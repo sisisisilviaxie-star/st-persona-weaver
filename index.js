@@ -10,7 +10,6 @@ const STORAGE_KEY_HISTORY = 'pw_history_v9'; // 升级版本号
 const STORAGE_KEY_STATE = 'pw_state_v9'; 
 const STORAGE_KEY_TAGS = 'pw_tags_v3';
 
-// 默认标签库
 const defaultTags = [
     { name: "姓名", value: "" },
     { name: "性别", value: "" },
@@ -68,19 +67,20 @@ function saveData() {
     localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(historyCache));
 }
 
-// [修改] 增强的保存历史逻辑
+// [修改] 增强的保存历史逻辑 - 默认标题改为 "User & Char"
 function saveHistory(item) {
     const context = getContext();
-    const charName = context.characters[context.characterId]?.name || "未知角色";
-    // 如果还没设定用户名称，尝试获取当前用户的名字
-    const userName = $('#pw-res-name').val() || context.name1 || "User";
+    // 获取当前实际的用户名和角色名
+    const userName = $("#your_name").val() || "User";
+    const charName = context.characters[context.characterId]?.name || "Char";
     
     item.timestamp = new Date().toLocaleString();
     item.targetChar = charName; 
 
-    // [需求] 默认标题: User & Char
-    if (!item.data.name) {
-        item.data.name = `${userName} & ${charName}`;
+    // 默认标题逻辑
+    if (!item.data.customTitle) {
+        // 如果没有自定义标题，使用 "User & Char"
+        item.data.customTitle = `${userName} & ${charName}`;
     }
 
     historyCache.unshift(item);
@@ -100,154 +100,122 @@ function loadState() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; }
 }
 
+// [CSS 重写] 重点适配手机和修复背景
 function injectStyles() {
     const styleId = 'persona-weaver-css-v9';
     if ($(`#${styleId}`).length) return;
 
     const css = `
-    /* 全局容器：适应手机高度，防止溢出 */
-    .pw-wrapper { 
-        display: flex; 
-        flex-direction: column; 
-        height: 100%; 
-        text-align: left; 
-        font-size: 0.95em; 
-        min-height: 50vh; 
-        max-height: 85vh; /* 留出一点边距 */
-        position: relative; 
-        overflow: hidden; 
-    }
+    /* 全局容器：防止溢出 */
+    .pw-wrapper { display: flex; flex-direction: column; height: 100%; text-align: left; font-size: 0.95em; min-height: 600px; position: relative; overflow: hidden; }
     
-    /* Header */
+    /* 头部 */
     .pw-header { background: var(--SmartThemeBg); border-bottom: 1px solid var(--SmartThemeBorderColor); display: flex; flex-direction: column; flex-shrink: 0; }
-    .pw-top-bar { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; }
+    .pw-top-bar { padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; }
     .pw-title { font-weight: bold; font-size: 1.1em; display: flex; align-items: center; gap: 8px; }
     
-    /* Tabs: 手机适配，字体变小 */
-    .pw-tabs { display: flex; background: var(--black30a); user-select: none; flex-wrap: nowrap; overflow-x: auto; }
-    .pw-tab { flex: 1; text-align: center; padding: 10px 5px; cursor: pointer; border-bottom: 3px solid transparent; opacity: 0.7; font-size: 0.9em; font-weight: bold; transition: 0.2s; white-space: nowrap; }
+    /* 选项卡 */
+    .pw-tabs { display: flex; background: var(--black30a); user-select: none; }
+    .pw-tab { flex: 1; text-align: center; padding: 12px 5px; cursor: pointer; border-bottom: 3px solid transparent; opacity: 0.7; font-size: 0.9em; font-weight: bold; transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pw-tab:hover { background: var(--white10a); opacity: 1; }
     .pw-tab.active { border-bottom-color: var(--SmartThemeQuoteColor); opacity: 1; color: var(--SmartThemeQuoteColor); background: var(--white05a); }
 
-    /* Scroll Area */
+    /* 滚动区域 */
     .pw-view { display: none; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
     .pw-view.active { display: flex; }
-    .pw-scroll-area { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 15px; }
+    .pw-scroll-area { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
 
-    /* Tags */
+    /* 标签系统 */
     .pw-tags-wrapper { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 5px; }
     .pw-tags-container { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: var(--black10a); border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor); max-height: 120px; overflow-y: auto; }
-    .pw-tag { padding: 4px 8px; background: var(--SmartThemeInputColor); border: 1px solid var(--SmartThemeBorderColor); border-radius: 4px; cursor: pointer; font-size: 0.85em; user-select: none; }
-    .pw-tag:hover { border-color: var(--SmartThemeQuoteColor); color: var(--SmartThemeQuoteColor); }
+    .pw-tag { padding: 4px 10px; background: var(--SmartThemeInputColor); border: 1px solid var(--SmartThemeBorderColor); border-radius: 4px; cursor: pointer; font-size: 0.85em; user-select: none; transition: 0.1s; }
+    .pw-tag:hover { border-color: var(--SmartThemeQuoteColor); color: var(--SmartThemeQuoteColor); transform: translateY(-1px); }
     .pw-tag-val { opacity: 0.6; font-size: 0.9em; margin-left: 2px; }
+    .pw-tags-edit-btn { padding: 8px; cursor: pointer; opacity: 0.7; font-size: 1.1em; }
 
-    /* [核心修复] Tag Manager Modal (Overlay) - 手机适配版 */
+    /* [重要修复] Tag Manager Modal (Overlay) */
     .pw-modal-overlay { 
         position: absolute; 
         top: 0; left: 0; right: 0; bottom: 0;
         width: 100%; height: 100%; 
-        /* 跟随主题颜色，不透明 */
+        /* 使用主题背景色，确保不透明 */
         background-color: var(--SmartThemeBg) !important; 
-        z-index: 9999; 
+        z-index: 2000; 
         display: none; 
         flex-direction: column; 
     }
-    .pw-modal-header { 
-        padding: 12px 15px; 
-        border-bottom: 1px solid var(--SmartThemeBorderColor); 
-        display: flex; justify-content: space-between; align-items: center; 
-        font-weight: bold; font-size: 1.1em; 
-        background: var(--SmartThemeBg);
-    }
-    /* 中间滚动区 */
-    .pw-modal-body { flex: 1; overflow-y: auto; padding: 15px; }
-    /* 底部固定区，防止被键盘顶起或看不见 */
-    .pw-modal-footer {
-        padding: 10px 15px;
-        border-top: 1px solid var(--SmartThemeBorderColor);
-        background: var(--SmartThemeBg);
-        display: flex;
-        gap: 10px;
-        flex-shrink: 0; /* 防止压缩 */
-    }
-
-    .pw-tag-row { 
-        display: flex; 
-        gap: 5px; 
-        margin-bottom: 8px; 
-        align-items: center; 
-        background: var(--black10a); 
-        padding: 8px; 
-        border-radius: 4px; 
-        border: 1px solid var(--SmartThemeBorderColor);
-    }
+    .pw-modal-header { padding: 15px; border-bottom: 1px solid var(--SmartThemeBorderColor); display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 1.1em; background: var(--SmartThemeBg); flex-shrink: 0; }
+    .pw-modal-body { flex: 1; overflow-y: auto; padding: 15px; } /* 中间滚动 */
+    .pw-modal-footer { padding: 15px; border-top: 1px solid var(--SmartThemeBorderColor); display: flex; gap: 10px; background: var(--SmartThemeBg); flex-shrink: 0; } /* 底部固定 */
     
-    /* History UI */
-    .pw-history-toolbar { display: flex; gap: 5px; margin-bottom: 10px; align-items: center; position: relative; }
-    .pw-search-wrapper { flex: 1; position: relative; }
+    .pw-tag-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; background: var(--black10a); padding: 8px; border-radius: 4px; border: 1px solid var(--SmartThemeBorderColor); }
+    
+    /* 历史记录搜索栏 */
+    .pw-history-toolbar { display: flex; gap: 8px; margin-bottom: 10px; position: relative; }
+    .pw-search-wrapper { flex: 1; position: relative; display: flex; align-items: center; }
     .pw-history-search { width: 100%; padding: 8px 30px 8px 8px; border-radius: 4px; border: 1px solid var(--SmartThemeBorderColor); background: var(--SmartThemeInputColor); color: var(--SmartThemeBodyColor); }
-    .pw-search-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; opacity: 0.6; padding: 5px; }
-    
+    .pw-search-clear { position: absolute; right: 8px; cursor: pointer; opacity: 0.5; padding: 4px; }
+    .pw-search-clear:hover { opacity: 1; color: var(--SmartThemeQuoteColor); }
+
+    /* 历史记录项 - 手机适配卡片式布局 */
     .pw-history-item { 
         padding: 12px; 
         border: 1px solid var(--SmartThemeBorderColor);
         border-radius: 6px;
         background: var(--black05a);
+        margin-bottom: 8px;
         display: flex;
-        flex-direction: column;
+        flex-direction: column; /* 手机优先：垂直排列 */
         gap: 6px;
         transition: 0.1s;
     }
     .pw-history-item:hover { background: var(--white05a); border-color: var(--SmartThemeQuoteColor); }
     
-    .pw-hist-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
-    .pw-hist-main { flex: 1; cursor: pointer; }
-    .pw-hist-actions { display: flex; gap: 8px; align-items: center; }
-    .pw-hist-title { font-weight: bold; color: var(--SmartThemeQuoteColor); font-size: 1.05em; line-height: 1.3; }
-    .pw-hist-input { width: 100%; background: var(--black20a); border: 1px solid var(--SmartThemeBorderColor); color: inherit; padding: 4px; border-radius: 4px; margin-bottom: 4px; }
-    .pw-hist-meta { font-size: 0.75em; opacity: 0.6; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .pw-hist-desc { font-size: 0.85em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90%; }
+    .pw-hist-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .pw-hist-title-group { flex: 1; display: flex; align-items: center; gap: 8px; font-weight: bold; color: var(--SmartThemeQuoteColor); overflow: hidden; }
+    .pw-hist-title-input { background: var(--SmartThemeInputColor); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeBodyColor); padding: 2px 4px; border-radius: 3px; font-size: inherit; width: 100%; }
+    .pw-hist-meta { font-size: 0.8em; opacity: 0.6; display: flex; flex-wrap: wrap; gap: 10px; }
+    .pw-hist-desc { font-size: 0.85em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     
-    .pw-icon-btn { padding: 6px; cursor: pointer; opacity: 0.6; font-size: 1em; transition: 0.2s; }
-    .pw-icon-btn:hover { opacity: 1; transform: scale(1.1); }
-    .pw-icon-btn.del { color: #ff6b6b; }
-    .pw-icon-btn.edit { color: var(--SmartThemeQuoteColor); }
-    .pw-icon-btn.save { color: #51cf66; }
+    .pw-hist-actions { display: flex; gap: 10px; opacity: 0.8; }
+    .pw-icon-btn { cursor: pointer; padding: 4px; transition: 0.2s; }
+    .pw-icon-btn:hover { color: var(--SmartThemeQuoteColor); transform: scale(1.1); }
+    .pw-icon-btn.del:hover { color: #ff6b6b; }
 
-    /* Clear All Button Area */
-    .pw-history-footer { margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--SmartThemeBorderColor); text-align: center; }
-
-    /* Common */
+    /* 通用控件 */
     .pw-textarea { width: 100%; background: var(--SmartThemeInputColor); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeBodyColor); border-radius: 6px; padding: 10px; resize: vertical; min-height: 120px; font-family: inherit; line-height: 1.5; }
     .pw-textarea:focus { outline: 1px solid var(--SmartThemeQuoteColor); }
     .pw-input { width: 100%; background: var(--SmartThemeInputColor); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeBodyColor); padding: 8px; border-radius: 4px; }
     
     .pw-btn { border: none; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; color: white; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; white-space: nowrap; }
+    .pw-btn:hover { filter: brightness(1.1); }
+    .pw-btn:active { transform: translateY(1px); }
     .pw-btn.gen { background: linear-gradient(90deg, var(--SmartThemeQuoteColor), var(--SmartThemeEmColor)); width: 100%; font-size: 1em; padding: 12px; margin-top: 10px; }
     .pw-btn.save { background: var(--SmartThemeEmColor); width: 100%; }
-    .pw-btn.normal { background: var(--SmartThemeBorderColor); color: var(--SmartThemeBodyColor); padding: 8px 12px; } /* 加大点击区域 */
-    .pw-btn.primary { background: var(--SmartThemeQuoteColor); padding: 8px 12px; }
-    .pw-btn.danger { background: #ff6b6b; padding: 8px 12px; }
+    .pw-btn.normal { background: var(--SmartThemeBorderColor); color: var(--SmartThemeBodyColor); padding: 6px 12px; }
+    .pw-btn.primary { background: var(--SmartThemeQuoteColor); padding: 6px 12px; }
+    .pw-mini-btn { font-size: 0.85em; cursor: pointer; opacity: 0.7; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; border: 1px solid transparent; user-select: none; }
+    .pw-mini-btn:hover { opacity: 1; background: var(--white10a); border-color: var(--white10a); }
+
+    .pw-label { font-size: 0.85em; opacity: 0.8; font-weight: bold; margin-bottom: 4px; display: block; }
     
-    .pw-mini-btn { font-size: 0.85em; cursor: pointer; opacity: 0.7; display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 4px; border: 1px solid transparent; user-select: none; background: var(--white05a); }
-    
-    /* 手机适配 Media Queries */
-    @media (max-width: 700px) {
-        .pw-wrapper { font-size: 0.9em; }
-        .pw-top-bar { padding: 8px 10px; }
-        .pw-row { flex-direction: column; align-items: flex-start; gap: 4px; }
-        .pw-row label { width: 100%; margin-bottom: 2px; }
-        .pw-row select, .pw-row input { width: 100%; }
-        .pw-wi-controls { flex-wrap: wrap; }
-        .pw-wi-select { width: 100%; }
-        .pw-hist-top { flex-direction: row; }
+    /* 手机适配 Media Query */
+    @media (max-width: 600px) {
+        .pw-tag-row { flex-direction: column; align-items: stretch; }
+        .pw-modal-footer { flex-direction: column; }
+        .pw-editor-controls { flex-direction: column; align-items: stretch !important; gap: 10px !important; }
+        .pw-editor-controls > div { justify-content: space-between; }
+        .pw-hist-header { align-items: flex-start; }
+        .pw-api-card .pw-row { flex-direction: column; align-items: flex-start; }
+        .pw-api-card .pw-row label { width: 100%; margin-bottom: 5px; }
+        .pw-api-card .pw-row input, .pw-api-card .pw-row select { width: 100%; }
     }
     `;
     $('<style>').attr('id', styleId).html(css).appendTo('head');
 }
 
 // ============================================================================
-// 3. 业务逻辑 (世界书与生成)
+// 3. 业务逻辑 (世界书与生成) - 保持不变
 // ============================================================================
 
 async function loadAvailableWorldBooks() {
@@ -279,7 +247,6 @@ async function loadAvailableWorldBooks() {
             availableWorldBooks = [...window.world_names];
         }
     }
-    
     availableWorldBooks = [...new Set(availableWorldBooks)].filter(x => x).sort();
 }
 
@@ -432,15 +399,15 @@ async function openCreatorPopup() {
             </div>
         </div>
 
-        <!-- [修复] Tag Manager Modal - 适配手机布局 -->
+        <!-- Tag Manager Modal (Mobile Optimized) -->
         <div id="pw-tag-modal" class="pw-modal-overlay">
             <div class="pw-modal-header">
                 <span><i class="fa-solid fa-tags"></i> 管理标签</span>
-                <i class="fa-solid fa-times" id="pw-tags-close" style="cursor:pointer; padding:10px;"></i>
+                <i class="fa-solid fa-times" id="pw-tags-close" style="cursor:pointer; padding:5px;"></i>
             </div>
             <div class="pw-modal-body" id="pw-tags-edit-list"></div>
             <div class="pw-modal-footer">
-                <button id="pw-tags-add-new" class="pw-btn normal" style="flex:1;"><i class="fa-solid fa-plus"></i> 添加</button>
+                <button id="pw-tags-add-new" class="pw-btn normal" style="flex:1;"><i class="fa-solid fa-plus"></i> 新增</button>
                 <button id="pw-tags-finish" class="pw-btn primary" style="flex:1;">完成</button>
             </div>
         </div>
@@ -449,9 +416,9 @@ async function openCreatorPopup() {
         <div id="pw-view-editor" class="pw-view active">
             <div class="pw-scroll-area">
                 <div>
-                    <div class="pw-label" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div class="pw-label" style="display:flex; justify-content:space-between;">
                         <span>${TEXT.LABEL_TAGS}</span>
-                        <div class="pw-tags-edit-btn" title="管理标签"><i class="fa-solid fa-gear"></i> 管理</div>
+                        <i class="fa-solid fa-gear pw-tags-edit-btn" title="管理标签"></i>
                     </div>
                     <div class="pw-tags-wrapper">
                         <div class="pw-tags-container" id="pw-tags-list">
@@ -463,17 +430,17 @@ async function openCreatorPopup() {
                 <div style="flex:1; display:flex; flex-direction:column;">
                     <textarea id="pw-request" class="pw-textarea" placeholder="在此输入要求，或点击上方标签..." style="flex:1;">${savedState.request || ''}</textarea>
                     
-                    <div class="pw-editor-controls">
-                        <div style="display:flex; gap:10px; margin-top:5px; flex-wrap:wrap;">
+                    <div class="pw-editor-controls" style="display:flex; justify-content:space-between; align-items:center; margin-top:5px;">
+                        <div style="display:flex; gap:10px;">
                             <div class="pw-mini-btn" id="pw-clear"><i class="fa-solid fa-eraser"></i> 清空</div>
                             <div class="pw-mini-btn" id="pw-snapshot"><i class="fa-solid fa-save"></i> 存入历史</div>
-                            <div style="flex:1;"></div>
-                            <div style="display:flex; align-items:center; gap:5px;">
-                                <select id="pw-fmt-select" class="pw-input" style="padding:2px 6px;">
-                                    <option value="yaml" ${config.outputFormat === 'yaml' ? 'selected' : ''}>YAML</option>
-                                    <option value="paragraph" ${config.outputFormat === 'paragraph' ? 'selected' : ''}>小说</option>
-                                </select>
-                            </div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <span style="font-size:0.85em; opacity:0.7;">格式:</span>
+                            <select id="pw-fmt-select" class="pw-input" style="padding:2px 6px;">
+                                <option value="yaml" ${config.outputFormat === 'yaml' ? 'selected' : ''}>YAML 属性表</option>
+                                <option value="paragraph" ${config.outputFormat === 'paragraph' ? 'selected' : ''}>小说段落</option>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -482,7 +449,7 @@ async function openCreatorPopup() {
 
                 <div id="pw-result-area" style="display: ${savedState.hasResult ? 'block' : 'none'}; border-top: 1px dashed var(--SmartThemeBorderColor); padding-top: 10px;">
                     <div class="pw-label" style="color:var(--SmartThemeQuoteColor);">
-                        <i class="fa-solid fa-check-circle"></i> 生成结果
+                        <i class="fa-solid fa-check-circle"></i> 生成结果 (可编辑)
                     </div>
                     <div style="display:flex; flex-direction:column; gap:10px;">
                         <input type="text" id="pw-res-name" class="pw-input" placeholder="角色名称" value="${savedState.name || ''}">
@@ -506,7 +473,7 @@ async function openCreatorPopup() {
             <div class="pw-scroll-area">
                 <div class="pw-label">添加参考世界书</div>
                 <div class="pw-wi-controls">
-                    <select id="pw-wi-select" class="pw-input" style="flex:1; min-width:0;">
+                    <select id="pw-wi-select" class="pw-input" style="flex:1;">
                         <option value="">-- 选择世界书 --</option>
                         ${wiOptions}
                     </select>
@@ -539,33 +506,33 @@ async function openCreatorPopup() {
                         </div>
                         <div class="pw-row">
                             <label>Model</label>
-                            <div style="flex:1; display:flex; gap:5px; flex-wrap:wrap;">
-                                <input type="text" id="pw-api-model" class="pw-input" value="${config.indepApiModel}" list="pw-model-list" style="flex:1; min-width:100px;">
+                            <div style="flex:1; display:flex; gap:5px;">
+                                <input type="text" id="pw-api-model" class="pw-input" value="${config.indepApiModel}" list="pw-model-list" style="flex:1;">
                                 <datalist id="pw-model-list"></datalist>
                                 <button id="pw-api-fetch" class="pw-btn normal" title="获取模型列表"><i class="fa-solid fa-cloud-download-alt"></i></button>
                             </div>
                         </div>
                     </div>
                     <div style="text-align:right; margin-top:10px;">
-                        <button id="pw-api-save" class="pw-btn primary" style="width:100%"><i class="fa-solid fa-save"></i> 保存 API 设置</button>
+                        <button id="pw-api-save" class="pw-btn primary"><i class="fa-solid fa-save"></i> 保存 API 设置</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 4. 历史视图 [新功能] -->
+        <!-- 4. 历史视图 -->
         <div id="pw-view-history" class="pw-view">
             <div class="pw-scroll-area">
                 <div class="pw-history-toolbar">
                     <div class="pw-search-wrapper">
-                        <input type="text" id="pw-history-search" class="pw-history-search" placeholder="🔍 搜索 (内容/标题/时间/目标)...">
-                        <i class="fa-solid fa-times pw-search-clear" title="清空搜索"></i>
+                        <input type="text" id="pw-history-search" class="pw-history-search" placeholder="🔍 搜索 (时间/标题/内容)...">
+                        <i class="fa-solid fa-times pw-search-clear" id="pw-history-clear-search"></i>
                     </div>
                 </div>
-                <div id="pw-history-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+                <div id="pw-history-list" style="display:flex; flex-direction:column; gap:8px; padding-bottom: 20px;"></div>
                 
-                <div class="pw-history-footer">
-                    <button id="pw-history-clear-all" class="pw-btn danger" style="width:100%"><i class="fa-solid fa-trash-can"></i> 清空所有历史</button>
+                <div style="margin-top:auto; padding-top:15px; border-top:1px solid var(--SmartThemeBorderColor); text-align:center;">
+                     <span id="pw-history-clear-all" style="color:#ff6b6b; font-size:0.85em; cursor:pointer; text-decoration:underline;">清空所有历史记录</span>
                 </div>
             </div>
         </div>
@@ -606,37 +573,33 @@ async function openCreatorPopup() {
         $('.pw-view').removeClass('active');
         const tab = $(this).data('tab');
         $(`#pw-view-${tab}`).addClass('active');
-        
         if(tab === 'history') renderHistoryList(); 
     });
 
     // --- 3. 标签系统 ---
     $(document).on('click.pw', '.pw-tag', function(e) {
         e.preventDefault(); e.stopPropagation();
-        
         const idx = $(this).data('idx');
         const tag = tagsCache[idx];
         const $text = $('#pw-request');
         const cur = $text.val();
-        
         const insert = tag.value ? `${tag.name}: ${tag.value}` : `${tag.name}: `;
         const prefix = (cur && !cur.endsWith('\n')) ? '\n' : '';
-        
         $text.val(cur + prefix + insert).focus();
         $text[0].scrollTop = $text[0].scrollHeight;
         saveCurrentState();
     });
 
-    // 打开标签管理 Overlay
+    // 打开标签管理
     $('.pw-tags-edit-btn').on('click', () => {
         const renderManager = () => {
             const list = $('#pw-tags-edit-list').empty();
             tagsCache.forEach((t, i) => {
                 list.append(`
                     <div class="pw-tag-row">
-                        <input class="pw-input t-name" value="${t.name}" placeholder="标签名" style="flex:1; min-width:0;">
-                        <input class="pw-input t-val" value="${t.value}" placeholder="默认值" style="flex:1; min-width:0;">
-                        <button class="pw-btn normal t-del" style="background:#ff6b6b; color:white; padding:8px 12px;"><i class="fa-solid fa-trash"></i></button>
+                        <input class="pw-input t-name" value="${t.name}" placeholder="标签名" style="flex:1;">
+                        <input class="pw-input t-val" value="${t.value}" placeholder="默认值" style="flex:1;">
+                        <button class="pw-btn normal t-del" style="background:#ff6b6b; color:white; padding:6px 12px;"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 `);
             });
@@ -660,7 +623,7 @@ async function openCreatorPopup() {
             });
         };
         renderManager();
-        $('#pw-tag-modal').css('display', 'flex'); // Show Overlay
+        $('#pw-tag-modal').css('display', 'flex'); 
     });
 
     $('#pw-tags-close, #pw-tags-finish').on('click', () => {
@@ -671,18 +634,37 @@ async function openCreatorPopup() {
     $('#pw-tags-add-new').on('click', () => {
         tagsCache.push({ name: "新标签", value: "" });
         saveData();
-        // 直接刷新列表，保持在弹窗内
+        // 直接刷新列表，保持在编辑页
         const list = $('#pw-tags-edit-list');
-        const t = tagsCache[tagsCache.length - 1];
+        const lastIdx = tagsCache.length - 1;
+        const t = tagsCache[lastIdx];
         list.append(`
             <div class="pw-tag-row">
-                <input class="pw-input t-name" value="${t.name}" placeholder="标签名" style="flex:1; min-width:0;">
-                <input class="pw-input t-val" value="${t.value}" placeholder="默认值" style="flex:1; min-width:0;">
-                <button class="pw-btn normal t-del" style="background:#ff6b6b; color:white; padding:8px 12px;"><i class="fa-solid fa-trash"></i></button>
+                <input class="pw-input t-name" value="${t.name}" placeholder="标签名" style="flex:1;">
+                <input class="pw-input t-val" value="${t.value}" placeholder="默认值" style="flex:1;">
+                <button class="pw-btn normal t-del" style="background:#ff6b6b; color:white; padding:6px 12px;"><i class="fa-solid fa-trash"></i></button>
             </div>
         `);
-        // 重新绑定刚添加的行的事件（略简化，实际建议重绘）
-        $('.pw-tags-edit-btn').click(); 
+        // 重新绑定刚添加的行
+        const newRow = list.find('.pw-tag-row').last();
+        newRow.find('input').on('input', function() {
+             const idx = lastIdx;
+             if(tagsCache[idx]) {
+                tagsCache[idx].name = newRow.find('.t-name').val();
+                tagsCache[idx].value = newRow.find('.t-val').val();
+                saveData();
+             }
+        });
+        newRow.find('.t-del').on('click', function() {
+             if(confirm("删除此标签？")) {
+                 tagsCache.splice(lastIdx, 1);
+                 saveData();
+                 $(this).closest('.pw-tag-row').remove();
+                 $('#pw-tags-list').html(renderTags());
+             }
+        });
+        // 滚动到底部
+        list.scrollTop(list[0].scrollHeight);
     });
 
     // --- 4. 世界书逻辑 ---
@@ -703,8 +685,8 @@ async function openCreatorPopup() {
             const $el = $(`
                 <div class="pw-wi-book">
                     <div class="pw-wi-header">
-                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span style="opacity:0.5;font-weight:normal;font-size:0.8em;">(绑定)</span>' : ''}</span>
-                        <div style="flex-shrink:0;">
+                        <span><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span style="opacity:0.5;font-weight:normal;font-size:0.8em;">(绑定)</span>' : ''}</span>
+                        <div>
                             ${!isBound ? '<i class="fa-solid fa-times remove-book" style="color:#ff6b6b;margin-right:10px;" title="移除"></i>' : ''}
                             <i class="fa-solid fa-chevron-down arrow"></i>
                         </div>
@@ -743,7 +725,7 @@ async function openCreatorPopup() {
                                 <div class="pw-wi-item">
                                     <div class="pw-wi-item-top">
                                         <input type="checkbox" class="pw-wi-check" ${isChecked} data-content="${encodeURIComponent(entry.content)}">
-                                        <span style="font-weight:bold;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${entry.displayName}</span>
+                                        <span style="font-weight:bold;flex:1;">${entry.displayName}</span>
                                         <i class="fa-solid fa-eye pw-expand-btn" title="预览"></i>
                                     </div>
                                     <div class="pw-wi-content">${entry.content}</div>
@@ -805,7 +787,6 @@ async function openCreatorPopup() {
         }
     });
 
-    // 存入历史按钮 (手动)
     $('#pw-snapshot').on('click', () => {
         const req = $('#pw-request').val();
         const curName = $('#pw-res-name').val();
@@ -913,20 +894,21 @@ async function openCreatorPopup() {
         $('.popup_close').click();
     });
 
-    // --- 9. 历史管理 [全新功能] ---
+    // --- 9. 历史管理 [增强版] ---
     const renderHistoryList = () => {
         loadData();
         const $list = $('#pw-history-list').empty();
         const search = $('#pw-history-search').val().toLowerCase();
 
-        // [修改] 增强搜索
+        // 全能搜索
         const filtered = historyCache.filter(item => {
             if (!search) return true;
-            return (item.data.name && item.data.name.toLowerCase().includes(search)) ||
+            return (item.data.customTitle && item.data.customTitle.toLowerCase().includes(search)) ||
+                   (item.data.name && item.data.name.toLowerCase().includes(search)) ||
+                   (item.targetChar && item.targetChar.toLowerCase().includes(search)) ||
+                   (item.timestamp && item.timestamp.toLowerCase().includes(search)) ||
                    (item.request && item.request.toLowerCase().includes(search)) ||
-                   (item.data.description && item.data.description.toLowerCase().includes(search)) ||
-                   (item.timestamp && item.timestamp.includes(search)) ||
-                   (item.targetChar && item.targetChar.toLowerCase().includes(search));
+                   (item.data.description && item.data.description.toLowerCase().includes(search));
         });
 
         if (filtered.length === 0) {
@@ -935,35 +917,33 @@ async function openCreatorPopup() {
         }
 
         filtered.forEach((item) => {
+            // 确保有显示标题
+            const displayTitle = item.data.customTitle || item.data.name || "未命名";
+            
             const $el = $(`
                 <div class="pw-history-item">
-                    <div class="pw-hist-top">
-                        <div class="pw-hist-main">
-                            <div class="pw-hist-title">${item.data.name}</div>
-                            <div class="pw-hist-meta">
-                                <span><i class="fa-regular fa-clock"></i> ${item.timestamp}</span>
-                                <span><i class="fa-solid fa-user"></i> 目标: ${item.targetChar || '未知'}</span>
-                            </div>
-                            <div class="pw-hist-desc">${item.data.description || item.request || '无描述'}</div>
+                    <div class="pw-hist-header">
+                        <div class="pw-hist-title-group">
+                            <span class="pw-hist-title-text">${displayTitle}</span>
+                            <i class="fa-solid fa-pen pw-icon-btn edit" title="编辑标题"></i>
                         </div>
                         <div class="pw-hist-actions">
-                             <div class="pw-icon-btn edit" title="编辑名称/描述"><i class="fa-solid fa-pen"></i></div>
-                             <div class="pw-icon-btn del" title="删除"><i class="fa-solid fa-trash"></i></div>
+                            <i class="fa-solid fa-trash pw-icon-btn del" title="删除"></i>
                         </div>
                     </div>
-                    <!-- 编辑模式 -->
-                    <div class="pw-hist-edit-area" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--white10a);">
-                        <input class="pw-hist-input h-name" value="${item.data.name}" placeholder="名称">
-                        <textarea class="pw-hist-input h-desc" rows="3" placeholder="描述">${item.data.description}</textarea>
-                        <div style="text-align:right;">
-                            <button class="pw-btn normal save-edit"><i class="fa-solid fa-check"></i> 保存修改</button>
-                        </div>
+                    <div class="pw-hist-meta">
+                        <span><i class="fa-regular fa-clock"></i> ${item.timestamp}</span>
+                        <span><i class="fa-solid fa-user-tag"></i> 目标: ${item.targetChar || '未知'}</span>
                     </div>
+                    <div class="pw-hist-desc">${item.data.description || item.request || '无描述'}</div>
                 </div>
             `);
 
-            // 点击主体加载
-            $el.find('.pw-hist-main').on('click', function() {
+            // 点击卡片本体：加载内容
+            $el.on('click', function(e) {
+                // 如果点击的是按钮或输入框，不触发加载
+                if ($(e.target).closest('.pw-icon-btn, input').length) return;
+                
                 $('#pw-request').val(item.request);
                 $('#pw-res-name').val(item.data.name);
                 $('#pw-res-desc').val(item.data.description);
@@ -972,33 +952,37 @@ async function openCreatorPopup() {
                 $('.pw-tab[data-tab="editor"]').click();
             });
 
-            // 点击编辑
-            $el.find('.pw-icon-btn.edit').on('click', function(e) {
+            // 编辑标题逻辑
+            $el.find('.edit').on('click', function(e) {
                 e.stopPropagation();
-                $el.find('.pw-hist-edit-area').slideToggle();
-            });
-
-            // 保存编辑
-            $el.find('.save-edit').on('click', function(e) {
-                e.stopPropagation();
-                const newName = $el.find('.h-name').val();
-                const newDesc = $el.find('.h-desc').val();
+                const $group = $(this).closest('.pw-hist-title-group');
+                const currentText = $group.find('.pw-hist-title-text').text();
                 
-                // 更新 Cache
-                const realIndex = historyCache.indexOf(item);
-                if(realIndex > -1) {
-                    historyCache[realIndex].data.name = newName;
-                    historyCache[realIndex].data.description = newDesc;
-                    saveData();
-                    renderHistoryList(); // 刷新列表
-                    toastr.success("历史记录已更新");
-                }
+                // 替换为输入框
+                $group.html(`<input type="text" class="pw-hist-title-input" value="${currentText}"> <i class="fa-solid fa-check pw-icon-btn save-title" title="保存"></i>`);
+                
+                const $input = $group.find('input');
+                $input.focus();
+                
+                // 保存函数
+                const doSave = () => {
+                    const newVal = $input.val();
+                    if(newVal) {
+                        item.data.customTitle = newVal;
+                        saveData();
+                        renderHistoryList();
+                    }
+                };
+
+                $group.find('.save-title').on('click', (ev) => { ev.stopPropagation(); doSave(); });
+                $input.on('click', (ev) => ev.stopPropagation());
+                $input.on('keypress', (ev) => { if(ev.which === 13) doSave(); });
             });
 
-            // 点击删除
-            $el.find('.pw-icon-btn.del').on('click', function(e) {
+            // 删除逻辑
+            $el.find('.del').on('click', function(e) {
                 e.stopPropagation();
-                if(confirm(`确定删除 "${item.data.name}" 吗？`)) {
+                if(confirm(`确定删除这条记录吗？`)) {
                     const realIndex = historyCache.indexOf(item);
                     if (realIndex > -1) {
                         historyCache.splice(realIndex, 1);
@@ -1015,15 +999,15 @@ async function openCreatorPopup() {
     // 搜索事件
     $(document).on('input.pw', '#pw-history-search', renderHistoryList);
     
-    // 清空搜索框
-    $(document).on('click.pw', '.pw-search-clear', () => {
+    // 清除搜索
+    $(document).on('click.pw', '#pw-history-clear-search', function() {
         $('#pw-history-search').val('').trigger('input');
     });
 
-    // 清空全部事件
+    // 清空全部
     $(document).on('click.pw', '#pw-history-clear-all', function() {
         if (historyCache.length === 0) return;
-        if(confirm("确定要清空所有历史记录吗？此操作无法撤销。")) {
+        if(confirm("⚠ 警告：确定要清空所有历史记录吗？此操作无法撤销！")) {
             historyCache = [];
             saveData();
             renderHistoryList();
@@ -1049,5 +1033,5 @@ jQuery(async () => {
         </div>
     `);
     $("#pw_open_btn").on("click", openCreatorPopup);
-    console.log(`${extensionName} v9 loaded.`);
+    console.log(`${extensionName} v9 (Mobile & UI Fixed) loaded.`);
 });
