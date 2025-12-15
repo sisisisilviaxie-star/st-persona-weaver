@@ -6,9 +6,9 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 // ============================================================================
 
 const extensionName = "st-persona-weaver";
-const STORAGE_KEY_HISTORY = 'pw_history_v10'; 
-const STORAGE_KEY_STATE = 'pw_state_v10'; 
-const STORAGE_KEY_TAGS = 'pw_tags_v4'; // 升级 Tag 存储结构
+const STORAGE_KEY_HISTORY = 'pw_history_v11'; // 升级版本号
+const STORAGE_KEY_STATE = 'pw_state_v11'; 
+const STORAGE_KEY_TAGS = 'pw_tags_v4';
 
 // 默认标签库
 const defaultTags = [
@@ -69,16 +69,26 @@ function saveData() {
     localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(historyCache));
 }
 
+// [修改] 保存历史逻辑：User + Char
 function saveHistory(item) {
     const context = getContext();
     const charName = context.characters[context.characterId]?.name || "未知角色";
+    // 尝试获取当前用户名字 (从输入框或设置)
+    let userName = $('#your_name').val() || context.powerUserSettings?.persona_selected || "User";
+    
+    // 如果 item.data.name 是生成出来的名字，优先用它作为 User 部分
+    if (item.data.name && item.data.name !== "未命名") {
+        userName = item.data.name;
+    }
+
     item.timestamp = new Date().toLocaleString();
     item.targetChar = charName; 
+    
+    // [V11需求] 默认名字是 user + char
+    item.data.customTitle = `${userName} + ${charName}`;
 
-    if (!item.data.name) {
-        item.data.name = item.request.length > 15 ? item.request.substring(0, 15) + "..." : item.request;
-    }
-    if (!item.data.name) item.data.name = "未命名设定";
+    // 填充内部数据防空
+    if (!item.data.name) item.data.name = userName;
 
     historyCache.unshift(item);
     const limit = extension_settings[extensionName]?.historyLimit || 50;
@@ -102,7 +112,7 @@ function loadState() {
 }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v10';
+    const styleId = 'persona-weaver-css-v11';
     if ($(`#${styleId}`).length) return;
 
     const css = `
@@ -124,7 +134,7 @@ function injectStyles() {
     .pw-view.active { display: flex; }
     .pw-scroll-area { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
 
-    /* Tags System V10 */
+    /* Tags System */
     .pw-tags-wrapper { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 5px; }
     .pw-tags-container { flex: 1; display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; background: var(--black10a); border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor); max-height: 150px; overflow-y: auto; }
     
@@ -144,7 +154,6 @@ function injectStyles() {
     .pw-tag:hover { border-color: var(--SmartThemeQuoteColor); color: var(--SmartThemeQuoteColor); transform: translateY(-1px); }
     .pw-tag-val { opacity: 0.6; font-size: 0.9em; }
     
-    /* Tag Edit Mode Styles */
     .pw-tag.edit-mode { border-color: #e67e22; color: #e67e22; background: rgba(230, 126, 34, 0.1); }
     .pw-tag.edit-mode:hover { background: rgba(230, 126, 34, 0.2); }
     
@@ -155,24 +164,39 @@ function injectStyles() {
     .pw-tags-edit-btn:hover { opacity: 1; }
     .pw-tags-edit-btn.active { color: #e67e22; opacity: 1; transform: rotate(90deg); }
 
-    /* History UI (Mobile Adaptive) */
+    /* [V11] Internal Editor Overlay (Fixes main window closing) */
+    .pw-internal-overlay {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7);
+        backdrop-filter: blur(2px);
+        z-index: 10; /* Higher than content, lower than global popup */
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    .pw-editor-card {
+        background: var(--SmartThemeBg);
+        border: 1px solid var(--SmartThemeBorderColor);
+        border-radius: 8px;
+        width: 100%;
+        max-width: 350px;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    .pw-editor-title { font-weight: bold; font-size: 1.1em; border-bottom: 1px solid var(--SmartThemeBorderColor); padding-bottom: 10px; margin-bottom: 5px; }
+    .pw-editor-actions { display: flex; gap: 10px; margin-top: 10px; }
+
+    /* History UI */
     .pw-history-toolbar { display: flex; gap: 8px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--SmartThemeBorderColor); align-items: center; }
     .pw-search-wrapper { flex: 1; position: relative; display: flex; align-items: center; }
     .pw-history-search { width: 100%; padding: 8px 30px 8px 8px; border-radius: 4px; border: 1px solid var(--SmartThemeBorderColor); background: var(--SmartThemeInputColor); color: var(--SmartThemeBodyColor); }
     .pw-search-clear { position: absolute; right: 8px; cursor: pointer; opacity: 0.5; padding: 5px; }
     
-    /* [修复] 弱化清空历史按钮 */
-    .pw-history-clear-btn { 
-        padding: 8px 12px; 
-        color: var(--SmartThemeBodyColor); 
-        opacity: 0.5; 
-        cursor: pointer; 
-        font-size: 1.1em; 
-        transition: 0.2s; 
-        border-radius: 4px;
-    }
-    .pw-history-clear-btn:hover { color: #ff6b6b; opacity: 1; background: var(--white10a); }
-
     .pw-history-item { 
         padding: 12px; 
         border: 1px solid var(--SmartThemeBorderColor);
@@ -201,20 +225,32 @@ function injectStyles() {
     .pw-hist-del { padding: 8px; color: #ff6b6b; cursor: pointer; font-size: 1em; opacity: 0.7; border-radius: 4px; background: rgba(255, 107, 107, 0.1); border: 1px solid transparent; }
     .pw-hist-del:hover { opacity: 1; border-color: #ff6b6b; background: rgba(255, 107, 107, 0.2); }
 
+    /* [V11] Bottom Clear Button */
+    .pw-clear-history-text {
+        text-align: center;
+        color: #ff6b6b;
+        opacity: 0.7;
+        font-size: 0.85em;
+        margin-top: 20px;
+        padding: 10px;
+        cursor: pointer;
+        text-decoration: underline;
+    }
+    .pw-clear-history-text:hover { opacity: 1; font-weight: bold; }
+
     /* API Settings */
     .pw-api-card { padding: 15px; background: var(--black10a); border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor); display: flex; flex-direction: column; gap: 12px; }
     .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .pw-row label { font-weight: bold; font-size: 0.9em; width: 80px; }
     
-    /* World Info Tree Spacing Fix */
-    .pw-wi-header > div { display: flex; align-items: center; gap: 15px; } /* [修复] 增加按钮间距 */
+    /* World Info Tree */
     .pw-wi-controls { display: flex; gap: 10px; margin-bottom: 10px; }
     .pw-wi-book { border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; overflow: hidden; margin-bottom: 8px; background: var(--black10a); }
     .pw-wi-header { padding: 12px; background: var(--black30a); cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 0.9em; }
     .pw-wi-header:hover { background: var(--white10a); }
     .pw-wi-list { display: none; padding: 0; border-top: 1px solid var(--SmartThemeBorderColor); max-height: 400px; overflow-y: auto; }
     .pw-wi-item { padding: 10px 12px; border-bottom: 1px solid var(--white05a); font-size: 0.85em; display: flex; flex-direction: column; gap: 4px; }
-    .pw-wi-item-top { display: flex; align-items: center; gap: 10px; }
+    .pw-wi-item-top { display: flex; align-items: center; gap: 12px; } /* [V11] Increased gap */
     .pw-wi-content { font-size: 0.9em; opacity: 0.8; padding: 8px; background: var(--black10a); border-radius: 4px; margin-top: 4px; display: none; white-space: pre-wrap; }
     .pw-wi-content.show { display: block; }
     .pw-expand-btn { cursor: pointer; opacity: 0.5; padding: 5px; }
@@ -239,7 +275,6 @@ function injectStyles() {
 
     .pw-label { font-size: 0.85em; opacity: 0.8; font-weight: bold; margin-bottom: 4px; display: block; }
 
-    /* [Mobile] 手机适配 */
     @media screen and (max-width: 700px) {
         .pw-history-item { flex-direction: column; }
         .pw-hist-actions { width: 100%; display: flex; justify-content: flex-end; border-top: 1px solid var(--white05a); padding-top: 8px; margin-top: 5px; }
@@ -275,7 +310,7 @@ async function testApiConnection() {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             await res.json();
         } else {
-            // Main API Test (Just try to get models or simple gen)
+            // Main API Test
             const context = getContext();
             if (!context.generateQuietPrompt) throw new Error("主 API 不可用");
         }
@@ -441,9 +476,9 @@ async function openCreatorPopup() {
     const savedState = loadState();
     
     const config = { ...defaultSettings, ...extension_settings[extensionName], ...savedState.localConfig };
-    isTagEditMode = false; // 重置编辑模式
+    isTagEditMode = false;
 
-    // [重构] 渲染标签列表 (含+号)
+    // 渲染标签
     const renderTags = () => {
         let html = tagsCache.map((t, i) => `
             <div class="pw-tag ${isTagEditMode ? 'edit-mode' : ''}" data-idx="${i}">
@@ -452,7 +487,6 @@ async function openCreatorPopup() {
                 ${!isTagEditMode && t.value ? `<span class="pw-tag-val">:${t.value}</span>` : ''}
             </div>
         `).join('');
-        // 添加按钮
         html += `<div class="pw-tag pw-tag-add" title="添加新标签"><i class="fa-solid fa-plus"></i></div>`;
         return html;
     };
@@ -472,6 +506,25 @@ async function openCreatorPopup() {
                 <div class="pw-tab" data-tab="context">📚 世界书</div>
                 <div class="pw-tab" data-tab="api">⚙️ API</div>
                 <div class="pw-tab" data-tab="history">📜 历史</div>
+            </div>
+        </div>
+
+        <!-- [V11] Internal Tag Editor Overlay (Fixes window closing bug) -->
+        <div id="pw-tag-overlay" class="pw-internal-overlay">
+            <div class="pw-editor-card">
+                <div class="pw-editor-title">管理标签</div>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <label>标签名称</label>
+                    <input id="pw-edit-name" class="pw-input" placeholder="例如：性格">
+                    <label>预填内容 (可选)</label>
+                    <input id="pw-edit-val" class="pw-input" placeholder="例如：温柔体贴">
+                </div>
+                <div class="pw-editor-actions">
+                    <button id="pw-edit-delete" class="pw-btn" style="background:rgba(255,107,107,0.2); color:#ff6b6b; padding:8px 12px; display:none;"><i class="fa-solid fa-trash"></i></button>
+                    <div style="flex:1"></div>
+                    <button id="pw-edit-cancel" class="pw-btn normal">取消</button>
+                    <button id="pw-edit-save" class="pw-btn primary">保存</button>
+                </div>
             </div>
         </div>
 
@@ -584,7 +637,7 @@ async function openCreatorPopup() {
             </div>
         </div>
 
-        <!-- 4. 历史视图 [修复] -->
+        <!-- 4. 历史视图 -->
         <div id="pw-view-history" class="pw-view">
             <div class="pw-scroll-area">
                 <div class="pw-history-toolbar">
@@ -592,12 +645,9 @@ async function openCreatorPopup() {
                         <input type="text" id="pw-history-search" class="pw-history-search" placeholder="🔍 搜索 (标题/内容/角色/时间)...">
                         <i class="fa-solid fa-times pw-search-clear"></i>
                     </div>
-                    <!-- [修复] 清空按钮改为小图标 -->
-                    <div id="pw-history-clear-all" class="pw-history-clear-btn" title="清空所有记录">
-                        <i class="fa-solid fa-trash-alt"></i>
-                    </div>
                 </div>
                 <div id="pw-history-list" style="display:flex; flex-direction:column;"></div>
+                <div id="pw-history-clear-all" class="pw-clear-history-text">清空所有历史记录</div>
             </div>
         </div>
     </div>
@@ -641,71 +691,95 @@ async function openCreatorPopup() {
         if(tab === 'history') renderHistoryList(); 
     });
 
-    // --- 3. 标签系统 (全新 V10 逻辑) ---
-    // 添加新标签
-    $(document).on('click.pw', '.pw-tag-add', function(e) {
-        e.stopPropagation();
-        // 原生 Prompt 简单高效
-        const name = prompt("请输入标签名称:", "新标签");
-        if (name) {
-            const val = prompt("请输入默认预填内容 (可选):", "");
-            tagsCache.push({ name: name, value: val || "" });
+    // --- 3. 标签系统 (Internal Overlay V11) ---
+    let currentEditIdx = null;
+
+    const openTagEditor = (idx = null) => {
+        currentEditIdx = idx;
+        const isAdd = idx === null;
+        
+        // 设置标题
+        $('.pw-editor-title').text(isAdd ? "添加新标签" : "编辑标签");
+        
+        // 填充数据
+        if (isAdd) {
+            $('#pw-edit-name').val('');
+            $('#pw-edit-val').val('');
+            $('#pw-edit-delete').hide();
+        } else {
+            const t = tagsCache[idx];
+            $('#pw-edit-name').val(t.name);
+            $('#pw-edit-val').val(t.value);
+            $('#pw-edit-delete').show();
+        }
+        
+        // 显示
+        $('#pw-tag-overlay').css('display', 'flex');
+    };
+
+    const closeTagEditor = () => {
+        $('#pw-tag-overlay').hide();
+    };
+
+    // 保存逻辑
+    $('#pw-edit-save').on('click', () => {
+        const name = $('#pw-edit-name').val().trim();
+        const val = $('#pw-edit-val').val().trim();
+        if (!name) return toastr.warning("标签名不能为空");
+
+        if (currentEditIdx === null) {
+            tagsCache.push({ name, value: val });
+        } else {
+            tagsCache[currentEditIdx].name = name;
+            tagsCache[currentEditIdx].value = val;
+        }
+        saveData();
+        $('#pw-tags-list').html(renderTags());
+        closeTagEditor();
+    });
+
+    // 删除逻辑
+    $('#pw-edit-delete').on('click', () => {
+        if (confirm("确定删除此标签？")) {
+            tagsCache.splice(currentEditIdx, 1);
             saveData();
             $('#pw-tags-list').html(renderTags());
+            closeTagEditor();
         }
     });
 
-    // 标签点击 (插入 或 编辑)
+    // 取消逻辑
+    $('#pw-edit-cancel').on('click', closeTagEditor);
+
+    // 渲染函数
+    const renderTags = () => {
+        let html = tagsCache.map((t, i) => `
+            <div class="pw-tag ${isTagEditMode ? 'edit-mode' : ''}" data-idx="${i}">
+                ${isTagEditMode ? '<i class="fa-solid fa-pen"></i>' : '<i class="fa-solid fa-tag" style="opacity:0.5;font-size:0.8em;"></i>'}
+                ${t.name}
+                ${!isTagEditMode && t.value ? `<span class="pw-tag-val">:${t.value}</span>` : ''}
+            </div>
+        `).join('');
+        html += `<div class="pw-tag pw-tag-add" title="添加新标签"><i class="fa-solid fa-plus"></i></div>`;
+        return html;
+    };
+
+    // 添加按钮点击
+    $(document).on('click.pw', '.pw-tag-add', function(e) {
+        e.stopPropagation();
+        openTagEditor(null); // Add Mode
+    });
+
+    // 标签点击
     $(document).on('click.pw', '.pw-tag:not(.pw-tag-add)', function(e) {
-        e.preventDefault(); e.stopPropagation();
+        e.stopPropagation();
         const idx = $(this).data('idx');
-        const tag = tagsCache[idx];
-
+        
         if (isTagEditMode) {
-            // [新功能] 编辑模式下点击弹出小菜单
-            // 使用 callPopup 构建一个小型的编辑表单
-            const editHtml = `
-                <div style="display:flex; flex-direction:column; gap:10px;">
-                    <label>标签名称</label>
-                    <input id="pw-edit-tag-name" class="pw-input" value="${tag.name}">
-                    <label>预填内容</label>
-                    <input id="pw-edit-tag-val" class="pw-input" value="${tag.value}">
-                </div>
-            `;
-            callPopup(editHtml, 'confirm', '编辑标签', { okButton: "保存", cancelButton: "取消" }).then(accept => {
-                if (accept) {
-                    tagsCache[idx].name = $('#pw-edit-tag-name').val();
-                    tagsCache[idx].value = $('#pw-edit-tag-val').val();
-                    saveData();
-                    $('#pw-tags-list').html(renderTags());
-                }
-            });
-            // 补充一个删除按钮在弹窗外部不太好，这里建议简单化：编辑模式点击标签，询问“编辑”还是“删除”？
-            // 或者：直接在刚才的 callPopup 里加个删除按钮？SillyTavern 的 callPopup 比较标准。
-            // 为了更好的体验，我们换个方式：
-            // 点击 -> 确认框 "删除标签?" -> 是则删除。如果是想改名，可能需要更复杂的交互。
-            // 鉴于移动端，最简单的是：点击 -> 弹窗 [修改] [删除] [取消]。
-            // 这里我们用 confirm 实现删除，用 prompt 实现修改？太繁琐。
-            // 最终方案：点击直接弹出修改框，修改框下面有个“删除此标签”的红色链接。
-            setTimeout(() => {
-                // HACK: 往刚才打开的 Popup 里插入一个删除按钮
-                $('.extensions_popup_text').append(`
-                    <div style="margin-top:15px; text-align:right;">
-                        <span id="pw-tag-delete-btn" style="color:#ff6b6b; cursor:pointer; text-decoration:underline;">🗑️ 删除此标签</span>
-                    </div>
-                `);
-                $('#pw-tag-delete-btn').on('click', () => {
-                    if(confirm("确定删除？")) {
-                        tagsCache.splice(idx, 1);
-                        saveData();
-                        $('#pw-tags-list').html(renderTags());
-                        $('.popup_close').click(); // 关闭弹窗
-                    }
-                });
-            }, 100);
-
+            openTagEditor(idx); // Edit Mode
         } else {
-            // 正常模式：插入文本
+            // 插入模式
+            const tag = tagsCache[idx];
             const $text = $('#pw-request');
             const cur = $text.val();
             const insert = tag.value ? `${tag.name}: ${tag.value}` : `${tag.name}: `;
@@ -721,7 +795,7 @@ async function openCreatorPopup() {
         isTagEditMode = !isTagEditMode;
         $(this).toggleClass('active', isTagEditMode);
         $('#pw-tags-list').html(renderTags());
-        if(isTagEditMode) toastr.info("已进入标签编辑模式，点击标签进行修改/删除");
+        if(isTagEditMode) toastr.info("已进入编辑模式，点击标签修改");
     });
 
     // --- 4. 世界书逻辑 ---
@@ -837,7 +911,6 @@ async function openCreatorPopup() {
         }
     });
 
-    // [修复] API 测试按钮逻辑
     $('#pw-api-test').on('click', testApiConnection);
 
     $('#pw-api-save').on('click', () => {
@@ -995,7 +1068,7 @@ async function openCreatorPopup() {
                         </div>
                         <div class="pw-hist-meta">
                             <span><i class="fa-regular fa-clock"></i> ${item.timestamp}</span>
-                            <span><i class="fa-solid fa-user-tag"></i> ${item.targetChar || '未知'}</span>
+                            <span><i class="fa-solid fa-user-tag"></i> 目标: ${item.targetChar || '未知'}</span>
                         </div>
                         <div class="pw-hist-desc">${item.data.description || item.request || '无描述'}</div>
                     </div>
@@ -1090,5 +1163,5 @@ jQuery(async () => {
         </div>
     `);
     $("#pw_open_btn").on("click", openCreatorPopup);
-    console.log(`${extensionName} v10 loaded.`);
+    console.log(`${extensionName} v11 loaded.`);
 });
