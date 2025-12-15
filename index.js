@@ -7,33 +7,55 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 
 const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_generation_history_v1';
-const STORAGE_KEY_STATE = 'pw_current_state_v2';
+const STORAGE_KEY_STATE = 'pw_current_state_v4';
 
-const defaultSettings = {
-    autoSwitchPersona: true,
-    syncToWorldInfo: true,
-    historyLimit: 10,
-    defaultOutputFormat: 'list' // 'list' | 'paragraph'
-};
-
-// UI Text Constants (已修复 undefined 问题)
-const TEXT = {
-    PANEL_TITLE: "用户设定编织者 ✒️",
-    BTN_OPEN_MAIN: "✨ 打开设定生成器",
-    BTN_OPEN_DESC: "AI 辅助生成用户人设、属性表并同步世界书",
-    LABEL_AUTO_SWITCH: "保存后自动切换马甲",  // 补回丢失的文本
-    LABEL_SYNC_WI: "默认勾选同步世界书",      // 补回丢失的文本
-    TOAST_NO_CHAR: "请先打开一个角色聊天",
-    TOAST_GEN_FAIL: "AI 生成失败，请检查连接",
-    TOAST_SAVE_SUCCESS: (name) => `已保存并切换为: ${name}`,
-    TOAST_WI_SUCCESS: (book) => `已更新世界书: ${book}`,
-    TEMPLATE_CONTENT: `姓名：
+const DEFAULT_TEMPLATE = `姓名：
 年龄：
 职业/身份：
 外貌特征：
 性格特点：
 与当前角色的关系：
-特殊能力/背景：`
+特殊能力/背景：`;
+
+const defaultSettings = {
+    autoSwitchPersona: true,
+    syncToWorldInfo: true,
+    historyLimit: 10,
+    defaultOutputFormat: 'list',
+    
+    // Custom Template
+    customTemplate: DEFAULT_TEMPLATE,
+    
+    // Independent API Settings
+    apiSource: 'main', // 'main' | 'custom'
+    customApiUrl: 'https://api.openai.com/v1',
+    customApiKey: '',
+    customApiModel: 'gpt-3.5-turbo'
+};
+
+// UI Text Constants
+const TEXT = {
+    PANEL_TITLE: "用户设定编织者 ✒️",
+    BTN_OPEN_MAIN: "✨ 打开设定生成器",
+    BTN_OPEN_DESC: "AI 辅助生成用户人设、属性表并同步世界书",
+    
+    // Settings UI
+    LBL_AUTO_SWITCH: "保存后自动切换马甲",
+    LBL_SYNC_WI: "默认勾选同步世界书",
+    LBL_API_SOURCE: "AI 生成源",
+    LBL_CUSTOM_URL: "API 地址 (Base URL)",
+    LBL_CUSTOM_KEY: "API 密钥 (Key)",
+    LBL_CUSTOM_MODEL: "模型名称 (Model)",
+    LBL_TEMPLATE_EDIT: "编辑填写模板",
+    
+    // Popup UI
+    TOAST_NO_CHAR: "请先打开一个角色聊天",
+    TOAST_GEN_FAIL: "生成失败，请检查 API 设置",
+    TOAST_SAVE_SUCCESS: (name) => `已保存并切换为: ${name}`,
+    TOAST_WI_SUCCESS: (book) => `已更新世界书: ${book}`,
+    LBL_SELECT_WB: "目标世界书 & 条目管理",
+    LBL_ENTRIES_HEADER: "条目状态管理 (已选: {n})",
+    LBL_ENTRIES_TIP: "在此勾选需要激活的条目，保存时会同步更新状态。"
 };
 
 // ============================================================================
@@ -41,6 +63,8 @@ const TEXT = {
 // ============================================================================
 
 let historyCache = [];
+let currentBookEntries = {}; // Cache for current book entries
+let entryChanges = {}; // Track user changes to existing entries
 
 function loadHistory() {
     try {
@@ -72,7 +96,7 @@ function injectStyles() {
     if ($(`#${styleId}`).length) return;
 
     const css = `
-    .pw-wrapper { display: flex; flex-direction: column; height: 100%; text-align: left; font-size: 0.95em; min-height: 400px; }
+    .pw-wrapper { display: flex; flex-direction: column; height: 100%; text-align: left; font-size: 0.95em; min-height: 500px; }
     .pw-header { padding: 12px; border-bottom: 1px solid var(--SmartThemeBorderColor); display: flex; justify-content: space-between; align-items: center; background: var(--SmartThemeBg); }
     .pw-title { font-weight: bold; font-size: 1.1em; display: flex; align-items: center; gap: 8px; }
     .pw-tools i { cursor: pointer; margin-left: 15px; opacity: 0.7; transition: 0.2s; font-size: 1.1em; }
@@ -83,12 +107,10 @@ function injectStyles() {
     .pw-section { display: flex; flex-direction: column; gap: 8px; }
     .pw-label { font-size: 0.85em; opacity: 0.8; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
     
-    /* Input Tools Bar */
     .pw-input-tools { display: flex; gap: 10px; margin-bottom: 5px; font-size: 0.85em; }
     .pw-text-btn { cursor: pointer; color: var(--SmartThemeQuoteColor); font-weight: bold; opacity: 0.9; text-decoration: underline; }
     .pw-text-btn:hover { opacity: 1; }
 
-    /* Output Format Toggle */
     .pw-fmt-toggle { display: flex; background: var(--black30a); padding: 3px; border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor); }
     .pw-fmt-opt { flex: 1; text-align: center; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-size: 0.85em; opacity: 0.7; transition: 0.2s; }
     .pw-fmt-opt.active { background: var(--SmartThemeQuoteColor); color: white; opacity: 1; font-weight: bold; }
@@ -97,6 +119,7 @@ function injectStyles() {
     .pw-textarea:focus { outline: 2px solid var(--SmartThemeQuoteColor); border-color: transparent; }
     
     .pw-input { width: 100%; background: var(--SmartThemeInputColor); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeBodyColor); padding: 8px; border-radius: 6px; box-sizing: border-box; }
+    .pw-select { width: 100%; background: var(--SmartThemeInputColor); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeBodyColor); padding: 8px; border-radius: 6px; box-sizing: border-box; cursor: pointer; }
     
     .pw-card { background: var(--black10a); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
     
@@ -111,6 +134,37 @@ function injectStyles() {
     
     .pw-view { display: none; flex-direction: column; flex: 1; min-height: 0; }
     .pw-view.active { display: flex; }
+
+    /* Entry Manager Styles */
+    .pw-entries-box { 
+        background: var(--SmartThemeInputColor); 
+        border: 1px solid var(--SmartThemeBorderColor); 
+        border-radius: 6px; 
+        margin-top: 8px; 
+        max-height: 200px; 
+        display: flex; 
+        flex-direction: column;
+    }
+    .pw-entries-search {
+        padding: 5px; border-bottom: 1px solid var(--SmartThemeBorderColor);
+    }
+    .pw-search-input {
+        width: 100%; background: transparent; border: none; color: var(--SmartThemeBodyColor); padding: 4px; font-size: 0.9em;
+    }
+    .pw-search-input:focus { outline: none; }
+    .pw-entries-list {
+        flex: 1; overflow-y: auto; padding: 5px;
+    }
+    .pw-entry-item {
+        display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 4px; cursor: pointer; user-select: none;
+    }
+    .pw-entry-item:hover { background: var(--white10a); }
+    .pw-entry-item input { cursor: pointer; }
+    .pw-entry-name { font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
+    .pw-entry-comment { font-size: 0.8em; opacity: 0.5; margin-left: auto; }
+
+    .pw-setting-row { margin-bottom: 10px; }
+    .pw-setting-input { width: 100%; background: var(--black10a); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeBodyColor); padding: 5px; border-radius: 4px; }
     `;
     $('<style>').attr('id', styleId).html(css).appendTo('head');
 }
@@ -119,7 +173,42 @@ function injectStyles() {
 // CORE LOGIC
 // ============================================================================
 
-async function getCurrentWorldbook() {
+// 获取所有世界书列表
+async function getAllWorldBooks() {
+    try {
+        const headers = getRequestHeaders();
+        const response = await fetch('/api/worldinfo/get', { method: 'POST', headers, body: JSON.stringify({}) });
+        if (response.ok) {
+            const data = await response.json();
+            return data.map(item => (typeof item === 'object' ? item.name : item)).sort();
+        }
+    } catch (e) {
+        console.error("Failed to fetch world books", e);
+    }
+    return [];
+}
+
+// 获取特定世界书的内容（条目）
+async function getWorldBookContent(bookName) {
+    try {
+        const headers = getRequestHeaders();
+        const response = await fetch('/api/worldinfo/get', { 
+            method: 'POST', headers, body: JSON.stringify({ name: bookName }) 
+        });
+        if (response.ok) {
+            const data = await response.json();
+            // entries is object {id: entry}, convert to array
+            if (data.entries) {
+                return Object.values(data.entries).sort((a, b) => (a.comment || '').localeCompare(b.comment || ''));
+            }
+        }
+    } catch (e) {
+        console.error(`Failed to fetch content for ${bookName}`, e);
+    }
+    return [];
+}
+
+async function getRecommendedWorldBook() {
     const context = getContext();
     if (context.chatMetadata && context.chatMetadata.world_info) return context.chatMetadata.world_info;
     const charId = context.characterId;
@@ -132,41 +221,67 @@ async function getCurrentWorldbook() {
     return null;
 }
 
+// API Calls
+async function callCustomApi(messages) {
+    const settings = extension_settings[extensionName];
+    const url = settings.customApiUrl.replace(/\/$/, '') + '/chat/completions';
+    
+    const body = {
+        model: settings.customApiModel,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 1000
+    };
+
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${settings.customApiKey}`
+    };
+
+    const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    const data = await response.json();
+    return data.choices[0].message.content;
+}
+
 async function generatePersona(userRequest, outputFormat = 'list') {
     const context = getContext();
     const charId = context.characterId;
     if (charId === undefined) throw new Error("No character selected");
     
     const char = context.characters[charId];
+    const settings = extension_settings[extensionName];
     
-    let formatInst = "";
-    if (outputFormat === 'list') {
-        formatInst = `
-        "description": "Output strictly as an Attribute List / Character Sheet format. Use newlines. Example:\\nName: ...\\nAge: ...\\nAppearance: ...\\nPersonality: ...\\nBackground: ...\\n\\n(Ensure content is detailed, approx 200 words total)"`;
-    } else {
-        formatInst = `
-        "description": "Output as a narrative, descriptive paragraph in third person. (Approx 200 words)"`;
-    }
+    let formatInst = outputFormat === 'list' ? 
+        `"description": "Output strictly as an Attribute List / Character Sheet format. Use newlines."` : 
+        `"description": "Output as a narrative, descriptive paragraph in third person."`;
 
-    const prompt = `
-Task: Create a User Persona based on the user's request and the current character's context.
+    const systemPrompt = `Task: Create a User Persona based on the user's request and the current character's context.
 Current Character: ${char.name}
 Scenario: ${char.scenario || "None"}
 
-User Request/Profile:
-${userRequest}
-
-Return ONLY a JSON object with this format:
+Return ONLY a JSON object:
 {
     "name": "Name of the persona",
     ${formatInst},
     "wi_entry": "Background facts about this persona suitable for World Info/Lorebook (Key facts only)."
 }`;
 
+    const userPrompt = `User Request:\n${userRequest}`;
+
     try {
-        const generatedText = await context.generateQuietPrompt(prompt, false, false, "System");
+        let generatedText = "";
+        if (settings.apiSource === 'custom' && settings.customApiKey) {
+            generatedText = await callCustomApi([
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt }
+            ]);
+        } else {
+            generatedText = await context.generateQuietPrompt(systemPrompt + "\n\n" + userPrompt, false, false, "System");
+        }
+
         const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error("Failed to parse JSON from AI response");
+        if (!jsonMatch) throw new Error("Failed to parse JSON");
         return JSON.parse(jsonMatch[0]);
     } catch (e) {
         console.error("Persona Weaver Generation Error:", e);
@@ -178,6 +293,53 @@ Return ONLY a JSON object with this format:
 // UI FUNCTIONS
 // ============================================================================
 
+// Render the list of entries for a world book
+function renderEntryList(entries, filterText = "") {
+    const $list = $('#pw-entries-list').empty();
+    
+    if (!entries || entries.length === 0) {
+        $list.html('<div style="text-align:center; opacity:0.5; padding:10px;">(空)</div>');
+        return;
+    }
+
+    const lowerFilter = filterText.toLowerCase();
+    
+    entries.forEach(entry => {
+        const name = entry.comment || entry.key?.toString() || `Entry #${entry.uid}`;
+        if (filterText && !name.toLowerCase().includes(lowerFilter)) return;
+
+        // Check if user changed it, otherwise use original state
+        const isChecked = entryChanges[entry.uid] !== undefined ? entryChanges[entry.uid] : entry.enabled;
+
+        const $item = $(`
+            <div class="pw-entry-item">
+                <input type="checkbox" data-uid="${entry.uid}" ${isChecked ? 'checked' : ''}>
+                <span class="pw-entry-name" title="${name}">${name}</span>
+                <span class="pw-entry-comment">#${entry.uid}</span>
+            </div>
+        `);
+        
+        $item.on('click', function(e) {
+            if (e.target.tagName !== 'INPUT') {
+                const $cb = $(this).find('input');
+                $cb.prop('checked', !$cb.prop('checked')).trigger('change');
+            }
+        });
+
+        $list.append($item);
+    });
+}
+
+// Load book entries and update UI
+async function loadAndRenderEntries(bookName) {
+    $('#pw-entries-list').html('<div style="text-align:center; padding:10px;"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>');
+    
+    currentBookEntries = await getWorldBookContent(bookName);
+    entryChanges = {}; // Reset changes when switching books
+    
+    renderEntryList(currentBookEntries);
+}
+
 async function openCreatorPopup() {
     const context = getContext();
     if (context.characterId === undefined) {
@@ -187,18 +349,26 @@ async function openCreatorPopup() {
 
     loadHistory();
     const savedState = loadState();
-    const currentWb = await getCurrentWorldbook();
     
-    // 默认输出格式状态
+    const allBooks = await getAllWorldBooks();
+    const recommendedBook = await getRecommendedWorldBook();
+    const selectedBook = savedState.selectedBook || recommendedBook || (allBooks.length > 0 ? allBooks[0] : "");
+    
     let currentFormat = savedState.format || extension_settings[extensionName].defaultOutputFormat || 'list';
+
+    let optionsHtml = allBooks.map(b => 
+        `<option value="${b}" ${b === selectedBook ? 'selected' : ''}>${b}${b === recommendedBook ? ' (当前)' : ''}</option>`
+    ).join('');
+    
+    if (allBooks.length === 0) optionsHtml = `<option value="" disabled selected>无可用世界书</option>`;
 
     const html = `
     <div class="pw-wrapper">
         <div class="pw-header">
             <div class="pw-title"><i class="fa-solid fa-wand-magic-sparkles"></i> 设定构思</div>
             <div class="pw-tools">
-                <i class="fa-solid fa-eraser" id="pw-clear" title="清空内容"></i>
-                <i class="fa-solid fa-clock-rotate-left" id="pw-history" title="历史记录"></i>
+                <i class="fa-solid fa-eraser" id="pw-clear" title="清空"></i>
+                <i class="fa-solid fa-clock-rotate-left" id="pw-history" title="历史"></i>
             </div>
         </div>
 
@@ -206,55 +376,63 @@ async function openCreatorPopup() {
         <div id="pw-view-editor" class="pw-view active">
             <div class="pw-scroll-area">
                 
-                <!-- Input Section -->
+                <!-- Input -->
                 <div class="pw-section">
                     <div class="pw-label">
                         <span>我的要求 / 设定填空</span>
                         <div class="pw-input-tools">
-                            <span class="pw-text-btn" id="pw-fill-template"><i class="fa-solid fa-clipboard-list"></i> 插入填写模板</span>
+                            <span class="pw-text-btn" id="pw-fill-template"><i class="fa-solid fa-clipboard-list"></i> 插入模板</span>
                         </div>
                     </div>
-                    <textarea id="pw-request" class="pw-textarea" placeholder="在此输入你的要求，或者点击上方“插入填写模板”...">${savedState.request || ''}</textarea>
+                    <textarea id="pw-request" class="pw-textarea" placeholder="输入要求...">${savedState.request || ''}</textarea>
                     
                     <div class="pw-label" style="margin-top:5px;">生成结果格式</div>
                     <div class="pw-fmt-toggle">
-                        <div class="pw-fmt-opt ${currentFormat === 'list' ? 'active' : ''}" data-fmt="list">
-                            <i class="fa-solid fa-list-ul"></i> 属性表 (推荐)
-                        </div>
-                        <div class="pw-fmt-opt ${currentFormat === 'paragraph' ? 'active' : ''}" data-fmt="paragraph">
-                            <i class="fa-solid fa-paragraph"></i> 小说段落
-                        </div>
+                        <div class="pw-fmt-opt ${currentFormat === 'list' ? 'active' : ''}" data-fmt="list"><i class="fa-solid fa-list-ul"></i> 属性表</div>
+                        <div class="pw-fmt-opt ${currentFormat === 'paragraph' ? 'active' : ''}" data-fmt="paragraph"><i class="fa-solid fa-paragraph"></i> 段落</div>
                     </div>
 
                     <button id="pw-btn-gen" class="pw-btn gen"><i class="fa-solid fa-bolt"></i> AI 生成 / 润色</button>
                 </div>
 
-                <!-- Result Section -->
+                <!-- Result -->
                 <div id="pw-result-area" style="display: ${savedState.hasResult ? 'block' : 'none'}">
                     <div style="border-top: 1px dashed var(--SmartThemeBorderColor); margin: 5px 0 15px 0;"></div>
                     <div class="pw-label"><i class="fa-solid fa-check-circle"></i> 结果确认</div>
                     
                     <div class="pw-card">
                         <div>
-                            <span class="pw-label">角色名称 (Name)</span>
+                            <span class="pw-label">角色名称</span>
                             <input type="text" id="pw-res-name" class="pw-input" value="${savedState.name || ''}">
                         </div>
                         <div>
-                            <span class="pw-label">用户设定 (Description)</span>
-                            <textarea id="pw-res-desc" class="pw-textarea" rows="6">${savedState.desc || ''}</textarea>
+                            <span class="pw-label">用户设定</span>
+                            <textarea id="pw-res-desc" class="pw-textarea" rows="5">${savedState.desc || ''}</textarea>
                         </div>
                         
-                        ${currentWb ? `
-                        <div style="margin-top:5px; display: flex; align-items: center; gap: 8px;">
-                            <input type="checkbox" id="pw-wi-toggle" ${extension_settings[extensionName].syncToWorldInfo ? 'checked' : ''}>
-                            <label for="pw-wi-toggle" style="font-size: 0.9em; cursor: pointer; font-weight:bold;">
-                                同步写入世界书 <span style="opacity:0.6; font-weight:normal;">(${currentWb})</span>
-                            </label>
+                        <div style="background: var(--black10a); padding: 8px; border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor);">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <input type="checkbox" id="pw-wi-toggle" ${extension_settings[extensionName].syncToWorldInfo ? 'checked' : ''}>
+                                <label for="pw-wi-toggle" style="font-size: 0.9em; cursor: pointer; font-weight:bold;">${TEXT.LBL_SELECT_WB}</label>
+                            </div>
+                            
+                            <div id="pw-wi-container">
+                                <select id="pw-wi-select" class="pw-select">${optionsHtml}</select>
+                                
+                                <!-- Entry Manager -->
+                                <div class="pw-entries-box">
+                                    <div class="pw-entries-search">
+                                        <input type="text" id="pw-entry-filter" class="pw-search-input" placeholder="🔍 搜索/筛选条目...">
+                                    </div>
+                                    <div id="pw-entries-list" class="pw-entries-list">
+                                        <!-- Entries will be loaded here -->
+                                    </div>
+                                </div>
+                                <div style="font-size:0.8em; opacity:0.6; margin-top:2px; text-align:right;">${TEXT.LBL_ENTRIES_TIP}</div>
+
+                                <textarea id="pw-res-wi" class="pw-textarea" rows="3" placeholder="新条目内容..." style="margin-top:8px;">${savedState.wiContent || ''}</textarea>
+                            </div>
                         </div>
-                        <div id="pw-wi-container" style="margin-top: 5px;">
-                            <textarea id="pw-res-wi" class="pw-textarea" rows="3" placeholder="世界书条目内容...">${savedState.wiContent || ''}</textarea>
-                        </div>
-                        ` : '<div style="opacity:0.5; font-size:0.8em; font-style:italic; margin-top:5px;">未检测到绑定世界书</div>'}
                     </div>
 
                     <button id="pw-btn-save" class="pw-btn save"><i class="fa-solid fa-floppy-disk"></i> 保存并启用</button>
@@ -262,7 +440,7 @@ async function openCreatorPopup() {
             </div>
         </div>
 
-        <!-- History View -->
+        <!-- History -->
         <div id="pw-view-history" class="pw-view">
             <div class="pw-scroll-area" id="pw-history-list"></div>
             <div style="padding: 15px; border-top: 1px solid var(--SmartThemeBorderColor); text-align: center;">
@@ -274,20 +452,22 @@ async function openCreatorPopup() {
     </div>
     `;
 
-    // 关键修正：await 可能会阻塞代码，导致后续绑定失效。
-    // 我们直接调用 callPopup，但不等待其结果来绑定事件。
     callPopup(html, 'text', '', { wide: true, large: true, okButton: "关闭" });
+    
+    // Initial Load of Entries
+    if (selectedBook) {
+        loadAndRenderEntries(selectedBook);
+    }
 }
 
 // ============================================================================
-// GLOBAL EVENT DELEGATION (修复按钮点不动的问题)
+// GLOBAL EVENTS
 // ============================================================================
 
 function bindGlobalEvents() {
-    // 移除旧的绑定以防重复
     $(document).off('click.pw_ext change.pw_ext input.pw_ext');
 
-    // 状态保存 (Event Delegation)
+    // Save State
     $(document).on('input.pw_ext change.pw_ext', '#pw-request, #pw-res-name, #pw-res-desc, #pw-res-wi, #pw-wi-toggle', function() {
         const currentFormat = $('.pw-fmt-opt.active').data('fmt') || 'list';
         saveState({
@@ -296,27 +476,47 @@ function bindGlobalEvents() {
             hasResult: $('#pw-result-area').css('display') !== 'none',
             name: $('#pw-res-name').val(),
             desc: $('#pw-res-desc').val(),
-            wiContent: $('#pw-res-wi').val()
+            wiContent: $('#pw-res-wi').val(),
+            selectedBook: $('#pw-wi-select').val()
         });
     });
 
-    // 切换格式
+    // World Book Change
+    $(document).on('change.pw_ext', '#pw-wi-select', function() {
+        const book = $(this).val();
+        loadAndRenderEntries(book);
+        $('#pw-request').trigger('change'); // trigger save state
+    });
+
+    // Entry Search
+    $(document).on('input.pw_ext', '#pw-entry-filter', function() {
+        renderEntryList(currentBookEntries, $(this).val());
+    });
+
+    // Entry Toggle Tracking
+    $(document).on('change.pw_ext', '.pw-entry-item input', function() {
+        const uid = $(this).data('uid');
+        const checked = $(this).is(':checked');
+        entryChanges[uid] = checked;
+    });
+
+    // Format Toggle
     $(document).on('click.pw_ext', '.pw-fmt-opt', function() {
         $('.pw-fmt-opt').removeClass('active');
         $(this).addClass('active');
-        $('#pw-request').trigger('change'); // 触发保存
+        $('#pw-request').trigger('change');
     });
 
-    // 插入模板
+    // Template
     $(document).on('click.pw_ext', '#pw-fill-template', function() {
+        const template = extension_settings[extensionName].customTemplate || DEFAULT_TEMPLATE;
         const currentVal = $('#pw-request').val();
-        if (currentVal.trim() !== "" && !confirm("输入框已有内容，确定要追加模板吗？")) return;
-        
-        const newVal = currentVal ? currentVal + "\n\n" + TEXT.TEMPLATE_CONTENT : TEXT.TEMPLATE_CONTENT;
+        if (currentVal.trim() !== "" && !confirm("确定要追加模板吗？")) return;
+        const newVal = currentVal ? currentVal + "\n\n" + template : template;
         $('#pw-request').val(newVal).focus().trigger('change');
     });
 
-    // 生成按钮
+    // Generate
     $(document).on('click.pw_ext', '#pw-btn-gen', async function() {
         const req = $('#pw-request').val();
         if (!req.trim()) return toastr.warning("请输入要求");
@@ -324,32 +524,30 @@ function bindGlobalEvents() {
         const currentFormat = $('.pw-fmt-opt.active').data('fmt') || 'list';
         const $btn = $(this);
         const oldText = $btn.html();
-        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 正在生成...');
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 生成中...');
 
         try {
             const data = await generatePersona(req, currentFormat);
-            
             $('#pw-res-name').val(data.name);
             $('#pw-res-desc').val(data.description);
             $('#pw-res-wi').val(data.wi_entry || data.description);
             $('#pw-result-area').fadeIn();
-            
             saveHistory({ request: req, format: currentFormat, data: data });
-            $('#pw-request').trigger('change'); // Save state
+            $('#pw-request').trigger('change');
         } catch (e) {
-            toastr.error(TEXT.TOAST_GEN_FAIL);
+            toastr.error(e.message || TEXT.TOAST_GEN_FAIL);
         } finally {
             $btn.prop('disabled', false).html(oldText);
         }
     });
 
-    // 保存按钮
+    // Save Logic (Includes Entry Updates)
     $(document).on('click.pw_ext', '#pw-btn-save', async function() {
         const name = $('#pw-res-name').val();
         const desc = $('#pw-res-desc').val();
         const wiContent = $('#pw-res-wi').val();
         const syncWi = $('#pw-wi-toggle').is(':checked');
-        const currentWb = await getCurrentWorldbook(); // Re-fetch to be safe
+        const targetWb = $('#pw-wi-select').val();
 
         if (!name) return toastr.warning("名字不能为空");
 
@@ -364,37 +562,55 @@ function bindGlobalEvents() {
             context.powerUserSettings.personas[name] = desc;
             await saveSettingsDebounced();
 
-            // 2. Sync World Info
-            if (currentWb && syncWi && wiContent) {
+            // 2. Sync World Info (Update existing + Add new)
+            if (targetWb && syncWi) {
                 const headers = getRequestHeaders();
+                // Re-fetch to ensure fresh data
                 const getRes = await fetch('/api/worldinfo/get', { 
-                    method: 'POST', headers, body: JSON.stringify({ name: currentWb }) 
+                    method: 'POST', headers, body: JSON.stringify({ name: targetWb }) 
                 });
                 
                 if (getRes.ok) {
                     const bookData = await getRes.json();
                     if (!bookData.entries) bookData.entries = {};
                     
-                    const ids = Object.keys(bookData.entries).map(Number);
-                    const newId = ids.length ? Math.max(...ids) + 1 : 0;
+                    let updatedCount = 0;
+
+                    // Apply user toggles to existing entries
+                    if (Object.keys(entryChanges).length > 0) {
+                        for (const [uid, enabled] of Object.entries(entryChanges)) {
+                            if (bookData.entries[uid]) {
+                                bookData.entries[uid].enabled = enabled;
+                                updatedCount++;
+                            }
+                        }
+                    }
+
+                    // Add new entry if content is present
+                    if (wiContent) {
+                        const ids = Object.keys(bookData.entries).map(Number);
+                        const newId = ids.length ? Math.max(...ids) + 1 : 0;
+                        
+                        bookData.entries[newId] = {
+                            uid: newId,
+                            key: [name, "User", "用户"],
+                            keysecondary: [],
+                            comment: `[User] ${name}`,
+                            content: wiContent,
+                            constant: false,
+                            selective: true,
+                            enabled: true
+                        };
+                        updatedCount++;
+                    }
                     
-                    bookData.entries[newId] = {
-                        uid: newId,
-                        key: [name, "User", "用户"],
-                        keysecondary: [],
-                        comment: `[User] ${name}`,
-                        content: wiContent,
-                        constant: false,
-                        selective: true,
-                        enabled: true
-                    };
-                    
-                    await fetch('/api/worldinfo/edit', {
-                        method: 'POST', headers, body: JSON.stringify({ name: currentWb, data: bookData })
-                    });
-                    
-                    toastr.success(TEXT.TOAST_WI_SUCCESS(currentWb), TEXT.PANEL_TITLE);
-                    if (context.updateWorldInfoList) context.updateWorldInfoList();
+                    if (updatedCount > 0) {
+                        await fetch('/api/worldinfo/edit', {
+                            method: 'POST', headers, body: JSON.stringify({ name: targetWb, data: bookData })
+                        });
+                        toastr.success(TEXT.TOAST_WI_SUCCESS(targetWb), TEXT.PANEL_TITLE);
+                        if (context.updateWorldInfoList) context.updateWorldInfoList();
+                    }
                 }
             }
 
@@ -406,7 +622,6 @@ function bindGlobalEvents() {
             }
 
             toastr.success(TEXT.TOAST_SAVE_SUCCESS(name), TEXT.PANEL_TITLE);
-            // Close popup manually
             const $closeBtn = $('.swal2-confirm, .swal2-cancel, .popup_close');
             if ($closeBtn.length) $closeBtn.click();
 
@@ -418,7 +633,7 @@ function bindGlobalEvents() {
         }
     });
 
-    // 清空
+    // Clear
     $(document).on('click.pw_ext', '#pw-clear', function() {
         if(confirm("确定清空当前所有内容？")) {
             $('input[type="text"], textarea').val('');
@@ -427,7 +642,7 @@ function bindGlobalEvents() {
         }
     });
 
-    // 历史记录
+    // History
     $(document).on('click.pw_ext', '#pw-history', function() {
         loadHistory();
         const $list = $('#pw-history-list').empty();
@@ -440,7 +655,7 @@ function bindGlobalEvents() {
                     <div style="font-weight:bold; color:var(--SmartThemeQuoteColor); font-size:1.05em;">${item.data.name}</div>
                     <div style="font-size:0.9em; opacity:0.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                         <span style="opacity:0.6; border:1px solid var(--SmartThemeBorderColor); border-radius:3px; padding:0 3px; font-size:0.8em; margin-right:5px;">
-                            ${item.format === 'paragraph' ? '小说段落' : '属性表'}
+                            ${item.format === 'paragraph' ? '段落' : '属性表'}
                         </span>
                         ${item.request}
                     </div>
@@ -483,20 +698,43 @@ async function loadSettings() {
     if (Object.keys(extension_settings[extensionName]).length === 0) {
         Object.assign(extension_settings[extensionName], defaultSettings);
     }
+    
     $("#pw_auto_switch").prop("checked", extension_settings[extensionName].autoSwitchPersona);
     $("#pw_sync_wi").prop("checked", extension_settings[extensionName].syncToWorldInfo);
+    
+    $("#pw_api_source").val(extension_settings[extensionName].apiSource || 'main');
+    $("#pw_custom_url").val(extension_settings[extensionName].customApiUrl);
+    $("#pw_custom_key").val(extension_settings[extensionName].customApiKey);
+    $("#pw_custom_model").val(extension_settings[extensionName].customApiModel);
+    $("#pw_custom_template").val(extension_settings[extensionName].customTemplate || DEFAULT_TEMPLATE);
+    
+    updateApiVisibility();
+}
+
+function updateApiVisibility() {
+    const source = $("#pw_api_source").val();
+    if (source === 'custom') $("#pw_custom_api_settings").slideDown();
+    else $("#pw_custom_api_settings").slideUp();
 }
 
 function onSettingChanged() {
-    extension_settings[extensionName].autoSwitchPersona = $("#pw_auto_switch").prop("checked");
-    extension_settings[extensionName].syncToWorldInfo = $("#pw_sync_wi").prop("checked");
+    const s = extension_settings[extensionName];
+    s.autoSwitchPersona = $("#pw_auto_switch").prop("checked");
+    s.syncToWorldInfo = $("#pw_sync_wi").prop("checked");
+    s.apiSource = $("#pw_api_source").val();
+    s.customApiUrl = $("#pw_custom_url").val();
+    s.customApiKey = $("#pw_custom_key").val();
+    s.customApiModel = $("#pw_custom_model").val();
+    s.customTemplate = $("#pw_custom_template").val();
+    
     saveSettingsDebounced();
+    updateApiVisibility();
 }
 
 jQuery(async () => {
     injectStyles();
     await loadSettings();
-    bindGlobalEvents(); // Bind events once on load
+    bindGlobalEvents();
 
     const settingsHtml = `
     <div class="world-info-cleanup-settings">
@@ -510,20 +748,48 @@ jQuery(async () => {
                     <input id="pw_open_btn" class="menu_button" type="button" 
                            value="${TEXT.BTN_OPEN_MAIN}" 
                            style="width: 100%; padding: 8px; font-weight: bold; background: var(--SmartThemeQuoteColor); color: #fff;" />
-                    <small style="display: block; text-align: center; opacity: 0.7; margin-top: 5px;">
-                        ${TEXT.BTN_OPEN_DESC}
-                    </small>
+                    <small style="display: block; text-align: center; opacity: 0.7; margin-top: 5px;">${TEXT.BTN_OPEN_DESC}</small>
                 </div>
                 <hr class="sysHR" />
                 <div style="margin-bottom: 10px;">
                     <div class="flex-container" style="margin: 5px 0; align-items: center;">
                         <input id="pw_auto_switch" type="checkbox" />
-                        <label for="pw_auto_switch" style="margin-left: 8px;">${TEXT.LABEL_AUTO_SWITCH}</label>
+                        <label for="pw_auto_switch" style="margin-left: 8px;">${TEXT.LBL_AUTO_SWITCH}</label>
                     </div>
                     <div class="flex-container" style="margin: 5px 0; align-items: center;">
                         <input id="pw_sync_wi" type="checkbox" />
-                        <label for="pw_sync_wi" style="margin-left: 8px;">${TEXT.LABEL_SYNC_WI}</label>
+                        <label for="pw_sync_wi" style="margin-left: 8px;">${TEXT.LBL_SYNC_WI}</label>
                     </div>
+                </div>
+                <hr class="sysHR" />
+                <div style="margin-bottom: 15px;">
+                    <h4 style="margin:0 0 10px 0;">API 设置</h4>
+                    <div class="pw-setting-row">
+                        <label class="pw-label">${TEXT.LBL_API_SOURCE}</label>
+                        <select id="pw_api_source" class="pw-select">
+                            <option value="main">酒馆主连接 (Main)</option>
+                            <option value="custom">独立 API (OpenAI Compatible)</option>
+                        </select>
+                    </div>
+                    <div id="pw_custom_api_settings" style="display:none; padding-left: 10px; border-left: 2px solid var(--SmartThemeBorderColor);">
+                        <div class="pw-setting-row">
+                            <label class="pw-label">${TEXT.LBL_CUSTOM_URL}</label>
+                            <input id="pw_custom_url" class="pw-setting-input" placeholder="https://api.openai.com/v1" />
+                        </div>
+                        <div class="pw-setting-row">
+                            <label class="pw-label">${TEXT.LBL_CUSTOM_KEY}</label>
+                            <input id="pw_custom_key" type="password" class="pw-setting-input" placeholder="sk-..." />
+                        </div>
+                        <div class="pw-setting-row">
+                            <label class="pw-label">${TEXT.LBL_CUSTOM_MODEL}</label>
+                            <input id="pw_custom_model" class="pw-setting-input" placeholder="gpt-4o" />
+                        </div>
+                    </div>
+                </div>
+                <hr class="sysHR" />
+                <div style="margin-bottom: 10px;">
+                    <h4 style="margin:0 0 10px 0;">${TEXT.LBL_TEMPLATE_EDIT}</h4>
+                    <textarea id="pw_custom_template" class="pw-textarea" rows="6"></textarea>
                 </div>
             </div>
         </div>
@@ -531,8 +797,9 @@ jQuery(async () => {
 
     $("#extensions_settings2").append(settingsHtml);
     $("#pw_open_btn").on("click", openCreatorPopup);
-    $("#pw_auto_switch").on("change", onSettingChanged);
-    $("#pw_sync_wi").on("change", onSettingChanged);
+    $("#pw_auto_switch, #pw_sync_wi").on("change", onSettingChanged);
+    $("#pw_api_source, #pw_custom_url, #pw_custom_key, #pw_custom_model").on("change", onSettingChanged);
+    $("#pw_custom_template").on("change", onSettingChanged);
 
     console.log(`${extensionName} loaded.`);
 });
