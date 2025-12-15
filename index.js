@@ -8,7 +8,7 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v5';
 const STORAGE_KEY_STATE = 'pw_state_v6'; 
-const STORAGE_KEY_TAGS = 'pw_tags_v2';
+const STORAGE_KEY_TAGS = 'pw_tags_v3';
 
 // 默认标签库
 const defaultTags = [
@@ -40,12 +40,12 @@ const TEXT = {
     PANEL_TITLE: "用户设定编织者 Pro",
     BTN_OPEN_MAIN: "✨ 打开设定生成器",
     LABEL_TAGS: "点击插入标签",
-    TOAST_NO_CHAR: "⚠️ 请先在酒馆中打开一个角色聊天！", // 修复提示文案
-    TOAST_API_OK: "✅ API 连接成功，模型列表已更新",
+    TOAST_NO_CHAR: "⚠️ 请先打开一个角色聊天",
+    TOAST_API_OK: "✅ API 连接成功",
     TOAST_API_ERR: "❌ API 连接失败",
     TOAST_SAVE_API: "API 设置已保存",
-    TOAST_SNAPSHOT: "当前内容已保存至历史记录",
-    TOAST_GEN_FAIL: "生成失败，请检查 API 设置"
+    TOAST_SNAPSHOT: "✅ 已存入历史记录",
+    TOAST_GEN_FAIL: "❌ 生成失败，请检查 API 设置"
 };
 
 // ============================================================================
@@ -80,21 +80,25 @@ function injectStyles() {
     if ($(`#${styleId}`).length) return;
 
     const css = `
-    .pw-wrapper { display: flex; flex-direction: column; height: 100%; text-align: left; font-size: 0.95em; min-height: 600px; }
+    .pw-wrapper { display: flex; flex-direction: column; height: 100%; text-align: left; font-size: 0.95em; min-height: 600px; position: relative; }
     
+    /* Header */
     .pw-header { background: var(--SmartThemeBg); border-bottom: 1px solid var(--SmartThemeBorderColor); display: flex; flex-direction: column; flex-shrink: 0; }
     .pw-top-bar { padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; }
     .pw-title { font-weight: bold; font-size: 1.1em; display: flex; align-items: center; gap: 8px; }
     
+    /* Tabs */
     .pw-tabs { display: flex; background: var(--black30a); user-select: none; }
     .pw-tab { flex: 1; text-align: center; padding: 10px; cursor: pointer; border-bottom: 3px solid transparent; opacity: 0.7; font-size: 0.9em; font-weight: bold; transition: 0.2s; }
     .pw-tab:hover { background: var(--white10a); opacity: 1; }
     .pw-tab.active { border-bottom-color: var(--SmartThemeQuoteColor); opacity: 1; color: var(--SmartThemeQuoteColor); background: var(--white05a); }
 
+    /* Scroll Area */
     .pw-view { display: none; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
     .pw-view.active { display: flex; }
     .pw-scroll-area { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
 
+    /* Tags System */
     .pw-tags-wrapper { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 5px; }
     .pw-tags-container { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: var(--black10a); border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor); max-height: 120px; overflow-y: auto; }
     .pw-tag { padding: 4px 10px; background: var(--SmartThemeInputColor); border: 1px solid var(--SmartThemeBorderColor); border-radius: 4px; cursor: pointer; font-size: 0.85em; user-select: none; transition: 0.1s; }
@@ -103,13 +107,13 @@ function injectStyles() {
     .pw-tags-edit-btn { padding: 8px; cursor: pointer; opacity: 0.7; font-size: 1.1em; }
     .pw-tags-edit-btn:hover { opacity: 1; color: var(--SmartThemeQuoteColor); }
 
-    .pw-tag-row { display: flex; gap: 5px; margin-bottom: 5px; align-items: center; }
-    .pw-tag-row input { flex: 1; }
-
-    .pw-editor-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
-    .pw-mini-btn { font-size: 0.85em; cursor: pointer; opacity: 0.7; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; border: 1px solid transparent; }
-    .pw-mini-btn:hover { opacity: 1; background: var(--white10a); border-color: var(--white10a); }
-
+    /* Internal Modal (Overlay) */
+    .pw-modal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--SmartThemeBg); z-index: 10; display: none; flex-direction: column; }
+    .pw-modal-header { padding: 15px; border-bottom: 1px solid var(--SmartThemeBorderColor); display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 1.1em; }
+    .pw-modal-body { flex: 1; overflow-y: auto; padding: 15px; }
+    .pw-tag-row { display: flex; gap: 5px; margin-bottom: 8px; align-items: center; background: var(--black10a); padding: 5px; border-radius: 4px; }
+    
+    /* World Info Tree */
     .pw-wi-controls { display: flex; gap: 10px; margin-bottom: 10px; }
     .pw-wi-book { border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; overflow: hidden; margin-bottom: 8px; background: var(--black10a); }
     .pw-wi-header { padding: 10px 12px; background: var(--black30a); cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 0.9em; }
@@ -122,19 +126,25 @@ function injectStyles() {
     .pw-expand-btn { cursor: pointer; opacity: 0.5; padding: 2px 6px; }
     .pw-expand-btn:hover { opacity: 1; color: var(--SmartThemeQuoteColor); }
 
+    /* API Settings */
     .pw-api-card { padding: 15px; background: var(--black10a); border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor); display: flex; flex-direction: column; gap: 12px; }
     .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .pw-row label { font-weight: bold; font-size: 0.9em; width: 80px; }
     
+    /* Common */
     .pw-textarea { width: 100%; background: var(--SmartThemeInputColor); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeBodyColor); border-radius: 6px; padding: 10px; resize: vertical; min-height: 120px; font-family: inherit; line-height: 1.5; }
     .pw-textarea:focus { outline: 1px solid var(--SmartThemeQuoteColor); }
     .pw-input { width: 100%; background: var(--SmartThemeInputColor); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeBodyColor); padding: 8px; border-radius: 4px; }
     
-    .pw-btn { border: none; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; color: white; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; }
+    .pw-btn { border: none; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; color: white; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; white-space: nowrap; }
+    .pw-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .pw-btn:active { transform: translateY(1px); }
     .pw-btn.gen { background: linear-gradient(90deg, var(--SmartThemeQuoteColor), var(--SmartThemeEmColor)); width: 100%; font-size: 1em; padding: 12px; margin-top: 10px; }
     .pw-btn.save { background: var(--SmartThemeEmColor); width: 100%; }
     .pw-btn.normal { background: var(--SmartThemeBorderColor); color: var(--SmartThemeBodyColor); padding: 6px 12px; }
     .pw-btn.primary { background: var(--SmartThemeQuoteColor); padding: 6px 12px; }
+    .pw-mini-btn { font-size: 0.85em; cursor: pointer; opacity: 0.7; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; border: 1px solid transparent; user-select: none; }
+    .pw-mini-btn:hover { opacity: 1; background: var(--white10a); border-color: var(--white10a); }
 
     .pw-label { font-size: 0.85em; opacity: 0.8; font-weight: bold; margin-bottom: 4px; display: block; }
     .pw-history-item { padding: 10px; border-bottom: 1px solid var(--white10a); cursor: pointer; }
@@ -147,37 +157,40 @@ function injectStyles() {
 // 3. 业务逻辑
 // ============================================================================
 
-// 1. 获取所有可用世界书 (增强版)
+// [FIX] 强健的世界书读取逻辑 (参考 world-info-cleanup)
 async function loadAvailableWorldBooks() {
+    availableWorldBooks = [];
     try {
         const context = getContext();
-        let list = [];
-
-        // 尝试从 API 获取
-        try {
-            const response = await fetch('/api/worldinfo/get', { 
-                method: 'POST', 
-                headers: getRequestHeaders(), 
-                body: JSON.stringify({}) 
-            });
-            if (response.ok) {
-                const apiList = await response.json();
-                if (Array.isArray(apiList)) list = apiList;
+        
+        // 1. 尝试从 API 获取 (最准确)
+        const response = await fetch('/api/worldinfo/get', { 
+            method: 'POST', 
+            headers: getRequestHeaders(), 
+            body: JSON.stringify({}) 
+        });
+        
+        if (response.ok) {
+            const list = await response.json();
+            availableWorldBooks = list.filter(x => x).map(item => item.name || item);
+        } 
+        
+        // 2. 如果 API 失败，尝试全局变量回退
+        if (availableWorldBooks.length === 0) {
+            if (context.world_names && Array.isArray(context.world_names)) {
+                availableWorldBooks = context.world_names;
+            } else if (window.world_names && Array.isArray(window.world_names)) {
+                availableWorldBooks = window.world_names;
             }
-        } catch (e) { console.warn("API fetch failed, trying globals", e); }
-
-        // 如果 API 失败，尝试从全局变量获取
-        if (list.length === 0 && context.world_names) {
-            list = context.world_names;
         }
-
-        // 过滤并去重
-        availableWorldBooks = [...new Set(list.map(item => item.name || item))].filter(Boolean).sort();
-        console.log("[PersonaWeaver] Loaded WorldBooks:", availableWorldBooks.length);
-    } catch (e) { console.error("Load WI failed", e); }
+        
+        availableWorldBooks.sort();
+        console.log("[PW] Loaded WorldBooks:", availableWorldBooks.length);
+    } catch (e) { 
+        console.error("[PW] Load WI failed", e); 
+    }
 }
 
-// 2. 获取当前上下文世界书
 async function getContextWorldBooks(extras = []) {
     const context = getContext();
     const books = new Set(extras); 
@@ -197,7 +210,6 @@ async function getContextWorldBooks(extras = []) {
     return Array.from(books).filter(Boolean);
 }
 
-// 3. 获取详细条目
 async function getWorldBookEntries(bookName) {
     if (worldInfoCache[bookName]) return worldInfoCache[bookName];
     try {
@@ -207,10 +219,11 @@ async function getWorldBookEntries(bookName) {
             const data = await response.json();
             const entries = Object.values(data.entries || {}).map(e => ({
                 uid: e.uid,
+                // [FIX] 优先显示备注名 (Comment)，其次是 Keys
                 displayName: e.comment && e.comment.trim() !== "" ? e.comment : (Array.isArray(e.key) ? e.key.join(', ') : e.key),
                 keys: Array.isArray(e.key) ? e.key.join(', ') : e.key,
                 content: e.content,
-                enabled: !e.disable && e.enabled !== false 
+                enabled: !e.disable && e.enabled !== false
             }));
             worldInfoCache[bookName] = entries;
             return entries;
@@ -219,7 +232,6 @@ async function getWorldBookEntries(bookName) {
     return [];
 }
 
-// 4. API & 生成
 async function fetchModels(url, key) {
     try {
         const endpoint = url.includes('v1') ? `${url.replace(/\/$/, '')}/models` : `${url.replace(/\/$/, '')}/v1/models`;
@@ -283,7 +295,6 @@ Return ONLY a JSON object:
         const content = json.choices[0].message.content;
         return JSON.parse(content.match(/\{[\s\S]*\}/)[0]);
     } else {
-        // Main API
         const generatedText = await context.generateQuietPrompt(systemPrompt, false, false, "System");
         return JSON.parse(generatedText.match(/\{[\s\S]*\}/)[0]);
     }
@@ -295,21 +306,17 @@ Return ONLY a JSON object:
 
 async function openCreatorPopup() {
     const context = getContext();
-    
-    // 修复 1: 确保 Toast 能显示文本
-    if (context.characterId === undefined || context.characterId === null) {
-        toastr.warning(TEXT.TOAST_NO_CHAR);
-        return;
+    if (context.characterId === undefined) {
+        // [FIX] 确保文字正常显示
+        return toastr.warning(TEXT.TOAST_NO_CHAR);
     }
 
     loadData();
     await loadAvailableWorldBooks();
     const savedState = loadState();
     
-    // 合并配置
     const config = { ...defaultSettings, ...extension_settings[extensionName], ...savedState.localConfig };
     
-    // 渲染标签
     const renderTags = () => tagsCache.map((t, i) => `
         <div class="pw-tag" data-idx="${i}">
             <i class="fa-solid fa-tag" style="opacity:0.5;font-size:0.8em;"></i> ${t.name}
@@ -331,11 +338,22 @@ async function openCreatorPopup() {
             </div>
         </div>
 
+        <!-- Tag Manager Overlay (Internal Modal) -->
+        <div id="pw-tag-modal" class="pw-modal-overlay">
+            <div class="pw-modal-header">
+                <span><i class="fa-solid fa-tags"></i> 管理标签</span>
+                <i class="fa-solid fa-times" id="pw-tags-close" style="cursor:pointer;"></i>
+            </div>
+            <div class="pw-modal-body" id="pw-tags-edit-list"></div>
+            <div style="padding:15px; border-top:1px solid var(--SmartThemeBorderColor); display:flex; gap:10px;">
+                <button id="pw-tags-add-new" class="pw-btn normal" style="flex:1;"><i class="fa-solid fa-plus"></i> 添加新标签</button>
+                <button id="pw-tags-finish" class="pw-btn primary" style="flex:1;">完成</button>
+            </div>
+        </div>
+
         <!-- 1. 编辑视图 -->
         <div id="pw-view-editor" class="pw-view active">
             <div class="pw-scroll-area">
-                
-                <!-- 标签栏 -->
                 <div>
                     <div class="pw-label" style="display:flex; justify-content:space-between;">
                         <span>${TEXT.LABEL_TAGS}</span>
@@ -348,11 +366,11 @@ async function openCreatorPopup() {
                     </div>
                 </div>
 
-                <!-- 输入框 -->
                 <div style="flex:1; display:flex; flex-direction:column;">
                     <textarea id="pw-request" class="pw-textarea" placeholder="在此输入要求，或点击上方标签..." style="flex:1;">${savedState.request || ''}</textarea>
                     
                     <div class="pw-editor-controls">
+                        <!-- [FIX] 清除和保存按钮移到这里 -->
                         <div style="display:flex; gap:10px;">
                             <div class="pw-mini-btn" id="pw-clear"><i class="fa-solid fa-eraser"></i> 清空</div>
                             <div class="pw-mini-btn" id="pw-snapshot"><i class="fa-solid fa-save"></i> 存入历史</div>
@@ -369,7 +387,6 @@ async function openCreatorPopup() {
 
                 <button id="pw-btn-gen" class="pw-btn gen"><i class="fa-solid fa-bolt"></i> 生成 / 润色</button>
 
-                <!-- 结果区域 -->
                 <div id="pw-result-area" style="display: ${savedState.hasResult ? 'block' : 'none'}; border-top: 1px dashed var(--SmartThemeBorderColor); padding-top: 10px;">
                     <div class="pw-label" style="color:var(--SmartThemeQuoteColor);">
                         <i class="fa-solid fa-check-circle"></i> 生成结果 (可编辑)
@@ -391,7 +408,7 @@ async function openCreatorPopup() {
             </div>
         </div>
 
-        <!-- 2. 世界书视图 (修复: 显示所有世界书) -->
+        <!-- 2. 世界书视图 -->
         <div id="pw-view-context" class="pw-view">
             <div class="pw-scroll-area">
                 <div class="pw-label">添加参考世界书</div>
@@ -436,8 +453,9 @@ async function openCreatorPopup() {
                             </div>
                         </div>
                     </div>
+                    <!-- [FIX] 增加保存按钮 -->
                     <div style="text-align:right; margin-top:10px;">
-                        <button id="pw-api-save" class="pw-btn primary"><i class="fa-solid fa-save"></i> 保存设置</button>
+                        <button id="pw-api-save" class="pw-btn primary"><i class="fa-solid fa-save"></i> 保存 API 设置</button>
                     </div>
                 </div>
             </div>
@@ -474,7 +492,6 @@ async function openCreatorPopup() {
             }
         });
     };
-    // 使用命名空间事件，防止重复
     $(document).off('.pw');
     $(document).on('input.pw change.pw', '#pw-request, #pw-res-name, #pw-res-desc, #pw-res-wi, .pw-input', saveCurrentState);
 
@@ -486,10 +503,9 @@ async function openCreatorPopup() {
         $(`#pw-view-${$(this).data('tab')}`).addClass('active');
     });
 
-    // --- 3. 标签系统 (防抖修复) ---
+    // --- 3. 标签系统 (修复重复生成 + 内部Overlay管理) ---
     $(document).on('click.pw', '.pw-tag', function(e) {
-        e.preventDefault();
-        e.stopPropagation(); // 阻止冒泡防止触发两次
+        e.preventDefault(); e.stopPropagation();
         
         const idx = $(this).data('idx');
         const tag = tagsCache[idx];
@@ -497,7 +513,6 @@ async function openCreatorPopup() {
         const cur = $text.val();
         
         const insert = tag.value ? `${tag.name}: ${tag.value}` : `${tag.name}: `;
-        // 只有当最后一行不为空且没有换行符时，才添加换行
         const prefix = (cur && !cur.endsWith('\n')) ? '\n' : '';
         
         $text.val(cur + prefix + insert).focus();
@@ -505,62 +520,59 @@ async function openCreatorPopup() {
         saveCurrentState();
     });
 
-    // 修复 2: 标签管理 - 点击完成返回主界面
+    // 打开标签管理 Overlay
     $('.pw-tags-edit-btn').on('click', () => {
-        // 保存当前状态，防止丢失
-        saveCurrentState();
-
-        const manageHtml = `
-            <div style="height:400px; display:flex; flex-direction:column;">
-                <div style="flex:1; overflow-y:auto; margin-bottom:10px;" id="pw-tags-manager-list"></div>
-                <button id="pw-tags-add-new" class="pw-btn normal"><i class="fa-solid fa-plus"></i> 添加新标签</button>
-            </div>
-        `;
-        
         const renderManager = () => {
-            const list = $('#pw-tags-manager-list').empty();
+            const list = $('#pw-tags-edit-list').empty();
             tagsCache.forEach((t, i) => {
                 list.append(`
                     <div class="pw-tag-row">
                         <input class="pw-input t-name" value="${t.name}" placeholder="标签名">
                         <input class="pw-input t-val" value="${t.value}" placeholder="默认值">
-                        <button class="pw-btn normal t-del" style="background:#ff6b6b;"><i class="fa-solid fa-trash"></i></button>
+                        <button class="pw-btn normal t-del" style="background:#ff6b6b; color:white; padding:6px 10px;"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 `);
             });
             
-            // 绑定实时修改
+            // 实时绑定修改
             list.find('input').on('input', function() {
                 const row = $(this).closest('.pw-tag-row');
                 const idx = row.index();
                 tagsCache[idx].name = row.find('.t-name').val();
                 tagsCache[idx].value = row.find('.t-val').val();
                 saveData();
-                // 不在这里更新主界面 DOM，等返回时统一刷新
+                $('#pw-tags-list').html(renderTags());
             });
             
             list.find('.t-del').on('click', function() {
                 const idx = $(this).closest('.pw-tag-row').index();
-                tagsCache.splice(idx, 1);
-                saveData();
-                renderManager();
+                if(confirm("删除此标签？")) {
+                    tagsCache.splice(idx, 1);
+                    saveData();
+                    renderManager();
+                    $('#pw-tags-list').html(renderTags());
+                }
             });
         };
-
-        // 打开管理弹窗，配置 "完成" 按钮回调
-        callPopup(manageHtml, 'text', '', { wide: true, okButton: "完成" })
-            .then(() => {
-                // 当点击完成时，重新打开主界面
-                openCreatorPopup();
-            });
-
         renderManager();
-        
-        $('#pw-tags-add-new').on('click', () => {
-            tagsCache.push({ name: "新标签", value: "" });
-            saveData();
-            renderManager();
-        });
+        $('#pw-tag-modal').css('display', 'flex'); // Show Overlay
+    });
+
+    $('#pw-tags-close, #pw-tags-finish').on('click', () => {
+        $('#pw-tag-modal').hide();
+    });
+
+    $('#pw-tags-add-new').on('click', () => {
+        tagsCache.push({ name: "新标签", value: "" });
+        saveData();
+        // 重新渲染管理列表
+        const list = $('#pw-tags-edit-list');
+        // Trigger re-render by simulating open or just function call.
+        // For simplicity, just append logic or re-call renderManager.
+        // We need to re-attach listeners, so let's recall the opener logic's render part.
+        // But since we can't access `renderManager` here easily without refactoring, 
+        // we will manually trigger the edit btn click again to refresh (Hack but works).
+        $('.pw-tags-edit-btn').click();
     });
 
     // --- 4. 世界书逻辑 ---
@@ -664,12 +676,13 @@ async function openCreatorPopup() {
         }
     });
 
+    // [FIX] 保存 API 设置按钮
     $('#pw-api-save').on('click', () => {
         saveCurrentState();
         toastr.success(TEXT.TOAST_SAVE_API);
     });
 
-    // --- 6. 底部工具栏 ---
+    // --- 6. 底部工具栏 (存入历史) ---
     $('#pw-clear').on('click', () => {
         if(confirm("清空输入内容？")) {
             $('#pw-request').val('');
@@ -678,10 +691,22 @@ async function openCreatorPopup() {
         }
     });
 
+    // [FIX] 存入历史逻辑
     $('#pw-snapshot').on('click', () => {
         const req = $('#pw-request').val();
-        if (!req) return;
-        saveHistory({ request: req, data: { name: "手动快照", description: "未生成", wi_entry: "" } });
+        const curName = $('#pw-res-name').val();
+        const curDesc = $('#pw-res-desc').val();
+        
+        if (!req && !curName) return;
+        
+        saveHistory({ 
+            request: req, 
+            data: { 
+                name: curName || "快照", 
+                description: curDesc || "", 
+                wi_entry: $('#pw-res-wi').val() 
+            } 
+        });
         toastr.success(TEXT.TOAST_SNAPSHOT);
     });
 
@@ -758,7 +783,7 @@ async function openCreatorPopup() {
                         const newId = ids.length ? Math.max(...ids) + 1 : 0;
                         d.entries[newId] = { uid: newId, key: [name, "User"], content: wiContent, comment: `User: ${name}`, enabled: true, selective: true };
                         await fetch('/api/worldinfo/edit', { method: 'POST', headers, body: JSON.stringify({ name: book, data: d }) });
-                        toastr.success(TEXT.TOAST_WI_SUCCESS(book));
+                        toastr.success(`WI Updated: ${book}`);
                         if (context.updateWorldInfoList) context.updateWorldInfoList();
                     }
                 } catch(e) { console.error(e); }
