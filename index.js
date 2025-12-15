@@ -7,7 +7,7 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 
 const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_generation_history_v1';
-const STORAGE_KEY_STATE = 'pw_current_state_v2'; // 更新版本号以免冲突
+const STORAGE_KEY_STATE = 'pw_current_state_v2';
 
 const defaultSettings = {
     autoSwitchPersona: true,
@@ -16,11 +16,13 @@ const defaultSettings = {
     defaultOutputFormat: 'list' // 'list' | 'paragraph'
 };
 
-// UI Text Constants
+// UI Text Constants (已修复 undefined 问题)
 const TEXT = {
     PANEL_TITLE: "用户设定编织者 ✒️",
     BTN_OPEN_MAIN: "✨ 打开设定生成器",
     BTN_OPEN_DESC: "AI 辅助生成用户人设、属性表并同步世界书",
+    LABEL_AUTO_SWITCH: "保存后自动切换马甲",  // 补回丢失的文本
+    LABEL_SYNC_WI: "默认勾选同步世界书",      // 补回丢失的文本
     TOAST_NO_CHAR: "请先打开一个角色聊天",
     TOAST_GEN_FAIL: "AI 生成失败，请检查连接",
     TOAST_SAVE_SUCCESS: (name) => `已保存并切换为: ${name}`,
@@ -70,7 +72,7 @@ function injectStyles() {
     if ($(`#${styleId}`).length) return;
 
     const css = `
-    .pw-wrapper { display: flex; flex-direction: column; height: 100%; text-align: left; font-size: 0.95em; }
+    .pw-wrapper { display: flex; flex-direction: column; height: 100%; text-align: left; font-size: 0.95em; min-height: 400px; }
     .pw-header { padding: 12px; border-bottom: 1px solid var(--SmartThemeBorderColor); display: flex; justify-content: space-between; align-items: center; background: var(--SmartThemeBg); }
     .pw-title { font-weight: bold; font-size: 1.1em; display: flex; align-items: center; gap: 8px; }
     .pw-tools i { cursor: pointer; margin-left: 15px; opacity: 0.7; transition: 0.2s; font-size: 1.1em; }
@@ -137,11 +139,10 @@ async function generatePersona(userRequest, outputFormat = 'list') {
     
     const char = context.characters[charId];
     
-    // Construct Format Instruction
     let formatInst = "";
     if (outputFormat === 'list') {
         formatInst = `
-        "description": "Output strictly as an Attribute List / Character Sheet format. Use newlines. Example:\nName: ...\nAge: ...\nAppearance: ...\nPersonality: ...\nBackground: ...\n\n(Ensure content is detailed, approx 200 words total)"`;
+        "description": "Output strictly as an Attribute List / Character Sheet format. Use newlines. Example:\\nName: ...\\nAge: ...\\nAppearance: ...\\nPersonality: ...\\nBackground: ...\\n\\n(Ensure content is detailed, approx 200 words total)"`;
     } else {
         formatInst = `
         "description": "Output as a narrative, descriptive paragraph in third person. (Approx 200 words)"`;
@@ -273,14 +274,22 @@ async function openCreatorPopup() {
     </div>
     `;
 
-    // Show Popup
-    await callPopup(html, 'text', '', { wide: true, large: true, okButton: "关闭" });
+    // 关键修正：await 可能会阻塞代码，导致后续绑定失效。
+    // 我们直接调用 callPopup，但不等待其结果来绑定事件。
+    callPopup(html, 'text', '', { wide: true, large: true, okButton: "关闭" });
+}
 
-    // === Event Binding ===
-    const $popup = $('.swal2-popup');
-    
-    // State Saver
-    const autoSave = () => {
+// ============================================================================
+// GLOBAL EVENT DELEGATION (修复按钮点不动的问题)
+// ============================================================================
+
+function bindGlobalEvents() {
+    // 移除旧的绑定以防重复
+    $(document).off('click.pw_ext change.pw_ext input.pw_ext');
+
+    // 状态保存 (Event Delegation)
+    $(document).on('input.pw_ext change.pw_ext', '#pw-request, #pw-res-name, #pw-res-desc, #pw-res-wi, #pw-wi-toggle', function() {
+        const currentFormat = $('.pw-fmt-opt.active').data('fmt') || 'list';
         saveState({
             request: $('#pw-request').val(),
             format: currentFormat,
@@ -289,32 +298,30 @@ async function openCreatorPopup() {
             desc: $('#pw-res-desc').val(),
             wiContent: $('#pw-res-wi').val()
         });
-    };
-    $popup.on('input change', 'input, textarea', autoSave);
-
-    // Format Toggle
-    $('.pw-fmt-opt').on('click', function() {
-        $('.pw-fmt-opt').removeClass('active');
-        $(this).addClass('active');
-        currentFormat = $(this).data('fmt');
-        autoSave();
     });
 
-    // Fill Template
-    $('#pw-fill-template').on('click', function() {
+    // 切换格式
+    $(document).on('click.pw_ext', '.pw-fmt-opt', function() {
+        $('.pw-fmt-opt').removeClass('active');
+        $(this).addClass('active');
+        $('#pw-request').trigger('change'); // 触发保存
+    });
+
+    // 插入模板
+    $(document).on('click.pw_ext', '#pw-fill-template', function() {
         const currentVal = $('#pw-request').val();
         if (currentVal.trim() !== "" && !confirm("输入框已有内容，确定要追加模板吗？")) return;
         
         const newVal = currentVal ? currentVal + "\n\n" + TEXT.TEMPLATE_CONTENT : TEXT.TEMPLATE_CONTENT;
-        $('#pw-request').val(newVal).focus();
-        autoSave();
+        $('#pw-request').val(newVal).focus().trigger('change');
     });
 
-    // Generate
-    $('#pw-btn-gen').on('click', async function() {
+    // 生成按钮
+    $(document).on('click.pw_ext', '#pw-btn-gen', async function() {
         const req = $('#pw-request').val();
         if (!req.trim()) return toastr.warning("请输入要求");
 
+        const currentFormat = $('.pw-fmt-opt.active').data('fmt') || 'list';
         const $btn = $(this);
         const oldText = $btn.html();
         $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 正在生成...');
@@ -328,7 +335,7 @@ async function openCreatorPopup() {
             $('#pw-result-area').fadeIn();
             
             saveHistory({ request: req, format: currentFormat, data: data });
-            autoSave();
+            $('#pw-request').trigger('change'); // Save state
         } catch (e) {
             toastr.error(TEXT.TOAST_GEN_FAIL);
         } finally {
@@ -336,12 +343,13 @@ async function openCreatorPopup() {
         }
     });
 
-    // Save
-    $('#pw-btn-save').on('click', async function() {
+    // 保存按钮
+    $(document).on('click.pw_ext', '#pw-btn-save', async function() {
         const name = $('#pw-res-name').val();
         const desc = $('#pw-res-desc').val();
         const wiContent = $('#pw-res-wi').val();
         const syncWi = $('#pw-wi-toggle').is(':checked');
+        const currentWb = await getCurrentWorldbook(); // Re-fetch to be safe
 
         if (!name) return toastr.warning("名字不能为空");
 
@@ -359,7 +367,6 @@ async function openCreatorPopup() {
             // 2. Sync World Info
             if (currentWb && syncWi && wiContent) {
                 const headers = getRequestHeaders();
-                // Get WB Data
                 const getRes = await fetch('/api/worldinfo/get', { 
                     method: 'POST', headers, body: JSON.stringify({ name: currentWb }) 
                 });
@@ -399,7 +406,9 @@ async function openCreatorPopup() {
             }
 
             toastr.success(TEXT.TOAST_SAVE_SUCCESS(name), TEXT.PANEL_TITLE);
-            $('.popup_close').click();
+            // Close popup manually
+            const $closeBtn = $('.swal2-confirm, .swal2-cancel, .popup_close');
+            if ($closeBtn.length) $closeBtn.click();
 
         } catch (e) {
             console.error(e);
@@ -409,8 +418,8 @@ async function openCreatorPopup() {
         }
     });
 
-    // Clear
-    $('#pw-clear').on('click', () => {
+    // 清空
+    $(document).on('click.pw_ext', '#pw-clear', function() {
         if(confirm("确定清空当前所有内容？")) {
             $('input[type="text"], textarea').val('');
             $('#pw-result-area').hide();
@@ -418,13 +427,9 @@ async function openCreatorPopup() {
         }
     });
 
-    // View Switching
-    const toggleView = (view) => {
-        $('.pw-view').removeClass('active');
-        $(`#pw-view-${view}`).addClass('active');
-    };
-
-    $('#pw-history').on('click', () => {
+    // 历史记录
+    $(document).on('click.pw_ext', '#pw-history', function() {
+        loadHistory();
         const $list = $('#pw-history-list').empty();
         if (historyCache.length === 0) $list.html('<div style="text-align:center; opacity:0.5;">暂无记录</div>');
         
@@ -447,24 +452,25 @@ async function openCreatorPopup() {
                 $('#pw-res-desc').val(item.data.description);
                 $('#pw-res-wi').val(item.data.wi_entry);
                 
-                // Restore format selection
-                currentFormat = item.format || 'list';
                 $('.pw-fmt-opt').removeClass('active');
-                $(`.pw-fmt-opt[data-fmt="${currentFormat}"]`).addClass('active');
+                $(`.pw-fmt-opt[data-fmt="${item.format || 'list'}"]`).addClass('active');
 
                 $('#pw-result-area').show();
-                autoSave();
-                toggleView('editor');
+                $('#pw-request').trigger('change');
+                
+                $('.pw-view').removeClass('active');
+                $(`#pw-view-editor`).addClass('active');
             });
             $list.append($el);
         });
-        toggleView('history');
-        $('#pw-clear').hide();
+        
+        $('.pw-view').removeClass('active');
+        $(`#pw-view-history`).addClass('active');
     });
 
-    $('#pw-btn-back').on('click', () => {
-        toggleView('editor');
-        $('#pw-clear').show();
+    $(document).on('click.pw_ext', '#pw-btn-back', function() {
+        $('.pw-view').removeClass('active');
+        $(`#pw-view-editor`).addClass('active');
     });
 }
 
@@ -490,6 +496,7 @@ function onSettingChanged() {
 jQuery(async () => {
     injectStyles();
     await loadSettings();
+    bindGlobalEvents(); // Bind events once on load
 
     const settingsHtml = `
     <div class="world-info-cleanup-settings">
