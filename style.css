@@ -98,3 +98,20 @@
 /* 视图切换辅助类 */
 .pw-view { display: none; flex-direction: column; flex: 1; }
 .pw-view.active { display: flex; }
+
+/* 底部红色小字按钮 */
+.pw-text-danger-btn {
+    color: #ff6b6b;
+    font-size: 0.85em;
+    cursor: pointer;
+    text-align: center;
+    padding: 10px;
+    margin-top: auto; /* 推到底部 */
+    text-decoration: none;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+.pw-text-danger-btn:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
