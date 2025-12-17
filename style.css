@@ -1,26 +1,14 @@
 /* =========================================
-   1. 弹窗容器与全局布局
+   全局容器与弹窗修正
    ========================================= */
-/* 强制弹窗在移动端适配 */
 .swal2-popup.pw-wide { 
     width: 95% !important; 
     max-width: 800px !important;
     padding: 0 !important;
     display: flex !important;
     flex-direction: column;
+    height: 90vh !important; /* 固定高度，防止太高溢出 */
     max-height: 90vh !important;
-    border-radius: 12px !important;
-    overflow: hidden !important;
-}
-
-/* 移动端全屏优化 */
-@media screen and (max-width: 700px) {
-    .swal2-popup.pw-wide {
-        width: 100% !important;
-        height: 100% !important;
-        max-height: 100% !important;
-        border-radius: 0 !important;
-    }
 }
 
 .swal2-html-container {
@@ -34,29 +22,36 @@
 }
 
 /* =========================================
-   2. 顶部栏与 Tab
+   顶部导航栏
    ========================================= */
 .pw-header {
-    padding: 15px;
+    padding: 12px 15px;
     border-bottom: 1px solid var(--smart-theme-border-color-1);
-    display: flex; justify-content: space-between; align-items: center;
-    flex-shrink: 0; background: var(--smart-theme-bg);
+    background: var(--smart-theme-bg);
+    flex-shrink: 0;
 }
-.pw-title { font-weight: bold; font-size: 1.1em; color: var(--smart-theme-body-color); }
 
-.pw-tabs { display: flex; background: rgba(0,0,0,0.2); user-select: none; flex-shrink: 0; }
+.pw-top-bar {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+}
+.pw-title { font-weight: bold; font-size: 1.1em; color: var(--smart-theme-body-color); display: flex; align-items: center; gap: 8px; }
+
+/* 标签页导航 */
+.pw-tabs { display: flex; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 4px; gap: 4px; }
 .pw-tab { 
-    flex: 1; text-align: center; padding: 12px 5px; cursor: pointer; 
-    border-bottom: 3px solid transparent; opacity: 0.7; 
-    font-size: 0.9em; font-weight: bold; transition: 0.2s; 
-    white-space: nowrap;
+    flex: 1; text-align: center; padding: 8px; cursor: pointer; 
+    border-radius: 6px; font-size: 0.9em; font-weight: bold; opacity: 0.7; transition: 0.2s;
+    color: var(--smart-theme-body-color);
 }
 .pw-tab:hover { background: rgba(255,255,255,0.05); opacity: 1; }
-.pw-tab.active { border-bottom-color: #5b8db8; opacity: 1; color: #5b8db8; background: rgba(255,255,255,0.08); }
+.pw-tab.active { background: var(--smart-theme-body-color); color: var(--smart-theme-bg); opacity: 1; }
 
 /* =========================================
-   3. 滚动区域与基础组件
+   主内容区域
    ========================================= */
+.pw-view { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+.pw-view.active { display: flex; }
+
 .pw-scroll-area {
     flex: 1;
     overflow-y: auto;
@@ -65,106 +60,113 @@
     -webkit-overflow-scrolling: touch;
 }
 
-/* 输入框样式修复 - 增加对比度 */
+/* =========================================
+   新版标签系统 (Inline)
+   ========================================= */
+.pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.pw-tags-label { font-size: 0.85em; font-weight: bold; opacity: 0.7; }
+.pw-tags-edit-toggle { cursor: pointer; font-size: 0.85em; color: #5b8db8; padding: 4px 8px; }
+.pw-tags-edit-toggle:hover { text-decoration: underline; }
+
+.pw-tags-container { 
+    display: flex; flex-wrap: wrap; gap: 8px; 
+    padding: 10px; 
+    background: rgba(0,0,0,0.1); 
+    border: 1px solid var(--smart-theme-border-color-1); 
+    border-radius: 8px;
+    min-height: 40px;
+}
+
+/* 浏览模式下的标签 */
+.pw-tag-chip {
+    padding: 5px 10px;
+    background: var(--smart-theme-bg);
+    border: 1px solid var(--smart-theme-border-color-1);
+    border-radius: 20px;
+    font-size: 0.85em;
+    cursor: pointer;
+    user-select: none;
+    transition: 0.1s;
+    display: flex; align-items: center;
+}
+.pw-tag-chip:hover { border-color: #5b8db8; color: #5b8db8; transform: translateY(-1px); }
+.pw-tag-val { opacity: 0.6; margin-left: 4px; font-size: 0.9em; }
+
+/* 添加按钮 */
+.pw-tag-add-btn {
+    padding: 5px 12px;
+    background: rgba(91, 141, 184, 0.2);
+    color: #5b8db8;
+    border: 1px dashed #5b8db8;
+    border-radius: 20px;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.pw-tag-add-btn:hover { background: #5b8db8; color: white; border-style: solid; }
+
+/* 编辑模式下的标签行 */
+.pw-tag-edit-row {
+    width: 100%;
+    display: flex; gap: 8px; align-items: center;
+    margin-bottom: 4px;
+    background: rgba(0,0,0,0.05);
+    padding: 6px; border-radius: 6px;
+}
+.pw-tag-edit-input { 
+    flex: 1; background: var(--smart-theme-bg); 
+    border: 1px solid var(--smart-theme-border-color-1); 
+    padding: 6px; border-radius: 4px; font-size: 0.9em; 
+    color: var(--smart-theme-body-color);
+}
+.pw-tag-del-btn {
+    padding: 6px 10px; color: #ff6b6b; cursor: pointer; border-radius: 4px;
+    background: rgba(255, 107, 107, 0.1);
+}
+
+/* =========================================
+   通用表单元素
+   ========================================= */
 .pw-textarea {
-    width: 100%; 
-    background: rgba(0, 0, 0, 0.2); /* 加深背景 */
+    width: 100%; box-sizing: border-box;
+    background: var(--smart-theme-input-color, rgba(0,0,0,0.05));
     border: 1px solid var(--smart-theme-border-color-1);
     color: var(--smart-theme-body-color);
     border-radius: 8px; padding: 10px; resize: none;
-    font-family: inherit; min-height: 80px;
-    box-sizing: border-box;
+    font-family: inherit; line-height: 1.5;
 }
-.pw-textarea:focus { border-color: #5b8db8; outline: none; background: rgba(0,0,0,0.3); }
+.pw-textarea:focus { border-color: #5b8db8; outline: none; }
 
 .pw-input {
     width: 100%; box-sizing: border-box;
-    background: rgba(0, 0, 0, 0.2); /* 加深背景 */
+    background: var(--smart-theme-input-color, rgba(0,0,0,0.05));
     border: 1px solid var(--smart-theme-border-color-1);
     color: var(--smart-theme-body-color);
-    padding: 8px; border-radius: 6px; margin-top: 5px;
+    padding: 8px; border-radius: 6px;
 }
 
-/* 按钮通用样式 */
 .pw-btn {
-    border: none; padding: 10px 0; border-radius: 6px;
-    font-weight: bold; font-size: 0.95em;
+    border: none; padding: 10px; border-radius: 6px;
+    font-weight: bold; font-size: 0.95em; cursor: pointer;
     display: flex; align-items: center; justify-content: center; gap: 6px;
-    transition: all 0.2s; cursor: pointer; color: white; width: 100%;
+    transition: 0.2s; color: white;
 }
-.pw-btn.gen { background: linear-gradient(135deg, #5b8db8, #4a7a9f); }
-.pw-btn.save { background: #7a9a83; margin-top: 10px;}
-.pw-btn.normal { background: var(--smart-theme-border-color-1); color: var(--smart-theme-body-color); width: auto; padding: 8px 15px; }
-.pw-btn.primary { background: #5b8db8; width: auto; padding: 8px 15px; }
-.pw-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.pw-btn:hover { filter: brightness(1.1); }
+.pw-btn.gen { background: linear-gradient(90deg, #5b8db8, #4a7a9f); width: 100%; margin-top: 10px; }
+.pw-btn.save { background: #7a9a83; width: 100%; margin-top: 10px; }
+.pw-btn.primary { background: #5b8db8; }
+.pw-btn.danger { background: transparent; color: #ff6b6b; font-size: 0.85em; width: 100%; margin-top: 20px; text-decoration: underline; opacity: 0.8; }
+.pw-btn.danger:hover { opacity: 1; }
 
-.pw-mini-btn {
-    font-size: 0.85em; cursor: pointer; opacity: 0.7; 
-    padding: 4px 8px; border-radius: 4px; border: 1px solid transparent; 
-    display: flex; align-items: center; gap: 4px;
-}
-.pw-mini-btn:hover { opacity: 1; background: rgba(255,255,255,0.1); }
+.pw-editor-tools { display: flex; justify-content: flex-end; gap: 10px; margin-top: 5px; }
+.pw-mini-btn { font-size: 0.85em; opacity: 0.7; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; }
+.pw-mini-btn:hover { background: rgba(255,255,255,0.1); opacity: 1; }
 
 /* =========================================
-   4. 标签系统 (Tag System)
+   API 与 世界书卡片样式 (修复丑陋问题)
    ========================================= */
-.pw-tags-wrapper {
-    background: rgba(0,0,0,0.1);
-    border: 1px solid var(--smart-theme-border-color-1);
-    border-radius: 8px;
-    padding: 10px;
-    margin-bottom: 10px;
-}
-
-.pw-tags-container {
-    display: flex; flex-wrap: wrap; gap: 8px;
-    max-height: 200px; overflow-y: auto;
-}
-
-/* 正常标签 */
-.pw-tag {
-    padding: 6px 10px;
-    background: var(--smart-theme-bg);
-    border: 1px solid var(--smart-theme-border-color-1);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9em;
-    user-select: none;
-    transition: all 0.1s;
-    display: inline-flex; align-items: center;
-}
-.pw-tag:hover { border-color: #5b8db8; color: #5b8db8; transform: translateY(-1px); }
-.pw-tag-val { opacity: 0.6; font-size: 0.85em; margin-left: 4px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 4px; }
-
-/* 编辑模式行 */
-.pw-tag-edit-row {
-    display: flex; width: 100%; gap: 5px; align-items: center; margin-bottom: 2px;
-}
-.pw-tag-input {
-    background: rgba(0,0,0,0.2);
-    border: 1px solid var(--smart-theme-border-color-1);
-    color: var(--smart-theme-body-color);
-    padding: 6px; border-radius: 4px; font-size: 0.9em;
-}
-
-/* 新增按钮 (统一样式) */
-.pw-tag-add-btn {
-    padding: 6px 12px;
-    background: rgba(91, 141, 184, 0.15);
-    border: 1px dashed #5b8db8;
-    color: #5b8db8;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9em;
-    display: inline-flex; align-items: center; justify-content: center;
-}
-.pw-tag-add-btn:hover { background: #5b8db8; color: white; }
-
-/* =========================================
-   5. 世界书 & API 样式 (修复丑陋问题)
-   ========================================= */
-.pw-card-box {
-    background: rgba(0, 0, 0, 0.15); /* 加深背景 */
+.pw-card-section {
+    background: rgba(0, 0, 0, 0.2); /* 加深背景 */
     border: 1px solid var(--smart-theme-border-color-1);
     border-radius: 8px;
     padding: 15px;
@@ -174,64 +176,52 @@
 .pw-row { 
     display: flex; align-items: center; justify-content: space-between; gap: 10px; 
 }
-.pw-row label { font-weight: bold; font-size: 0.9em; min-width: 60px; }
+.pw-row label { font-weight: bold; min-width: 70px; font-size: 0.9em; }
 
+/* 世界书列表 */
 .pw-wi-book { 
-    border: 1px solid var(--smart-theme-border-color-1); 
-    border-radius: 6px; overflow: hidden; margin-bottom: 8px; 
     background: rgba(0,0,0,0.2); 
+    border: 1px solid var(--smart-theme-border-color-1); 
+    border-radius: 6px; margin-bottom: 8px; overflow: hidden; 
 }
-.pw-wi-header { 
-    padding: 10px 12px; background: rgba(255,255,255,0.05); 
-    cursor: pointer; display: flex; justify-content: space-between; align-items: center; 
-    font-weight: bold; font-size: 0.9em; 
-}
+.pw-wi-header { padding: 10px 12px; background: rgba(255,255,255,0.05); cursor: pointer; display: flex; justify-content: space-between; font-weight: bold; font-size: 0.9em; }
+.pw-wi-list { padding: 5px; display: none; }
+.pw-wi-item { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 8px; }
 
 /* =========================================
-   6. 历史记录列表
+   历史记录列表
    ========================================= */
 .pw-history-item {
-    background: rgba(0,0,0,0.15);
+    background: rgba(0,0,0,0.2);
     border: 1px solid var(--smart-theme-border-color-1);
-    padding: 12px; border-radius: 8px; cursor: pointer;
-    transition: 0.2s; position: relative; margin-bottom: 8px;
+    padding: 12px; border-radius: 8px;
+    margin-bottom: 8px; cursor: pointer;
+    transition: 0.2s;
+    display: flex; gap: 10px;
 }
-.pw-history-item:hover { border-color: #5b8db8; background: rgba(0,0,0,0.25); }
+.pw-history-item:hover { border-color: #5b8db8; background: rgba(255,255,255,0.05); }
 
-.pw-hist-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
-.pw-hist-title { 
-    font-weight: bold; color: #5b8db8; border: none; background: transparent; 
-    width: 85%; font-size: 1.05em; padding: 0;
-}
-.pw-hist-title.editing { border-bottom: 1px solid #5b8db8; outline: none; }
-.pw-hist-meta { font-size: 0.8em; opacity: 0.6; display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 6px; }
-.pw-hist-desc { font-size: 0.9em; opacity: 0.8; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4; }
-
-/* 底部红色小字 */
-.pw-text-danger-btn {
-    color: #ff6b6b; font-size: 0.9em; cursor: pointer; text-align: center;
-    padding: 20px; margin-top: auto; opacity: 0.8;
-}
-.pw-text-danger-btn:hover { opacity: 1; text-decoration: underline; }
+.pw-hist-main { flex: 1; min-width: 0; }
+.pw-hist-title { font-weight: bold; color: #5b8db8; margin-bottom: 4px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-hist-meta { font-size: 0.75em; opacity: 0.6; display: flex; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+.pw-hist-desc { font-size: 0.85em; opacity: 0.8; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pw-hist-del-btn { color: #ff6b6b; padding: 5px; opacity: 0.6; }
+.pw-hist-del-btn:hover { opacity: 1; transform: scale(1.1); }
 
 /* =========================================
-   7. 移动端响应式 (Mobile Responsive)
+   移动端自适应 (Mobile)
    ========================================= */
 @media screen and (max-width: 700px) {
-    /* 调整 Tab 大小 */
-    .pw-tab { font-size: 0.85em; padding: 10px 2px; }
-    
-    /* 标签编辑行变竖排 */
-    .pw-tag-edit-row { flex-direction: column; align-items: stretch; border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 5px; margin-bottom: 8px; }
-    
-    /* API 设置行变竖排 */
-    .pw-row { flex-direction: column; align-items: stretch; gap: 5px; }
+    .pw-row { flex-direction: column; align-items: flex-start; gap: 5px; }
     .pw-row label { margin-bottom: 2px; }
+    .pw-row select, .pw-row input { width: 100% !important; }
     
-    /* 工具栏调整 */
-    .pw-editor-controls { flex-direction: column; gap: 10px; }
-    .pw-editor-controls > div { justify-content: space-between; width: 100%; }
+    .pw-tag-edit-row { flex-direction: column; align-items: stretch; }
+    .pw-tag-del-btn { text-align: center; background: rgba(255, 107, 107, 0.2); }
+    
+    .pw-header { padding: 10px; }
+    .pw-title { font-size: 1em; }
+    
+    .pw-history-item { flex-direction: column; }
+    .pw-hist-del-btn { align-self: flex-end; margin-top: -20px; }
 }
-
-.pw-view { display: none; flex-direction: column; flex: 1; }
-.pw-view.active { display: flex; }
