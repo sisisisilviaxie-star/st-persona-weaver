@@ -1,6 +1,29 @@
-/* 顶部栏 */
+/* ==========================================================================
+   核心修复：强制覆盖酒馆默认弹窗样式
+   ========================================================================== */
+.pw-wrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    text-align: left; /* 强制左对齐 */
+    font-size: 0.95em;
+    min-height: 600px;
+    position: relative;
+    overflow: hidden;
+    color: var(--smart-theme-body-color); /* 确保文字颜色正确 */
+}
+
+/* 修复输入框在某些主题下看不清的问题 */
+.pw-wrapper * {
+    box-sizing: border-box;
+}
+
+/* ==========================================================================
+   顶部栏与导航
+   ========================================================================== */
 .pw-header {
-    padding: 15px;
+    padding: 10px 15px;
     border-bottom: 1px solid var(--smart-theme-border-color-1);
     display: flex; justify-content: space-between; align-items: center;
     flex-shrink: 0; background: var(--smart-theme-bg);
@@ -8,12 +31,14 @@
 .pw-title { font-weight: bold; font-size: 1.1em; color: var(--smart-theme-body-color); display: flex; align-items: center; gap: 8px; }
 
 /* Tab 样式 */
-.pw-tabs { display: flex; background: rgba(0,0,0,0.2); user-select: none; }
-.pw-tab { flex: 1; text-align: center; padding: 10px; cursor: pointer; border-bottom: 3px solid transparent; opacity: 0.7; font-size: 0.9em; font-weight: bold; transition: 0.2s; }
+.pw-tabs { display: flex; background: rgba(0,0,0,0.2); user-select: none; border-radius: 6px; overflow: hidden; margin-top: 5px;}
+.pw-tab { flex: 1; text-align: center; padding: 8px; cursor: pointer; border-bottom: 3px solid transparent; opacity: 0.7; font-size: 0.9em; font-weight: bold; transition: 0.2s; }
 .pw-tab:hover { background: rgba(255,255,255,0.1); opacity: 1; }
 .pw-tab.active { border-bottom-color: var(--smart-theme-quote-color); opacity: 1; color: var(--smart-theme-quote-color); background: rgba(255,255,255,0.05); }
 
-/* 滚动区域 */
+/* ==========================================================================
+   视图与滚动区域
+   ========================================================================== */
 .pw-view { display: none; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 .pw-view.active { display: flex; }
 .pw-scroll-area {
@@ -21,11 +46,13 @@
     -webkit-overflow-scrolling: touch;
 }
 
-/* --- [改动] 标签系统样式 --- */
-.pw-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+/* ==========================================================================
+   标签系统样式 (修复布局错乱)
+   ========================================================================== */
+.pw-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; width: 100%; }
 .pw-label { font-size: 0.85em; opacity: 0.8; font-weight: bold; }
 .pw-toggle-edit { cursor: pointer; opacity: 0.6; font-size: 1em; padding: 4px; transition: 0.2s; }
-.pw-toggle-edit:hover, .pw-toggle-edit.active { opacity: 1; color: var(--smart-theme-quote-color); transform: scale(1.1); }
+.pw-toggle-edit:hover, .pw-toggle-edit.active { opacity: 1; color: var(--smart-theme-quote-color); }
 
 .pw-tags-container {
     padding: 8px; 
@@ -33,44 +60,56 @@
     border-radius: 6px; 
     border: 1px solid var(--smart-theme-border-color-1); 
     min-height: 40px;
-    max-height: 200px; /* 防止太多时撑爆 */
+    max-height: 200px;
     overflow-y: auto;
+    width: 100%; /* 确保占满 */
 }
 
-/* 正常模式：流式布局 */
-.pw-tags-container.view-mode { display: flex; flex-wrap: wrap; gap: 6px; }
+/* 正常模式：流式布局 - 关键修复 */
+.pw-tags-container.view-mode { 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 6px; 
+    align-content: flex-start;
+}
 
 .pw-tag { 
     padding: 4px 10px; 
     background: var(--smart-theme-input-color); 
     border: 1px solid var(--smart-theme-border-color-1); 
-    border-radius: 4px; 
+    border-radius: 15px; /* 药丸形状 */
     cursor: pointer; 
     font-size: 0.85em; 
     user-select: none; 
     transition: 0.1s; 
-    display: inline-flex; align-items: center;
+    display: inline-flex; 
+    align-items: center;
+    white-space: nowrap; /* 防止文字换行 */
 }
 .pw-tag:hover { border-color: var(--smart-theme-quote-color); color: var(--smart-theme-quote-color); transform: translateY(-1px); }
-.pw-tag-val { opacity: 0.6; font-size: 0.9em; margin-left: 4px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 4px; }
+.pw-tag-val { opacity: 0.7; font-size: 0.9em; margin-left: 5px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 5px; }
 
 .pw-tag-add-btn {
     padding: 4px 10px;
     border: 1px dashed var(--smart-theme-border-color-1);
-    border-radius: 4px;
+    border-radius: 15px;
     cursor: pointer;
     font-size: 0.85em;
     opacity: 0.7;
     transition: 0.2s;
+    display: inline-flex; 
+    align-items: center;
 }
 .pw-tag-add-btn:hover { opacity: 1; border-color: var(--smart-theme-quote-color); color: var(--smart-theme-quote-color); background: rgba(255,255,255,0.05); }
 
-/* 编辑模式：垂直列表 */
+/* 编辑模式：垂直列表 - 关键修复 */
 .pw-tags-container.edit-mode { display: flex; flex-direction: column; gap: 6px; }
 .pw-tag-edit-row { display: flex; gap: 6px; align-items: center; width: 100%; }
 .pw-tag-edit-row input { font-size: 0.85em; padding: 4px 8px; }
 
-/* 通用输入框 */
+/* ==========================================================================
+   输入框与按钮
+   ========================================================================== */
 .pw-textarea {
     width: 100%; background: var(--smart-theme-input-color);
     border: 1px solid var(--smart-theme-border-color-1);
@@ -87,7 +126,6 @@
     padding: 8px; border-radius: 4px;
 }
 
-/* 按钮 */
 .pw-editor-controls { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; }
 .pw-mini-btn { font-size: 0.85em; cursor: pointer; opacity: 0.7; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; user-select: none; }
 .pw-mini-btn:hover { opacity: 1; background: rgba(255,255,255,0.1); }
@@ -99,10 +137,13 @@
 .pw-btn.gen { background: linear-gradient(90deg, var(--smart-theme-quote-color), #5b8db8); margin-top: 15px; }
 .pw-btn.save { background: #7a9a83; margin-top: 10px; }
 .pw-btn.normal { background: var(--smart-theme-border-color-1); color: var(--smart-theme-body-color); width: auto; padding: 6px 12px; }
+.pw-btn.primary { background: var(--smart-theme-quote-color); width: auto; padding: 6px 12px; }
 .pw-btn.danger-icon { background: rgba(255, 107, 107, 0.1); color: #ff6b6b; border: 1px solid transparent; width: auto; padding: 5px 10px; }
 .pw-btn.danger-icon:hover { background: #ff6b6b; color: white; }
 
-/* 结果区域 */
+/* ==========================================================================
+   结果与历史区域
+   ========================================================================== */
 #pw-result-area { border-top: 1px dashed var(--smart-theme-border-color-1); padding-top: 15px; margin-top: 15px; }
 
 /* 历史记录 */
@@ -111,27 +152,27 @@
 
 .pw-history-item { 
     padding: 12px; border: 1px solid var(--smart-theme-border-color-1); border-radius: 6px; 
-    background: rgba(0,0,0,0.1); margin-bottom: 8px; display: flex; gap: 10px; 
+    background: rgba(0,0,0,0.1); margin-bottom: 8px; display: flex; gap: 10px; width: 100%;
+    align-items: flex-start;
 }
 .pw-history-item:hover { background: rgba(255,255,255,0.05); border-color: var(--smart-theme-quote-color); }
-.pw-hist-content { flex: 1; min-width: 0; cursor: pointer; }
+.pw-hist-content { flex: 1; min-width: 0; cursor: pointer; text-align: left; }
 .pw-hist-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.pw-hist-title { font-weight: bold; color: var(--smart-theme-quote-color); font-size: 1em; background: transparent; border: none; width: 100%; }
+.pw-hist-title { font-weight: bold; color: var(--smart-theme-quote-color); font-size: 1em; background: transparent; border: none; width: 100%; text-align: left; }
 .pw-hist-title.editing { background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--smart-theme-body-color); }
 .pw-hist-meta { font-size: 0.8em; opacity: 0.6; display: flex; gap: 10px; margin-bottom: 6px; }
-.pw-hist-desc { font-size: 0.85em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pw-hist-del { color: #ff6b6b; opacity: 0.6; cursor: pointer; padding: 5px; }
+.pw-hist-desc { font-size: 0.85em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;}
+.pw-hist-del { color: #ff6b6b; opacity: 0.6; cursor: pointer; padding: 5px; flex-shrink: 0;}
 .pw-hist-del:hover { opacity: 1; }
 
-.pw-text-danger-btn { color: #ff6b6b; font-size: 0.85em; cursor: pointer; text-align: center; padding: 10px; margin-top: auto; opacity: 0.7; }
+.pw-text-danger-btn { color: #ff6b6b; font-size: 0.85em; cursor: pointer; text-align: center; padding: 10px; margin-top: auto; opacity: 0.7; width: 100%; }
 .pw-text-danger-btn:hover { opacity: 1; text-decoration: underline; }
 
-/* 世界书 */
-.pw-wi-book { border: 1px solid var(--smart-theme-border-color-1); border-radius: 6px; margin-bottom: 8px; background: rgba(0,0,0,0.1); }
-.pw-wi-header { padding: 10px; background: rgba(0,0,0,0.2); cursor: pointer; display: flex; justify-content: space-between; font-weight: bold; font-size: 0.9em; }
+/* 世界书 & API 设置 */
+.pw-wi-controls { display: flex; gap: 10px; margin-bottom: 10px; width: 100%; }
+.pw-wi-book { border: 1px solid var(--smart-theme-border-color-1); border-radius: 6px; margin-bottom: 8px; background: rgba(0,0,0,0.1); width: 100%; }
+.pw-wi-header { padding: 10px; background: rgba(0,0,0,0.2); cursor: pointer; display: flex; justify-content: space-between; font-weight: bold; font-size: 0.9em; align-items: center;}
 .pw-wi-list { display: none; padding: 0; max-height: 300px; overflow-y: auto; }
-.pw-wi-item { padding: 8px 10px; border-top: 1px solid rgba(255,255,255,0.05); font-size: 0.85em; display: flex; align-items: center; gap: 8px; }
-
-/* API 设置 */
-.pw-api-card { padding: 15px; background: rgba(0,0,0,0.1); border-radius: 6px; display: flex; flex-direction: column; gap: 12px; }
-.pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pw-wi-item { padding: 8px 10px; border-top: 1px solid rgba(255,255,255,0.05); font-size: 0.85em; display: flex; align-items: center; gap: 8px; text-align: left; }
+.pw-api-card { padding: 15px; background: rgba(0,0,0,0.1); border-radius: 6px; display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
