@@ -6,8 +6,8 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 // ============================================================================
 
 const extensionName = "st-persona-weaver";
-const STORAGE_KEY_HISTORY = 'pw_history_v10'; // 升级版本号
-const STORAGE_KEY_STATE = 'pw_state_v10'; 
+const STORAGE_KEY_HISTORY = 'pw_history_v11'; // 升级版本号
+const STORAGE_KEY_STATE = 'pw_state_v11'; 
 const STORAGE_KEY_TAGS = 'pw_tags_v4';
 
 const defaultTags = [
@@ -45,8 +45,7 @@ const TEXT = {
 
 let historyCache = [];
 let tagsCache = [];
-let isEditingTags = false; // 标签编辑模式状态
-let worldInfoCache = {}; 
+let isEditingTags = false; 
 let availableWorldBooks = []; 
 
 function loadData() {
@@ -61,20 +60,17 @@ function saveData() {
 
 function saveHistory(payload) {
     const limit = extension_settings[extensionName]?.historyLimit || 50;
-    
-    // [修复] 获取当前上下文，确保 targetChar 被正确记录
     const context = getContext();
     const charName = context.characters[context.characterId]?.name || "Unknown";
     const timestamp = new Date().toLocaleString();
 
-    // 构建标准历史对象
     const historyItem = {
         timestamp: timestamp,
-        targetChar: charName, // [修复] 显式保存目标角色名
+        targetChar: charName, 
         request: payload.request || "",
         data: {
             ...payload.data,
-            // [修复] 默认标题格式：User设定名 @ 目标角色名
+            // 默认标题格式：User设定名 @ 目标角色名
             customTitle: payload.data.customTitle || `${payload.data.name || 'User'} @ ${charName}`
         }
     };
@@ -104,8 +100,6 @@ function loadState() {
 // ============================================================================
 
 async function loadAvailableWorldBooks() {
-    // ... (保持原有的世界书加载逻辑，为了节省篇幅，此处省略未变动代码，逻辑与之前一致) ...
-    // 实际代码中请保留之前的 loadAvailableWorldBooks 实现
     availableWorldBooks = [];
     const context = getContext();
     if (window.TavernHelper && typeof window.TavernHelper.getWorldbookNames === 'function') {
@@ -124,7 +118,6 @@ async function loadAvailableWorldBooks() {
 }
 
 async function getContextWorldBooks() {
-    // ... (保持原有逻辑) ...
     const context = getContext();
     const books = new Set();
     const char = context.characters[context.characterId];
@@ -196,13 +189,13 @@ async function openCreatorPopup() {
     const savedState = loadState();
     const config = { ...defaultSettings, ...extension_settings[extensionName], ...savedState.localConfig };
 
-    // --- 标签渲染逻辑 (内联模式) ---
+    // --- 标签渲染逻辑 ---
     const renderTags = () => {
         const $container = $('#pw-tags-list');
         $container.removeClass('view-mode edit-mode');
         
         if (isEditingTags) {
-            // [编辑模式]：垂直列表，输入框 + 删除按钮
+            // [编辑模式]：垂直列表
             $container.addClass('edit-mode');
             let html = '';
             tagsCache.forEach((t, i) => {
@@ -214,7 +207,7 @@ async function openCreatorPopup() {
                 </div>`;
             });
             $container.html(html);
-            // 绑定编辑事件
+            
             $container.find('input').on('input', function() {
                 const idx = $(this).data('idx');
                 const field = $(this).hasClass('t-name') ? 'name' : 'value';
@@ -236,12 +229,10 @@ async function openCreatorPopup() {
                     ${t.value ? `<span class="pw-tag-val">${t.value}</span>` : ''}
                 </div>
             `).join('');
-            // 尾部添加按钮
             html += `<div class="pw-tag-add-btn" id="pw-tags-quick-add"><i class="fa-solid fa-plus"></i></div>`;
             $container.html(html);
         }
 
-        // 更新右上角图标状态
         const $toggle = $('#pw-tags-toggle-edit');
         if (isEditingTags) {
             $toggle.addClass('active').html('<i class="fa-solid fa-check"></i> 完成');
@@ -265,7 +256,6 @@ async function openCreatorPopup() {
         <!-- 1. 编辑视图 -->
         <div id="pw-view-editor" class="pw-view active">
             <div class="pw-scroll-area">
-                <!-- 标签区域 -->
                 <div>
                     <div class="pw-label-row">
                         <span class="pw-label">快捷标签 (点击插入)</span>
@@ -274,7 +264,6 @@ async function openCreatorPopup() {
                     <div id="pw-tags-list" class="pw-tags-container view-mode"></div>
                 </div>
 
-                <!-- 输入区域 -->
                 <div style="flex:1; display:flex; flex-direction:column;">
                     <textarea id="pw-request" class="pw-textarea" placeholder="输入你的要求，或点击上方标签组合描述...">${savedState.request || ''}</textarea>
                     
@@ -292,7 +281,6 @@ async function openCreatorPopup() {
 
                 <button id="pw-btn-gen" class="pw-btn gen"><i class="fa-solid fa-bolt"></i> 生成 / 润色</button>
 
-                <!-- 结果区域 -->
                 <div id="pw-result-area" style="display: ${savedState.hasResult ? 'block' : 'none'};">
                     <div class="pw-label" style="color:var(--smart-theme-quote-color); margin-bottom:8px;">
                         <i class="fa-solid fa-check-circle"></i> 生成结果
@@ -314,7 +302,7 @@ async function openCreatorPopup() {
             </div>
         </div>
 
-        <!-- 2. 世界书视图 (精简逻辑) -->
+        <!-- 2. 世界书视图 -->
         <div id="pw-view-context" class="pw-view">
             <div class="pw-scroll-area">
                 <div class="pw-wi-controls">
@@ -365,29 +353,11 @@ async function openCreatorPopup() {
     callPopup(html, 'text', '', { wide: true, large: true, okButton: "关闭" });
 
     // --- 事件绑定 ---
-    
-    // 标签系统事件
     renderTags();
-    
-    // 切换编辑模式
-    $('#pw-tags-toggle-edit').on('click', () => {
-        isEditingTags = !isEditingTags;
-        renderTags();
-    });
-
-    // 快捷添加标签 (点击 + 号)
-    $(document).on('click', '#pw-tags-quick-add', () => {
-        tagsCache.push({ name: "", value: "" }); // 添加空标签
-        saveData();
-        isEditingTags = true; // 自动进入编辑模式
-        renderTags();
-        // 自动聚焦新标签
-        setTimeout(() => $('#pw-tags-list .t-name').last().focus(), 50);
-    });
-
-    // 标签插入文本
+    $('#pw-tags-toggle-edit').on('click', () => { isEditingTags = !isEditingTags; renderTags(); });
+    $(document).on('click', '#pw-tags-quick-add', () => { tagsCache.push({ name: "", value: "" }); saveData(); isEditingTags = true; renderTags(); setTimeout(() => $('#pw-tags-list .t-name').last().focus(), 50); });
     $(document).on('click', '.pw-tag', function() {
-        if (isEditingTags) return; // 编辑模式下不插入
+        if (isEditingTags) return;
         const idx = $(this).data('idx');
         const t = tagsCache[idx];
         const $txt = $('#pw-request');
@@ -398,7 +368,6 @@ async function openCreatorPopup() {
         saveCurrentState();
     });
 
-    // 通用逻辑 (Tab, API, State) 
     const saveCurrentState = () => {
         saveState({
             request: $('#pw-request').val(),
@@ -427,7 +396,6 @@ async function openCreatorPopup() {
         if(tab === 'history') renderHistory();
     });
 
-    // 历史功能 [修复核心]
     $('#pw-snapshot').on('click', () => {
         const req = $('#pw-request').val();
         const name = $('#pw-res-name').val();
@@ -443,7 +411,6 @@ async function openCreatorPopup() {
         toastr.success(TEXT.TOAST_SNAPSHOT);
     });
 
-    // 渲染历史列表 [修复]
     const renderHistory = () => {
         const $list = $('#pw-history-list').empty();
         const search = $('#pw-history-search').val().toLowerCase();
@@ -456,7 +423,6 @@ async function openCreatorPopup() {
 
         filtered.forEach((item, idx) => {
             const title = item.data.customTitle || "未命名记录";
-            // [修复] 优先显示记录中的 targetChar，如果没有则显示 Unknown
             const target = item.targetChar || "Unknown"; 
 
             const $el = $(`
@@ -476,7 +442,6 @@ async function openCreatorPopup() {
                 </div>
             `);
 
-            // 加载逻辑
             $el.find('.pw-hist-content').on('click', (e) => {
                 if($(e.target).is('input') || $(e.target).hasClass('fa-pencil')) return;
                 $('#pw-request').val(item.request);
@@ -487,7 +452,6 @@ async function openCreatorPopup() {
                 $('.pw-tab[data-tab="editor"]').click();
             });
 
-            // 编辑标题
             const $inp = $el.find('.pw-hist-title');
             $el.find('.fa-pencil').on('click', () => {
                 if($inp.prop('readonly')) { $inp.prop('readonly',false).addClass('editing').focus(); }
@@ -501,7 +465,6 @@ async function openCreatorPopup() {
                 if(e.type === 'blur' || e.key === 'Enter') saveTitle();
             });
 
-            // 删除
             $el.find('.pw-hist-del').on('click', () => {
                 if(confirm("删除此记录？")) {
                     historyCache.splice(historyCache.indexOf(item), 1);
@@ -514,21 +477,18 @@ async function openCreatorPopup() {
         });
     };
     
-    // 搜索与清空
     $('#pw-history-search').on('input', renderHistory);
     $('#pw-search-clear').on('click', () => $('#pw-history-search').val('').trigger('input'));
     $('#pw-history-clear-all').on('click', () => {
         if(confirm("确定清空所有？")) { historyCache = []; saveData(); renderHistory(); }
     });
 
-    // 生成逻辑
     $('#pw-btn-gen').on('click', async function() {
         const req = $('#pw-request').val();
         const $btn = $(this);
         $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 处理中...');
         
         try {
-            // 世界书上下文
             const wiContext = [];
             $('.pw-wi-check:checked').each(function(){ wiContext.push(decodeURIComponent($(this).data('content'))); });
             
@@ -548,8 +508,6 @@ async function openCreatorPopup() {
             $('#pw-res-desc').val(data.description);
             $('#pw-res-wi').val(data.wi_entry || data.description);
             $('#pw-result-area').fadeIn();
-            
-            // 自动保存历史 (带上正确的 targetChar)
             saveHistory({ request: req, data: data });
             saveCurrentState();
 
@@ -561,7 +519,6 @@ async function openCreatorPopup() {
         }
     });
 
-    // 应用逻辑
     $('#pw-btn-apply').on('click', async () => {
         const name = $('#pw-res-name').val();
         const desc = $('#pw-res-desc').val();
@@ -579,15 +536,10 @@ async function openCreatorPopup() {
         $('.popup_close').click();
     });
     
-    // API 设置保存
     $('#pw-api-source').on('change', function() { $('#pw-indep-settings').toggle($(this).val() === 'independent'); });
     $('#pw-api-save').on('click', () => { saveCurrentState(); toastr.success("设置已保存"); });
     
-    // 世界书逻辑 (简化版引用)
     const renderWiBooks = async () => {
-        // ... (世界书渲染逻辑与之前相同，确保 window.pwExtraBooks 正常工作)
-        // 此处逻辑与前一版代码一致，篇幅原因省略
-        // 核心：遍历 window.pwExtraBooks 和 getContextWorldBooks()，渲染 #pw-wi-container
         const container = $('#pw-wi-container').empty();
         const baseBooks = await getContextWorldBooks();
         const allBooks = [...new Set([...baseBooks, ...window.pwExtraBooks])];
@@ -633,7 +585,6 @@ async function openCreatorPopup() {
         if(val && !window.pwExtraBooks.includes(val)) { window.pwExtraBooks.push(val); renderWiBooks(); }
     });
 
-    // 清空
     $('#pw-clear').on('click', () => {
         if(confirm("清空输入？")) { $('#pw-request').val(''); $('#pw-result-area').hide(); saveCurrentState(); }
     });
@@ -641,8 +592,6 @@ async function openCreatorPopup() {
 
 // 初始化
 jQuery(() => {
-    // 注入 CSS (Style.css 内容已假设注入，此处不再重复注入逻辑)
-    // 菜单按钮
     $("#extensions_settings2").append(`
         <div class="world-info-cleanup-settings">
             <div class="inline-drawer">
