@@ -5,5 +5,6 @@
     "author": "Yellows & AI",
     "description": "原生扩展：AI辅助生成用户设定，支持历史记录、自动保存并同步至世界书。",
     "js": "index.js",
+    "css": "style.css",
     "type": "extension"
 }
