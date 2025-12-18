@@ -150,7 +150,7 @@
 .pw-tags-finish-bar:hover { background: rgba(0,0,0,0.05); }
 
 /* =========================================
-   世界书控制栏 (修复消失/塌陷问题)
+   世界书控制栏
    ========================================= */
 .pw-wi-controls {
     display: flex;
@@ -160,9 +160,9 @@
 }
 .pw-wi-select { 
     flex-grow: 1; 
-    width: auto; /* 修复: 不要设为0 */
-    min-width: 0; /* 允许Flex缩放但不消失 */
-    background: var(--smart-theme-input-color, rgba(0,0,0,0.2)); /* 加深背景 */
+    width: auto;
+    min-width: 0;
+    background: var(--smart-theme-input-color, rgba(0,0,0,0.2));
 }
 .pw-wi-add-btn { flex-shrink: 0; width: auto; padding: 6px 12px; }
 
@@ -217,11 +217,7 @@
     color: var(--smart-theme-body-color);
     padding: 6px 8px; border-radius: 6px;
 }
-/* 增加 Placeholder 可读性 */
-.pw-input::placeholder, .pw-textarea::placeholder {
-    opacity: 0.5;
-    font-style: italic;
-}
+.pw-input::placeholder, .pw-textarea::placeholder { opacity: 0.5; font-style: italic; }
 
 .pw-btn {
     border: none; padding: 8px; border-radius: 6px;
@@ -240,7 +236,7 @@
 .pw-mini-btn { font-size: 0.85em; opacity: 0.7; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; }
 .pw-mini-btn:hover { background: rgba(255,255,255,0.1); opacity: 1; }
 
-/* API Card */
+/* API Card - 仅保留世界书所需的 */
 .pw-card-section {
     background: rgba(0, 0, 0, 0.2);
     border: 1px solid var(--smart-theme-border-color-1);
@@ -248,25 +244,13 @@
     padding: 12px;
     display: flex; flex-direction: column; gap: 10px;
 }
-.pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.pw-row label { font-weight: bold; min-width: 60px; font-size: 0.9em; }
-
-/* 修复Model行挤压 */
-.pw-api-model-row { flex-wrap: nowrap; } 
-.pw-api-fetch-btn { flex-shrink: 0; width: auto !important; padding: 0 10px; }
 
 /* =========================================
    历史记录与搜索框
    ========================================= */
-.pw-search-box {
-    position: relative;
-    display: flex; align-items: center;
-    margin-bottom: 10px;
-}
+.pw-search-box { position: relative; display: flex; align-items: center; margin-bottom: 10px; }
 .pw-search-input { width: 100%; padding-right: 30px; }
-.pw-search-clear {
-    position: absolute; right: 8px; opacity: 0.5; cursor: pointer; padding: 4px;
-}
+.pw-search-clear { position: absolute; right: 8px; opacity: 0.5; cursor: pointer; padding: 4px; }
 .pw-search-clear:hover { opacity: 1; color: #ff6b6b; }
 
 .pw-history-item {
@@ -302,16 +286,8 @@
    移动端自适应
    ========================================= */
 @media screen and (max-width: 700px) {
-    .pw-row { flex-direction: column; align-items: stretch; gap: 5px; }
-    .pw-row label { margin-bottom: 2px; }
-    
-    /* 移动端API输入框堆叠 */
-    .pw-api-model-row { flex-direction: column !important; }
-    .pw-api-fetch-btn { width: 100% !important; margin-top: 5px; height: 32px; }
-
     .pw-history-item { flex-direction: column; gap: 5px; }
     .pw-hist-del-btn { align-self: flex-end; margin-top: -25px; }
-    
     .pw-tag-edit-row { gap: 4px; }
     .pw-tag-edit-input { padding: 4px; }
 }
