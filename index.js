@@ -6,9 +6,9 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 // ============================================================================
 
 const extensionName = "st-persona-weaver";
-const STORAGE_KEY_HISTORY = 'pw_history_v16'; // 升级版本
-const STORAGE_KEY_STATE = 'pw_state_v16'; 
-const STORAGE_KEY_TAGS = 'pw_tags_v10';
+const STORAGE_KEY_HISTORY = 'pw_history_v17'; // 版本升级
+const STORAGE_KEY_STATE = 'pw_state_v17'; 
+const STORAGE_KEY_TAGS = 'pw_tags_v11';
 
 // 默认标签库
 const defaultTags = [
@@ -44,7 +44,7 @@ const TEXT = {
     TOAST_SAVE_API: "API 设置已保存",
     TOAST_SNAPSHOT: "已存入历史记录",
     TOAST_GEN_FAIL: "生成失败，请检查 API 设置",
-    TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已创建并绑定到当前聊天！`
+    TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已保存并绑定！`
 };
 
 // ============================================================================
@@ -83,7 +83,7 @@ function loadState() {
 }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v16';
+    const styleId = 'persona-weaver-css-v17';
     if ($(`#${styleId}`).length) return;
 }
 
@@ -91,40 +91,14 @@ function injectStyles() {
 // 3. 业务逻辑 (核心功能)
 // ============================================================================
 
-// [新增] 核心 API：调用后端保存 Persona
-async function apiSavePersona(name, description, title) {
-    // 构造符合 ST 后端要求的数据包
-    // 即使是新建，也要传 avatar (虽然是空的)，否则可能报错
-    const payload = {
-        name: name,
-        description: description,
-        title: title || "",
-        avatar: "default.png" // 使用默认头像，避免空指针，用户后续可以在UI里改
-    };
-
-    try {
-        const response = await fetch('/api/personas/save', {
-            method: 'POST',
-            headers: getRequestHeaders(),
-            body: JSON.stringify(payload)
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Server Error: ${response.status}`);
-        }
-        return true;
-    } catch (e) {
-        console.error("[PW] Failed to save persona:", e);
-        throw e;
-    }
-}
-
-// [新增] 核心 API：执行 Slash 命令
+// [修复] 执行 Slash 命令的辅助函数
 async function executeSlash(command) {
-    const { executeSlashCommandsWithOptions } = SillyTavern;
-    if (executeSlashCommandsWithOptions) {
-        // 使用 pipe: true 可以获取返回值，但在 fire-and-forget 场景下主要为了执行
-        await executeSlashCommandsWithOptions(command, { quiet: true });
+    const context = getContext();
+    // 优先使用 executeSlashCommandsWithOptions，如果不存在则尝试 triggerSlash
+    if (context.executeSlashCommandsWithOptions) {
+        await context.executeSlashCommandsWithOptions(command, { quiet: true });
+    } else if (window.triggerSlash) {
+        await window.triggerSlash(command);
     } else {
         console.warn("[PW] Slash command API not found!");
     }
@@ -154,12 +128,7 @@ async function getContextWorldBooks(extras = []) {
     if (charId !== undefined && context.characters[charId]) {
         const char = context.characters[charId];
         const data = char.data || char;
-        // 尝试获取 V2 Character Book Name 或 Extension World
-        const v2Book = data.character_book?.name;
-        const extWorld = data.extensions?.world;
-        const legacyWorld = data.world;
-        
-        const main = v2Book || extWorld || legacyWorld;
+        const main = data.character_book?.name || data.extensions?.world || data.world;
         if (main) books.add(main);
     }
     return Array.from(books).filter(Boolean);
@@ -754,7 +723,7 @@ async function openCreatorPopup() {
         }
     });
 
-    // --- 8. 应用 (核心修复：API保存 + Slash绑定) ---
+    // --- 8. 应用 (核心修复：本地数据写入 + Slash 绑定) ---
     $('#pw-btn-apply').on('click', async function() {
         const name = $('#pw-res-name').val();
         const title = $('#pw-res-title').val();
@@ -765,25 +734,36 @@ async function openCreatorPopup() {
         
         const context = getContext();
         
-        // 1. 调用后端 API 保存 Persona
-        try {
-            await apiSavePersona(name, desc, title);
-        } catch (e) {
-            toastr.error("保存 Persona 文件失败: " + e.message);
-            return;
-        }
+        // 1. 初始化对象结构 (防止空指针)
+        if (!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
+        if (!context.powerUserSettings.persona_titles) context.powerUserSettings.persona_titles = {};
+        if (!context.powerUserSettings.persona_avatars) context.powerUserSettings.persona_avatars = {};
 
-        // 2. 使用 Slash Command 切换并绑定
+        // 2. 写入数据
+        context.powerUserSettings.personas[name] = desc;
+        context.powerUserSettings.persona_titles[name] = title || "";
+        
+        // 3. 关键：绑定头像
+        // 尝试继承当前选中 Persona 的头像，如果没有则回退到 default.png
+        // 注意：酒馆中没有头像映射，Persona 是无法被识别或显示的
+        const currentPersona = context.powerUserSettings.persona_selected;
+        const currentAvatar = context.powerUserSettings.persona_avatars[currentPersona];
+        context.powerUserSettings.persona_avatars[name] = currentAvatar || "default.png";
+
+        // 4. 保存到 settings.json
+        await saveSettingsDebounced();
+
+        // 5. 执行绑定操作 (Slash Command)
         try {
-            // 切换到新 Persona (引号防止名字空格问题)
+            // 切换到新 Persona
             await executeSlash(`/persona-set "${name}"`);
-            // 锁定到当前聊天
+            // 绑定到当前聊天
             await executeSlash(`/persona-lock type=chat`);
         } catch (e) {
             console.warn("Slash command execution failed", e);
         }
 
-        // 3. 写入世界书 (优化定位)
+        // 6. 写入世界书 (优先级修正)
         if ($('#pw-wi-toggle').is(':checked') && wiContent) {
             const char = context.characters[context.characterId];
             const data = char.data || char;
@@ -799,7 +779,6 @@ async function openCreatorPopup() {
             if (targetBook) {
                 try {
                     const headers = getRequestHeaders();
-                    // 先获取，确保不覆盖 ID
                     const r = await fetch('/api/worldinfo/get', { method: 'POST', headers, body: JSON.stringify({ name: targetBook }) });
                     if (r.ok) {
                         const d = await r.json();
@@ -807,7 +786,6 @@ async function openCreatorPopup() {
                         const ids = Object.keys(d.entries).map(Number);
                         const newId = ids.length ? Math.max(...ids) + 1 : 0;
                         
-                        // 构造 Key
                         const keys = [name, "User"];
                         if (title) keys.push(title);
 
@@ -945,5 +923,5 @@ jQuery(async () => {
         </div>
     `);
     $("#pw_open_btn").on("click", openCreatorPopup);
-    console.log(`${extensionName} v16 loaded.`);
+    console.log(`${extensionName} v17 loaded.`);
 });
