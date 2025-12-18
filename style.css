@@ -1,5 +1,5 @@
 /* =========================================
-   全局容器与弹窗修正
+   全局容器与弹窗
    ========================================= */
 .swal2-popup.pw-wide { 
     width: 95% !important; 
@@ -39,7 +39,6 @@
     display: flex; align-items: center; gap: 8px;
 }
 
-/* 标签页导航 */
 .pw-tabs { display: flex; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 3px; gap: 3px; }
 .pw-tab { 
     flex: 1; text-align: center; padding: 8px 4px; cursor: pointer; 
@@ -64,7 +63,7 @@
 }
 
 /* =========================================
-   标签系统 (极简紧凑版)
+   标签系统
    ========================================= */
 .pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
 .pw-tags-label { font-size: 0.85em; font-weight: bold; opacity: 0.7; }
@@ -80,7 +79,6 @@
     margin-bottom: 10px;
 }
 
-/* 浏览模式 Chip */
 .pw-tag-chip {
     padding: 2px 8px;
     background: var(--smart-theme-bg);
@@ -95,7 +93,6 @@
 .pw-tag-chip:hover { border-color: #5b8db8; color: #5b8db8; transform: translateY(-1px); }
 .pw-tag-val { opacity: 0.6; margin-left: 4px; border-left: 1px solid rgba(128,128,128,0.3); padding-left: 4px; }
 
-/* 添加按钮 */
 .pw-tag-add-btn {
     padding: 2px 8px;
     background: rgba(91, 141, 184, 0.1);
@@ -108,33 +105,21 @@
 }
 .pw-tag-add-btn:hover { background: #5b8db8; color: white; border-style: solid; }
 
-/* 编辑模式行 (强制一行) */
 .pw-tag-edit-row {
-    width: 100%;
-    display: flex; 
-    align-items: center; 
-    gap: 4px;
-    padding: 2px 0;
-    border-bottom: 1px dashed rgba(128,128,128,0.1);
+    width: 100%; display: flex; align-items: center; gap: 4px;
+    padding: 2px 0; border-bottom: 1px dashed rgba(128,128,128,0.1);
 }
 .pw-tag-edit-row:last-child { border-bottom: none; }
 
 .pw-tag-edit-input { 
-    flex: 1; 
-    width: 0; 
-    background: var(--smart-theme-bg); 
-    border: 1px solid transparent; 
-    padding: 2px 4px; 
-    border-radius: 2px; 
-    font-size: 0.85em; 
-    color: var(--smart-theme-body-color);
+    flex: 1; width: 0; 
+    background: var(--smart-theme-bg); border: 1px solid transparent; 
+    padding: 2px 4px; border-radius: 2px; font-size: 0.85em; color: var(--smart-theme-body-color);
 }
 .pw-tag-edit-input:focus { border-bottom: 1px solid #5b8db8; outline: none; }
-.pw-tag-edit-input::placeholder { opacity: 0.4; }
 
 .pw-tag-del-btn {
-    flex-shrink: 0;
-    width: 20px; height: 20px;
+    flex-shrink: 0; width: 20px; height: 20px;
     display: flex; align-items: center; justify-content: center;
     color: #ff6b6b; cursor: pointer; border-radius: 4px;
     font-size: 0.85em; opacity: 0.5;
@@ -142,55 +127,33 @@
 .pw-tag-del-btn:hover { background: rgba(255, 107, 107, 0.1); opacity: 1; }
 
 .pw-tags-finish-bar {
-    width: 100%; text-align: center;
-    padding: 4px; margin-top: 4px;
+    width: 100%; text-align: center; padding: 4px; margin-top: 4px;
     font-size: 0.8em; color: #7a9a83; cursor: pointer;
     border-top: 1px dashed rgba(128,128,128,0.2);
 }
 .pw-tags-finish-bar:hover { background: rgba(0,0,0,0.05); }
 
 /* =========================================
-   世界书控制栏
+   世界书
    ========================================= */
-.pw-wi-controls {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-}
-.pw-wi-select { 
-    flex-grow: 1; 
-    width: auto;
-    min-width: 0;
-    background: var(--smart-theme-input-color, rgba(0,0,0,0.2));
-}
+.pw-wi-controls { display: flex; align-items: center; gap: 8px; width: 100%; }
+.pw-wi-select { flex-grow: 1; width: auto; min-width: 0; background: var(--smart-theme-input-color, rgba(0,0,0,0.2)); }
 .pw-wi-add-btn { flex-shrink: 0; width: auto; padding: 6px 12px; }
 
 .pw-wi-book { 
-    background: rgba(0,0,0,0.1); 
-    border: 1px solid var(--smart-theme-border-color-1); 
+    background: rgba(0,0,0,0.1); border: 1px solid var(--smart-theme-border-color-1); 
     border-radius: 6px; margin-bottom: 8px; overflow: hidden; 
 }
 .pw-wi-header { padding: 8px 10px; background: rgba(255,255,255,0.03); cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 0.9em; }
 .pw-wi-list { padding: 0; display: none; border-top: 1px solid var(--smart-theme-border-color-1); }
-.pw-wi-item { 
-    padding: 8px 10px; 
-    border-bottom: 1px solid rgba(255,255,255,0.05); 
-    display: flex; flex-direction: column; gap: 4px;
-}
+.pw-wi-item { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 4px; }
 .pw-wi-item-row { display: flex; align-items: center; gap: 8px; }
 .pw-wi-desc { 
-    font-size: 0.85em; opacity: 0.8; 
-    margin-left: 24px; 
-    white-space: pre-wrap; 
-    display: none; 
-    background: rgba(0,0,0,0.1);
-    padding: 8px; border-radius: 4px;
-    border: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.85em; opacity: 0.8; margin-left: 24px; white-space: pre-wrap; 
+    display: none; background: rgba(0,0,0,0.1); padding: 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);
 }
 .pw-wi-toggle-icon { font-size: 0.8em; opacity: 0.5; cursor: pointer; padding: 4px; margin-left: auto; }
 .pw-wi-toggle-icon:hover { opacity: 1; color: #5b8db8; }
-
 .pw-wi-close-bar {
     text-align: center; font-size: 0.8em; opacity: 0.6; cursor: pointer;
     margin-top: 5px; padding-top: 5px; border-top: 1px dashed rgba(128,128,128,0.2);
@@ -198,25 +161,21 @@
 .pw-wi-close-bar:hover { opacity: 1; color: #5b8db8; }
 
 /* =========================================
-   通用组件
+   通用
    ========================================= */
 .pw-textarea {
-    width: 100%; box-sizing: border-box;
-    background: var(--smart-theme-input-color, rgba(0,0,0,0.05));
-    border: 1px solid var(--smart-theme-border-color-1);
-    color: var(--smart-theme-body-color);
-    border-radius: 8px; padding: 8px; resize: none;
-    font-family: inherit; line-height: 1.5;
+    width: 100%; box-sizing: border-box; background: var(--smart-theme-input-color, rgba(0,0,0,0.05));
+    border: 1px solid var(--smart-theme-border-color-1); color: var(--smart-theme-body-color);
+    border-radius: 8px; padding: 8px; resize: none; font-family: inherit; line-height: 1.5;
 }
 .pw-textarea:focus { border-color: #5b8db8; outline: none; }
 
 .pw-input {
-    width: 100%; box-sizing: border-box;
-    background: var(--smart-theme-input-color, rgba(0,0,0,0.05));
-    border: 1px solid var(--smart-theme-border-color-1);
-    color: var(--smart-theme-body-color);
+    width: 100%; box-sizing: border-box; background: var(--smart-theme-input-color, rgba(0,0,0,0.05));
+    border: 1px solid var(--smart-theme-border-color-1); color: var(--smart-theme-body-color);
     padding: 6px 8px; border-radius: 6px;
 }
+.pw-input:disabled { opacity: 0.7; cursor: not-allowed; font-style: italic; }
 .pw-input::placeholder, .pw-textarea::placeholder { opacity: 0.5; font-style: italic; }
 
 .pw-btn {
@@ -236,17 +195,26 @@
 .pw-mini-btn { font-size: 0.85em; opacity: 0.7; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; }
 .pw-mini-btn:hover { background: rgba(255,255,255,0.1); opacity: 1; }
 
-/* API Card - 仅保留世界书所需的 */
-.pw-card-section {
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--smart-theme-border-color-1);
-    border-radius: 8px;
-    padding: 12px;
-    display: flex; flex-direction: column; gap: 10px;
+/* 注入到酒馆面板的按钮样式 */
+.pw-inject-btn {
+    cursor: pointer;
+    width: 30px; 
+    height: 30px;
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    border-radius: 5px;
+    transition: background-color 0.2s;
+    margin-left: 5px;
+    color: var(--smart-theme-body-color);
+}
+.pw-inject-btn:hover {
+    background-color: var(--smart-theme-body-color);
+    color: var(--smart-theme-bg);
 }
 
 /* =========================================
-   历史记录与搜索框
+   历史记录
    ========================================= */
 .pw-search-box { position: relative; display: flex; align-items: center; margin-bottom: 10px; }
 .pw-search-input { width: 100%; padding-right: 30px; }
@@ -254,37 +222,23 @@
 .pw-search-clear:hover { opacity: 1; color: #ff6b6b; }
 
 .pw-history-item {
-    background: rgba(0,0,0,0.1);
-    border: 1px solid var(--smart-theme-border-color-1);
-    padding: 10px; border-radius: 6px;
-    margin-bottom: 8px; cursor: pointer;
-    transition: 0.2s;
-    display: flex; gap: 10px; align-items: flex-start;
+    background: rgba(0,0,0,0.1); border: 1px solid var(--smart-theme-border-color-1);
+    padding: 10px; border-radius: 6px; margin-bottom: 8px; cursor: pointer;
+    transition: 0.2s; display: flex; gap: 10px; align-items: flex-start;
 }
 .pw-history-item:hover { border-color: #5b8db8; background: rgba(255,255,255,0.05); }
-
 .pw-hist-main { flex: 1; min-width: 0; }
-
 .pw-hist-title-input {
-    font-weight: bold; color: #5b8db8; 
-    background: transparent; border: 1px solid transparent;
-    width: 100%; padding: 2px; border-radius: 4px;
-    font-size: 0.95em; cursor: pointer;
+    font-weight: bold; color: #5b8db8; background: transparent; border: 1px solid transparent;
+    width: 100%; padding: 2px; border-radius: 4px; font-size: 0.95em; cursor: pointer;
 }
 .pw-hist-title-input:hover { border-color: rgba(91, 141, 184, 0.3); }
-.pw-hist-title-input:focus { 
-    background: var(--smart-theme-input-color); 
-    border-color: #5b8db8; outline: none; color: var(--smart-theme-body-color);
-}
-
+.pw-hist-title-input:focus { background: var(--smart-theme-input-color); border-color: #5b8db8; outline: none; color: var(--smart-theme-body-color); }
 .pw-hist-meta { font-size: 0.75em; opacity: 0.6; display: flex; gap: 10px; margin-bottom: 4px; }
 .pw-hist-desc { font-size: 0.85em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pw-hist-del-btn { color: #ff6b6b; padding: 5px; opacity: 0.6; align-self: center; }
 .pw-hist-del-btn:hover { opacity: 1; transform: scale(1.1); }
 
-/* =========================================
-   移动端自适应
-   ========================================= */
 @media screen and (max-width: 700px) {
     .pw-history-item { flex-direction: column; gap: 5px; }
     .pw-hist-del-btn { align-self: flex-end; margin-top: -25px; }
