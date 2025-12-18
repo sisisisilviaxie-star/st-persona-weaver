@@ -6,9 +6,9 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 // ============================================================================
 
 const extensionName = "st-persona-weaver";
-const STORAGE_KEY_HISTORY = 'pw_history_v17'; // 升级版本
-const STORAGE_KEY_STATE = 'pw_state_v17'; 
-const STORAGE_KEY_TAGS = 'pw_tags_v11';
+const STORAGE_KEY_HISTORY = 'pw_history_v18'; // 升级版本
+const STORAGE_KEY_STATE = 'pw_state_v18'; 
+const STORAGE_KEY_TAGS = 'pw_tags_v12';
 
 // 默认标签库
 const defaultTags = [
@@ -83,7 +83,7 @@ function loadState() {
 }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v17';
+    const styleId = 'persona-weaver-css-v18';
     if ($(`#${styleId}`).length) return;
 }
 
@@ -99,6 +99,37 @@ async function executeSlash(command) {
     } else {
         console.warn("[PW] Slash command API not found!");
     }
+}
+
+// [核心] 暴力 UI 写入 (参考用户提供的 F12 方案)
+async function forceUpdatePersonaUI(name, description, title) {
+    const context = getContext();
+    
+    // 1. 确保数据层更新 (这是基础)
+    if (!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
+    context.powerUserSettings.personas[name] = description;
+    
+    if (!context.powerUserSettings.persona_titles) context.powerUserSettings.persona_titles = {};
+    context.powerUserSettings.persona_titles[name] = title || "";
+
+    // 2. 暴力操作 DOM (模拟用户输入)
+    // 只有当 ST 的输入框存在时才有效，但即使不存在，上面的数据层更新+保存也能生效
+    // 如果输入框存在，必须触发 input 事件，否则 UI 会覆盖数据
+    const $descInput = $('#persona_description');
+    const $nameInput = $('#your_name'); // 或者是 #persona_name，取决于版本
+    
+    // 只有当前显示的也是这个名字时，才去改 UI，防止串台
+    if ($nameInput.val() === name) {
+        if ($descInput.length) {
+            $descInput.val(description);
+            // 触发事件
+            $descInput[0].dispatchEvent(new Event('input', { bubbles: true }));
+            $descInput[0].dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    // 3. 强制保存
+    await saveSettingsDebounced();
 }
 
 async function loadAvailableWorldBooks() {
@@ -725,7 +756,7 @@ async function openCreatorPopup() {
         }
     });
 
-    // --- 8. 应用 (修复后) ---
+    // --- 8. 应用 (保存逻辑大修) ---
     $('#pw-btn-apply').on('click', async function() {
         const name = $('#pw-res-name').val();
         const title = $('#pw-res-title').val();
@@ -734,36 +765,27 @@ async function openCreatorPopup() {
         
         if (!name) return toastr.warning("名字不能为空");
         
-        const context = getContext();
+        // 1. 先切换 (Switch) - 让 ST 认为这是当前 Persona
+        // 使用 Slash Command 可以自动处理 "如果不存在则新建内存对象" 的逻辑
+        await executeSlash(`/persona-set "${name}"`);
         
-        // 1. 保存到内存配置 (关键：这是 ST 保存 Persona 的标准方式)
-        if (!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
-        context.powerUserSettings.personas[name] = desc;
+        // 等待一小会儿，确保切换逻辑执行完毕
+        await new Promise(r => setTimeout(r, 300));
 
-        if (!context.powerUserSettings.persona_titles) context.powerUserSettings.persona_titles = {};
-        context.powerUserSettings.persona_titles[name] = title || "";
+        // 2. 后更新 & 暴力 UI 写入 (Update)
+        await forceUpdatePersonaUI(name, desc, title);
 
-        // 2. 写入服务器 config.json
-        await saveSettingsDebounced();
-
-        // 3. 切换并绑定 (Slash Command 能够自动处理"切换到新创建的人设")
-        try {
-            // 引号包裹名字，防止空格导致解析错误
-            await executeSlash(`/persona-set "${name}"`);
-            await executeSlash(`/persona-lock type=chat`);
-        } catch (e) {
-            console.warn("Slash command execution failed", e);
-        }
+        // 3. 锁定到聊天 (Bind)
+        await executeSlash(`/persona-lock type=chat`);
 
         // 4. 写入世界书
+        const context = getContext();
         if ($('#pw-wi-toggle').is(':checked') && wiContent) {
             const char = context.characters[context.characterId];
             const data = char.data || char;
             
-            // 优先顺序: V2 Character Book > Extension World > Legacy World
             let targetBook = data.character_book?.name || data.extensions?.world || data.world;
             
-            // 兜底：如果没有绑定，尝试用第一个加载的世界书
             if (!targetBook) {
                 const books = await getContextWorldBooks();
                 if (books.length > 0) targetBook = books[0];
@@ -916,5 +938,5 @@ jQuery(async () => {
         </div>
     `);
     $("#pw_open_btn").on("click", openCreatorPopup);
-    console.log(`${extensionName} v17 loaded.`);
+    console.log(`${extensionName} v18 loaded.`);
 });
