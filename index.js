@@ -6,7 +6,7 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 // ============================================================================
 
 const extensionName = "st-persona-weaver";
-const STORAGE_KEY_HISTORY = 'pw_history_v17'; 
+const STORAGE_KEY_HISTORY = 'pw_history_v17'; // 升级版本
 const STORAGE_KEY_STATE = 'pw_state_v17'; 
 const STORAGE_KEY_TAGS = 'pw_tags_v11';
 
@@ -44,7 +44,7 @@ const TEXT = {
     TOAST_SAVE_API: "API 设置已保存",
     TOAST_SNAPSHOT: "已存入历史记录",
     TOAST_GEN_FAIL: "生成失败，请检查 API 设置",
-    TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已创建/更新并绑定到当前聊天！`
+    TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已保存并绑定！`
 };
 
 // ============================================================================
@@ -91,7 +91,7 @@ function injectStyles() {
 // 3. 业务逻辑 (核心功能)
 // ============================================================================
 
-// [新增] 核心 API：执行 Slash 命令
+// [核心] 执行 Slash 命令
 async function executeSlash(command) {
     const { executeSlashCommandsWithOptions } = SillyTavern;
     if (executeSlashCommandsWithOptions) {
@@ -125,6 +125,7 @@ async function getContextWorldBooks(extras = []) {
     if (charId !== undefined && context.characters[charId]) {
         const char = context.characters[charId];
         const data = char.data || char;
+        // 尝试获取 V2 Character Book Name 或 Extension World
         const v2Book = data.character_book?.name;
         const extWorld = data.extensions?.world;
         const legacyWorld = data.world;
@@ -724,7 +725,7 @@ async function openCreatorPopup() {
         }
     });
 
-    // --- 8. 应用 (核心修复：直接修改全局设置) ---
+    // --- 8. 应用 (修复后) ---
     $('#pw-btn-apply').on('click', async function() {
         const name = $('#pw-res-name').val();
         const title = $('#pw-res-title').val();
@@ -735,23 +736,23 @@ async function openCreatorPopup() {
         
         const context = getContext();
         
-        try {
-            // 1. 直接修改内存中的 powerUserSettings
-            if (!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
-            if (!context.powerUserSettings.persona_titles) context.powerUserSettings.persona_titles = {};
-            context.powerUserSettings.personas[name] = desc;
-            context.powerUserSettings.persona_titles[name] = title || "";
+        // 1. 保存到内存配置 (关键：这是 ST 保存 Persona 的标准方式)
+        if (!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
+        context.powerUserSettings.personas[name] = desc;
 
-            // 2. 调用 ST 原生方法保存设置到文件
-            await saveSettingsDebounced();
-            
-            // 3. 使用 Slash Command 切换并绑定
+        if (!context.powerUserSettings.persona_titles) context.powerUserSettings.persona_titles = {};
+        context.powerUserSettings.persona_titles[name] = title || "";
+
+        // 2. 写入服务器 config.json
+        await saveSettingsDebounced();
+
+        // 3. 切换并绑定 (Slash Command 能够自动处理"切换到新创建的人设")
+        try {
+            // 引号包裹名字，防止空格导致解析错误
             await executeSlash(`/persona-set "${name}"`);
             await executeSlash(`/persona-lock type=chat`);
-
         } catch (e) {
-            toastr.error("保存或绑定 Persona 失败: " + e.message);
-            return;
+            console.warn("Slash command execution failed", e);
         }
 
         // 4. 写入世界书
@@ -759,8 +760,10 @@ async function openCreatorPopup() {
             const char = context.characters[context.characterId];
             const data = char.data || char;
             
+            // 优先顺序: V2 Character Book > Extension World > Legacy World
             let targetBook = data.character_book?.name || data.extensions?.world || data.world;
             
+            // 兜底：如果没有绑定，尝试用第一个加载的世界书
             if (!targetBook) {
                 const books = await getContextWorldBooks();
                 if (books.length > 0) targetBook = books[0];
@@ -905,9 +908,9 @@ jQuery(async () => {
     $("#extensions_settings2").append(`
         <div class="world-info-cleanup-settings">
             <div class="inline-drawer">
-                <div class="inline-drawer-toggle inline-drawer-header"><b>✨ ${TEXT.PANEL_TITLE} ✨</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>
+                <div class="inline-drawer-toggle inline-drawer-header"><b>${TEXT.PANEL_TITLE}</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>
                 <div class="inline-drawer-content">
-                    <div style="margin:10px 0;"><input id="pw_open_btn" class="menu_button" type="button" value="✨ 打开设定生成器 ✨" style="width:100%;font-weight:bold;background:var(--SmartThemeQuoteColor);color:#fff;" /></div>
+                    <div style="margin:10px 0;"><input id="pw_open_btn" class="menu_button" type="button" value="${TEXT.BTN_OPEN_MAIN}" style="width:100%;font-weight:bold;background:var(--SmartThemeQuoteColor);color:#fff;" /></div>
                 </div>
             </div>
         </div>
