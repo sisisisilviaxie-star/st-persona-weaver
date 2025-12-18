@@ -6,9 +6,9 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 // ============================================================================
 
 const extensionName = "st-persona-weaver";
-const STORAGE_KEY_HISTORY = 'pw_history_v20'; // 升级版本
-const STORAGE_KEY_STATE = 'pw_state_v20'; 
-const STORAGE_KEY_TAGS = 'pw_tags_v14';
+const STORAGE_KEY_HISTORY = 'pw_history_v18'; // 版本升级
+const STORAGE_KEY_STATE = 'pw_state_v18'; 
+const STORAGE_KEY_TAGS = 'pw_tags_v12';
 
 // 默认标签库
 const defaultTags = [
@@ -43,8 +43,8 @@ const TEXT = {
     TOAST_API_ERR: "API 连接失败",
     TOAST_SAVE_API: "API 设置已保存",
     TOAST_SNAPSHOT: "已存入历史记录",
-    TOAST_GEN_FAIL: "生成失败",
-    TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已新建并绑定！`
+    TOAST_GEN_FAIL: "生成失败，请检查 API 设置",
+    TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已强制写入并绑定！`
 };
 
 // ============================================================================
@@ -83,7 +83,7 @@ function loadState() {
 }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v20';
+    const styleId = 'persona-weaver-css-v18';
     if ($(`#${styleId}`).length) return;
 }
 
@@ -91,48 +91,46 @@ function injectStyles() {
 // 3. 业务逻辑 (核心功能)
 // ============================================================================
 
-// [辅助] 鲁棒的 JSON 解析器 (自动处理 Markdown 代码块和非标准格式)
-function robustJSONParse(text) {
-    if (!text) return null;
-    let cleanText = text.trim();
-    
-    // 1. 尝试直接解析
-    try { return JSON.parse(cleanText); } catch(e) {}
-
-    // 2. 尝试提取 Markdown 代码块 ```json ... ```
-    const codeBlockMatch = cleanText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
-    if (codeBlockMatch) {
-        try { return JSON.parse(codeBlockMatch[1]); } catch(e) {}
-    }
-
-    // 3. 尝试暴力查找最外层 {}
-    const firstOpen = cleanText.indexOf('{');
-    const lastClose = cleanText.lastIndexOf('}');
-    if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
-        try { return JSON.parse(cleanText.substring(firstOpen, lastClose + 1)); } catch(e) {}
-    }
-
-    throw new Error("无法从返回内容中解析 JSON");
-}
-
-// [核心] 纯数据层保存 Persona
-async function pureSavePersona(name, description, title) {
+// [核心] 暴力写入 Persona (参考了用户的 F12 方案)
+async function forceSavePersona(name, description, title) {
     const context = getContext();
+    
+    // 1. 直接修改内存中的数据源 (SillyTavern 的核心数据)
     if (!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
-    if (!context.powerUserSettings.persona_titles) context.powerUserSettings.persona_titles = {};
-
     context.powerUserSettings.personas[name] = description;
+
+    if (!context.powerUserSettings.persona_titles) context.powerUserSettings.persona_titles = {};
     context.powerUserSettings.persona_titles[name] = title || "";
 
+    // 2. 切换当前选中的 Persona
+    context.powerUserSettings.persona_selected = name;
+
+    // 3. 尝试暴力更新 UI (如果用户正打开着设置面板)
+    // 这是为了防止 UI 显示旧数据
+    const $nameInput = $('#your_name'); // ST 的用户名称输入框 ID
+    const $descInput = $('#persona_description'); // ST 的用户描述输入框 ID
+    
+    if ($nameInput.length) {
+        $nameInput.val(name).trigger('input').trigger('change');
+    }
+    if ($descInput.length) {
+        $descInput.val(description).trigger('input').trigger('change');
+    }
+
+    // 4. 调用系统保存 (最关键的一步)
     await saveSettingsDebounced();
-    console.log(`[PW] Persona "${name}" data saved.`);
+    
+    console.log(`[PW] Persona "${name}" created/updated via direct memory injection.`);
+    return true;
 }
 
-// [核心] 执行 Slash 命令
+// [核心] 执行 Slash 命令 (用于绑定)
 async function executeSlash(command) {
     const { executeSlashCommandsWithOptions } = SillyTavern;
     if (executeSlashCommandsWithOptions) {
         await executeSlashCommandsWithOptions(command, { quiet: true });
+    } else {
+        console.warn("[PW] Slash command API not found!");
     }
 }
 
@@ -163,6 +161,7 @@ async function getContextWorldBooks(extras = []) {
         const v2Book = data.character_book?.name;
         const extWorld = data.extensions?.world;
         const legacyWorld = data.world;
+        
         const main = v2Book || extWorld || legacyWorld;
         if (main) books.add(main);
     }
@@ -235,7 +234,7 @@ ${specifiedName ? `1. Use the Name: "${specifiedName}".` : "1. Generate a fittin
 ${specifiedTitle ? `2. Use the Title: "${specifiedTitle}".` : "2. Generate a short Title (e.g. Detective, Shy Student)."}
 
 [Response Format]:
-Return ONLY a JSON object (Do not output markdown code blocks):
+Return ONLY a JSON object:
 {
     "name": "${specifiedName || "Name"}",
     "title": "${specifiedTitle || "Short Title"}",
@@ -248,27 +247,20 @@ Return ONLY a JSON object (Do not output markdown code blocks):
         const body = {
             model: apiConfig.indepApiModel,
             messages: [{ role: 'system', content: systemPrompt }],
-            temperature: 0.7,
-            stream: false // <--- 关键修复：强制关闭流式传输
+            temperature: 0.7
         };
         const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.indepApiKey}` },
             body: JSON.stringify(body)
         });
-        
-        if (!res.ok) {
-            const errText = await res.text();
-            throw new Error(`Status ${res.status}: ${errText}`);
-        }
-        
+        if (!res.ok) throw new Error("Independent API Error");
         const json = await res.json();
         const content = json.choices[0].message.content;
-        return robustJSONParse(content); // 使用增强解析器
+        return JSON.parse(content.match(/\{[\s\S]*\}/)[0]);
     } else {
-        // 使用主 API (generateQuietPrompt 通常返回字符串)
         const generatedText = await context.generateQuietPrompt(systemPrompt, false, false, "System");
-        return robustJSONParse(generatedText);
+        return JSON.parse(generatedText.match(/\{[\s\S]*\}/)[0]);
     }
 }
 
@@ -765,7 +757,7 @@ async function openCreatorPopup() {
         }
     });
 
-    // --- 8. 应用 (纯数据层逻辑，完全移除UI更新) ---
+    // --- 8. 应用 (核心修复：暴力写入 + 强制同步) ---
     $('#pw-btn-apply').on('click', async function() {
         const name = $('#pw-res-name').val();
         const title = $('#pw-res-title').val();
@@ -774,29 +766,38 @@ async function openCreatorPopup() {
         
         if (!name) return toastr.warning("名字不能为空");
         
+        const context = getContext();
+        
+        // 1. 暴力保存 Persona (内存劫持 + UI更新 + 强制存盘)
         try {
-            // 1. 保存 Persona 到配置 (不碰UI，避免重命名当前)
-            await pureSavePersona(name, desc, title);
+            await forceSavePersona(name, desc, title);
+        } catch (e) {
+            toastr.error("保存失败: " + e.message);
+            return;
+        }
 
-            // 2. 切换并绑定 (Slash Command 会自动处理 UI 刷新)
-            // 先切换
+        // 2. 绑定到聊天
+        try {
+            // 这里双保险：先切，再锁
             await executeSlash(`/persona-set "${name}"`);
-            // 再锁定
             await executeSlash(`/persona-lock type=chat`);
+        } catch (e) {
+            console.warn("Slash command execution failed", e);
+        }
 
-            // 3. 写入世界书
-            if ($('#pw-wi-toggle').is(':checked') && wiContent) {
-                const context = getContext();
-                const char = context.characters[context.characterId];
-                const data = char.data || char;
-                let targetBook = data.character_book?.name || data.extensions?.world || data.world;
-                
-                if (!targetBook) {
-                    const books = await getContextWorldBooks();
-                    if (books.length > 0) targetBook = books[0];
-                }
+        // 3. 写入世界书
+        if ($('#pw-wi-toggle').is(':checked') && wiContent) {
+            const char = context.characters[context.characterId];
+            const data = char.data || char;
+            let targetBook = data.character_book?.name || data.extensions?.world || data.world;
+            
+            if (!targetBook) {
+                const books = await getContextWorldBooks();
+                if (books.length > 0) targetBook = books[0];
+            }
 
-                if (targetBook) {
+            if (targetBook) {
+                try {
                     const headers = getRequestHeaders();
                     const r = await fetch('/api/worldinfo/get', { method: 'POST', headers, body: JSON.stringify({ name: targetBook }) });
                     if (r.ok) {
@@ -821,18 +822,14 @@ async function openCreatorPopup() {
                         toastr.success(`已写入世界书: ${targetBook}`);
                         if (context.updateWorldInfoList) context.updateWorldInfoList();
                     }
-                } else {
-                    toastr.warning("未找到可用的世界书，跳过写入。");
-                }
+                } catch(e) { console.error("WI Update Failed", e); }
+            } else {
+                toastr.warning("未找到可用的世界书，跳过写入。");
             }
-
-            toastr.success(TEXT.TOAST_SAVE_SUCCESS(name));
-            $('.popup_close').click();
-
-        } catch (e) {
-            console.error(e);
-            toastr.error("应用失败: " + e.message);
         }
+
+        toastr.success(TEXT.TOAST_SAVE_SUCCESS(name));
+        $('.popup_close').click();
     });
 
     // --- 9. 历史管理 ---
@@ -946,5 +943,5 @@ jQuery(async () => {
         </div>
     `);
     $("#pw_open_btn").on("click", openCreatorPopup);
-    console.log(`${extensionName} v20 loaded.`);
+    console.log(`${extensionName} v18 loaded.`);
 });
