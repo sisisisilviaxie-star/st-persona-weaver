@@ -6,8 +6,7 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 // ============================================================================
 
 const extensionName = "st-persona-weaver";
-const STORAGE_KEY_HISTORY = 'pw_history_v19'; // 升级
-const STORAGE_KEY_STATE = 'pw_state_v19'; 
+const STORAGE_KEY_HISTORY = 'pw_history_v19'; 
 const STORAGE_KEY_TAGS = 'pw_tags_v13';
 
 // 默认标签库
@@ -24,22 +23,18 @@ const defaultTags = [
     { name: "秘密", value: "" }
 ];
 
-// 已移除 API 相关的设置，仅保留格式和历史限制
 const defaultSettings = {
-    autoSwitchPersona: true,
-    syncToWorldInfo: true,
     historyLimit: 50,
-    outputFormat: 'yaml'
+    outputFormat: 'yaml', 
+    // 已移除独立 API 配置
 };
 
 const TEXT = {
-    PANEL_TITLE: "用户设定编织者 Pro",
-    BTN_OPEN_MAIN: "打开设定生成器",
+    PANEL_TITLE: "设定编织者 Pro",
     TOAST_NO_CHAR: "请先打开一个角色聊天",
-    TOAST_SAVE_API: "设置已保存",
     TOAST_SNAPSHOT: "已存入历史记录",
-    TOAST_GEN_FAIL: "生成失败",
-    TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已新建并绑定！`
+    TOAST_GEN_FAIL: "生成失败，请检查网络",
+    TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 描述已更新！`
 };
 
 // ============================================================================
@@ -52,6 +47,9 @@ let worldInfoCache = {};
 let availableWorldBooks = []; 
 let isEditingTags = false; 
 
+// 临时存储生成前的上下文，用于回填
+let currentContextData = { name: "", title: "" };
+
 function loadData() {
     try { historyCache = JSON.parse(localStorage.getItem(STORAGE_KEY_HISTORY)) || []; } catch { historyCache = []; }
     try { tagsCache = JSON.parse(localStorage.getItem(STORAGE_KEY_TAGS)) || defaultTags; } catch { tagsCache = defaultTags; }
@@ -63,18 +61,10 @@ function saveData() {
 }
 
 function saveHistory(item) {
-    const limit = extension_settings[extensionName]?.historyLimit || 50;
+    const limit = 50;
     historyCache.unshift(item);
     if (historyCache.length > limit) historyCache = historyCache.slice(0, limit);
     saveData();
-}
-
-function saveState(data) {
-    localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(data));
-}
-
-function loadState() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; }
 }
 
 function injectStyles() {
@@ -83,45 +73,8 @@ function injectStyles() {
 }
 
 // ============================================================================
-// 3. 业务逻辑 (核心功能)
+// 3. 业务逻辑
 // ============================================================================
-
-// [核心] 暴力写入 Persona (新建或更新)
-async function forceSavePersona(name, description, title) {
-    const context = getContext();
-    
-    // 1. 修改内存中的数据源
-    // ST的机制是：只要 personas[Key] 有值，就是一个 Persona。
-    // 如果 Key (name) 是新的，saveSettingsDebounced 后就会在 config.json 里新建一个。
-    if (!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
-    context.powerUserSettings.personas[name] = description;
-
-    if (!context.powerUserSettings.persona_titles) context.powerUserSettings.persona_titles = {};
-    context.powerUserSettings.persona_titles[name] = title || "";
-
-    // 2. 切换当前选中的 Persona
-    context.powerUserSettings.persona_selected = name;
-
-    // 3. 尝试更新 UI 输入框 (如果用户开着面板)
-    const $nameInput = $('#your_name'); 
-    const $descInput = $('#persona_description'); 
-    if ($nameInput.length) $nameInput.val(name).trigger('input').trigger('change');
-    if ($descInput.length) $descInput.val(description).trigger('input').trigger('change');
-
-    // 4. 强制保存到磁盘
-    await saveSettingsDebounced();
-    return true;
-}
-
-// [核心] 执行 Slash 命令 (用于绑定)
-async function executeSlash(command) {
-    const { executeSlashCommandsWithOptions } = SillyTavern;
-    if (executeSlashCommandsWithOptions) {
-        await executeSlashCommandsWithOptions(command, { quiet: true });
-    } else {
-        console.warn("[PW] Slash command API not found!");
-    }
-}
 
 async function loadAvailableWorldBooks() {
     availableWorldBooks = [];
@@ -150,6 +103,7 @@ async function getContextWorldBooks(extras = []) {
         const v2Book = data.character_book?.name;
         const extWorld = data.extensions?.world;
         const legacyWorld = data.world;
+        
         const main = v2Book || extWorld || legacyWorld;
         if (main) books.add(main);
     }
@@ -178,7 +132,7 @@ async function getWorldBookEntries(bookName) {
 
 async function runGeneration(data) {
     const context = getContext();
-    const char = context.characters[context.characterId];
+    const char = context.characters[context.characterId] || { name: "Unknown", scenario: "" };
     
     const formatInst = data.format === 'yaml' 
         ? `"description": "Use YAML format key-value pairs."`
@@ -189,11 +143,12 @@ async function runGeneration(data) {
         wiText = `\n[Context]:\n${data.wiContext.join('\n\n')}\n`;
     }
 
-    const specifiedName = $('#pw-res-name').val() || "";
-    const specifiedTitle = $('#pw-res-title').val() || "";
+    // 我们不让 AI 生成名字和标题，因为我们要修改当前的人设
+    const currentName = currentContextData.name;
+    const currentTitle = currentContextData.title;
 
     const systemPrompt = `You are a creative writing assistant.
-Task: Create a User Persona based on Request.
+Task: Refine the description for the User Persona "${currentName}"${currentTitle ? ` (${currentTitle})` : ""}.
 ${wiText}
 Target Character: ${char.name}
 Scenario: ${char.scenario || "None"}
@@ -201,20 +156,14 @@ Scenario: ${char.scenario || "None"}
 [User Request]:
 ${data.request}
 
-[Instructions]:
-${specifiedName ? `1. Use the Name: "${specifiedName}".` : "1. Generate a fitting Name."}
-${specifiedTitle ? `2. Use the Title: "${specifiedTitle}".` : "2. Generate a short Title (e.g. Detective, Shy Student)."}
-
 [Response Format]:
 Return ONLY a JSON object:
 {
-    "name": "${specifiedName || "Name"}",
-    "title": "${specifiedTitle || "Short Title"}",
     "description": ${formatInst},
     "wi_entry": "Concise facts."
 }`;
 
-    // 仅使用 Main API (generateQuietPrompt)
+    // 只使用主 API
     const generatedText = await context.generateQuietPrompt(systemPrompt, false, false, "System");
     return JSON.parse(generatedText.match(/\{[\s\S]*\}/)[0]);
 }
@@ -225,14 +174,19 @@ Return ONLY a JSON object:
 
 async function openCreatorPopup() {
     const context = getContext();
-    if (context.characterId === undefined) {
-        return toastr.warning(TEXT.TOAST_NO_CHAR);
-    }
+    
+    // 获取当前 Persona 信息
+    const currentPersonaName = context.powerUserSettings.persona_selected || "User";
+    const currentPersonaTitle = (context.powerUserSettings.persona_titles && context.powerUserSettings.persona_titles[currentPersonaName]) || "";
+    // 获取当前描述 (用于回显，或者作为参考)
+    const currentDesc = (context.powerUserSettings.personas && context.powerUserSettings.personas[currentPersonaName]) || "";
+
+    // 保存到全局供生成函数使用
+    currentContextData.name = currentPersonaName;
+    currentContextData.title = currentPersonaTitle;
 
     loadData();
     await loadAvailableWorldBooks();
-    const savedState = loadState();
-    const config = { ...defaultSettings, ...extension_settings[extensionName], ...savedState.localConfig };
     
     const wiOptions = availableWorldBooks.length > 0 
         ? availableWorldBooks.map(b => `<option value="${b}">${b}</option>`).join('')
@@ -247,12 +201,10 @@ async function openCreatorPopup() {
             <div class="pw-tabs">
                 <div class="pw-tab active" data-tab="editor"><i class="fa-solid fa-pen-to-square"></i> 编辑</div>
                 <div class="pw-tab" data-tab="context"><i class="fa-solid fa-book"></i> 世界书</div>
-                <!-- 已移除 API Tab -->
                 <div class="pw-tab" data-tab="history"><i class="fa-solid fa-clock-rotate-left"></i> 历史</div>
             </div>
         </div>
 
-        <!-- 1. 编辑视图 -->
         <div id="pw-view-editor" class="pw-view active">
             <div class="pw-scroll-area">
                 <div>
@@ -264,44 +216,44 @@ async function openCreatorPopup() {
                 </div>
 
                 <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
-                    <div style="display:flex; gap:10px;">
-                        <input type="text" id="pw-res-name" class="pw-input" placeholder="姓名" value="${savedState.name || ''}" style="flex:1;">
-                        <input type="text" id="pw-res-title" class="pw-input" placeholder="Title (选填)" value="${savedState.title || ''}" style="flex:1;">
+                    <!-- 只读的当前信息展示 -->
+                    <div style="display:flex; gap:10px; opacity: 0.8;">
+                        <input type="text" class="pw-input" value="${currentPersonaName}" disabled title="当前 Persona 名字 (不可修改)" style="flex:1;">
+                        <input type="text" class="pw-input" value="${currentPersonaTitle}" disabled title="当前 Persona 标题 (不可修改)" style="flex:1;" placeholder="无标题">
                     </div>
 
-                    <textarea id="pw-request" class="pw-textarea" placeholder="在此输入设定要求，或点击上方标签..." style="min-height:100px;">${savedState.request || ''}</textarea>
+                    <textarea id="pw-request" class="pw-textarea" placeholder="在此输入设定要求，或点击上方标签..." style="min-height:100px;"></textarea>
                     
                     <div class="pw-editor-tools">
                         <div class="pw-mini-btn" id="pw-clear"><i class="fa-solid fa-eraser"></i> 清空</div>
                         <div class="pw-mini-btn" id="pw-snapshot"><i class="fa-solid fa-save"></i> 存入历史</div>
                         <select id="pw-fmt-select" class="pw-input" style="width:auto; padding:2px 8px; font-size:0.85em;">
-                            <option value="yaml" ${config.outputFormat === 'yaml' ? 'selected' : ''}>YAML 属性</option>
-                            <option value="paragraph" ${config.outputFormat === 'paragraph' ? 'selected' : ''}>小说段落</option>
+                            <option value="yaml" selected>YAML 属性</option>
+                            <option value="paragraph">小说段落</option>
                         </select>
                     </div>
                 </div>
 
                 <button id="pw-btn-gen" class="pw-btn gen"><i class="fa-solid fa-bolt"></i> 生成 / 润色</button>
 
-                <div id="pw-result-area" style="display: ${savedState.hasResult ? 'block' : 'none'}; border-top: 1px dashed var(--SmartThemeBorderColor); padding-top: 15px; margin-top:5px;">
-                    <div style="font-weight:bold; margin-bottom:10px; color:#5b8db8;"><i class="fa-solid fa-check-circle"></i> 生成结果</div>
+                <div id="pw-result-area" style="display: block; border-top: 1px dashed var(--SmartThemeBorderColor); padding-top: 15px; margin-top:5px;">
+                    <div style="font-weight:bold; margin-bottom:10px; color:#5b8db8;"><i class="fa-solid fa-check-circle"></i> 结果 (当前描述)</div>
                     <div style="display:flex; flex-direction:column; gap:10px;">
-                        <textarea id="pw-res-desc" class="pw-textarea" rows="6" placeholder="用户设定描述">${savedState.desc || ''}</textarea>
+                        <textarea id="pw-res-desc" class="pw-textarea" rows="6" placeholder="等待生成...">${currentDesc}</textarea>
                         
                         <div style="background:rgba(0,0,0,0.1); padding:10px; border-radius:8px; border:1px solid var(--SmartThemeBorderColor);">
                             <div style="display:flex; align-items:center; gap:5px; margin-bottom:5px;">
                                 <input type="checkbox" id="pw-wi-toggle" checked>
                                 <span style="font-size:0.9em; font-weight:bold;">同步写入世界书</span>
                             </div>
-                            <textarea id="pw-res-wi" class="pw-textarea" rows="3" placeholder="世界书条目内容...">${savedState.wiContent || ''}</textarea>
+                            <textarea id="pw-res-wi" class="pw-textarea" rows="3" placeholder="世界书条目内容..."></textarea>
                         </div>
                     </div>
-                    <button id="pw-btn-apply" class="pw-btn save"><i class="fa-solid fa-check"></i> 保存并切换</button>
+                    <button id="pw-btn-apply" class="pw-btn save"><i class="fa-solid fa-floppy-disk"></i> 保存修改</button>
                 </div>
             </div>
         </div>
 
-        <!-- 2. 世界书视图 -->
         <div id="pw-view-context" class="pw-view">
             <div class="pw-scroll-area">
                 <div class="pw-card-section">
@@ -317,7 +269,6 @@ async function openCreatorPopup() {
             </div>
         </div>
 
-        <!-- 3. 历史视图 -->
         <div id="pw-view-history" class="pw-view">
             <div class="pw-scroll-area">
                 <div class="pw-search-box">
@@ -337,24 +288,6 @@ async function openCreatorPopup() {
     // 逻辑绑定
     // ========================================================================
     
-    // --- 1. 状态保存 ---
-    const saveCurrentState = () => {
-        saveState({
-            request: $('#pw-request').val(),
-            name: $('#pw-res-name').val(),
-            title: $('#pw-res-title').val(),
-            desc: $('#pw-res-desc').val(),
-            wiContent: $('#pw-res-wi').val(),
-            hasResult: $('#pw-result-area').is(':visible'),
-            localConfig: {
-                outputFormat: $('#pw-fmt-select').val(),
-                extraBooks: window.pwExtraBooks || []
-            }
-        });
-    };
-    $(document).off('.pw');
-    $(document).on('input.pw change.pw', '#pw-request, #pw-res-name, #pw-res-title, #pw-res-desc, #pw-res-wi, .pw-input', saveCurrentState);
-
     // --- 2. Tab 切换 ---
     $(document).on('click.pw', '.pw-tab', function() {
         $('.pw-tab').removeClass('active');
@@ -415,7 +348,6 @@ async function openCreatorPopup() {
                     const prefix = (cur && !cur.endsWith('\n')) ? '\n' : '';
                     $text.val(cur + prefix + insert).focus();
                     $text[0].scrollTop = $text[0].scrollHeight;
-                    saveCurrentState();
                 });
                 $container.append($chip);
             }
@@ -449,7 +381,7 @@ async function openCreatorPopup() {
     renderTagsList(); 
 
     // --- 4. 世界书逻辑 ---
-    window.pwExtraBooks = savedState.localConfig?.extraBooks || [];
+    window.pwExtraBooks = []; // Reset local
     
     const renderWiBooks = async () => {
         const container = $('#pw-wi-container').empty();
@@ -556,33 +488,23 @@ async function openCreatorPopup() {
     $('#pw-clear').on('click', () => {
         if(confirm("清空输入内容？")) {
             $('#pw-request').val('');
-            $('#pw-result-area').hide();
-            saveCurrentState();
         }
     });
 
     $('#pw-snapshot').on('click', () => {
         const req = $('#pw-request').val();
-        const curName = $('#pw-res-name').val();
-        const curTitle = $('#pw-res-title').val();
-        const curDesc = $('#pw-res-desc').val();
+        const desc = $('#pw-res-desc').val();
+        if (!req && !desc) return;
         
-        if (!req && !curName) return;
-        
-        const userName = curName || "User"; 
-        const userTitle = curTitle || "";
-        const finalTitle = userTitle ? `${userName} ${userTitle}` : userName;
+        const { name, title } = currentContextData;
+        const finalTitle = title ? `${name} ${title}` : name;
         
         saveHistory({ 
             request: req || "无请求内容", 
             timestamp: new Date().toLocaleString(),
             targetChar: getContext().characters[getContext().characterId]?.name || "未知",
             data: { 
-                name: userName, 
-                title: userTitle,
-                description: curDesc || "", 
-                wi_entry: $('#pw-res-wi').val(),
-                customTitle: finalTitle
+                name: name, title: title, description: desc, wi_entry: $('#pw-res-wi').val(), customTitle: finalTitle
             } 
         });
         toastr.success(TEXT.TOAST_SNAPSHOT);
@@ -591,11 +513,7 @@ async function openCreatorPopup() {
     // --- 7. 生成 ---
     $('#pw-btn-gen').on('click', async function() {
         const req = $('#pw-request').val();
-        const curName = $('#pw-res-name').val();
-        const curDesc = $('#pw-res-desc').val();
-        
-        let fullReq = req;
-        if (curName || curDesc) fullReq += `\n\n[Previous Draft]:\nName: ${curName}\nDesc: ${curDesc}`;
+        if (!req) return toastr.warning("请输入要求");
 
         const $btn = $(this);
         const oldText = $btn.html();
@@ -606,39 +524,27 @@ async function openCreatorPopup() {
             wiContext.push(decodeURIComponent($(this).data('content')));
         });
 
-        const config = {
-            request: fullReq,
-            format: $('#pw-fmt-select').val(),
-            wiContext: wiContext
-        };
-
         try {
-            const data = await runGeneration(config);
+            const data = await runGeneration({
+                request: req,
+                format: $('#pw-fmt-select').val(),
+                wiContext: wiContext
+            });
             
-            const finalName = data.name || $('#pw-res-name').val() || "User";
-            const finalTitle = data.title || $('#pw-res-title').val() || "";
-
-            $('#pw-res-name').val(finalName);
-            $('#pw-res-title').val(finalTitle);
             $('#pw-res-desc').val(data.description);
             $('#pw-res-wi').val(data.wi_entry || data.description);
-            $('#pw-result-area').fadeIn();
             
-            const finalTitleStr = finalTitle ? `${finalName} ${finalTitle}` : finalName;
+            const { name, title } = currentContextData;
+            const finalTitle = title ? `${name} ${title}` : name;
             
             saveHistory({ 
                 request: req, 
                 timestamp: new Date().toLocaleString(),
                 targetChar: getContext().characters[getContext().characterId]?.name || "未知", 
                 data: {
-                    name: finalName,
-                    title: finalTitle,
-                    description: data.description,
-                    wi_entry: data.wi_entry || data.description,
-                    customTitle: finalTitleStr
+                    name: name, title: title, description: data.description, wi_entry: data.wi_entry, customTitle: finalTitle
                 }
             });
-            saveCurrentState();
         } catch (e) {
             console.error(e);
             toastr.error(`${TEXT.TOAST_GEN_FAIL}: ${e.message}`);
@@ -647,39 +553,37 @@ async function openCreatorPopup() {
         }
     });
 
-    // --- 8. 应用 (暴力写入 + 绑定) ---
+    // --- 8. 应用 (核心逻辑：修改当前设置并保存) ---
     $('#pw-btn-apply').on('click', async function() {
-        const name = $('#pw-res-name').val();
-        const title = $('#pw-res-title').val();
         const desc = $('#pw-res-desc').val();
         const wiContent = $('#pw-res-wi').val();
-        
-        if (!name) return toastr.warning("名字不能为空");
+        const { name, title } = currentContextData;
         
         const context = getContext();
         
-        // 1. 暴力保存
-        try {
-            await forceSavePersona(name, desc, title);
-        } catch (e) {
-            toastr.error("保存失败: " + e.message);
-            return;
+        // 1. 修改内存配置 (这是真正的数据源)
+        if (context.powerUserSettings.personas) {
+            context.powerUserSettings.personas[name] = desc;
+        } else {
+            // 防御性编程，如果对象不存在（极少见）
+            context.powerUserSettings.personas = { [name]: desc };
         }
 
-        // 2. 绑定
-        try {
-            await executeSlash(`/persona-set "${name}"`);
-            await executeSlash(`/persona-lock type=chat`);
-        } catch (e) {
-            console.warn("Slash command execution failed", e);
+        // 2. 暴力刷新 UI (如果用户已经打开了 Persona 面板，确保他看到的是新的)
+        const $descInput = $('#persona_description');
+        if ($descInput.length && $descInput.is(':visible')) {
+            $descInput.val(desc).trigger('input').trigger('change');
         }
 
-        // 3. 写入世界书
+        // 3. 写入磁盘
+        await saveSettingsDebounced();
+
+        // 4. 写入世界书 (如果勾选)
         if ($('#pw-wi-toggle').is(':checked') && wiContent) {
             const char = context.characters[context.characterId];
             const data = char.data || char;
-            let targetBook = data.character_book?.name || data.extensions?.world || data.world;
             
+            let targetBook = data.character_book?.name || data.extensions?.world || data.world;
             if (!targetBook) {
                 const books = await getContextWorldBooks();
                 if (books.length > 0) targetBook = books[0];
@@ -712,13 +616,11 @@ async function openCreatorPopup() {
                         if (context.updateWorldInfoList) context.updateWorldInfoList();
                     }
                 } catch(e) { console.error("WI Update Failed", e); }
-            } else {
-                toastr.warning("未找到可用的世界书，跳过写入。");
             }
         }
 
         toastr.success(TEXT.TOAST_SAVE_SUCCESS(name));
-        $('.popup_close').click();
+        $('.popup_close').click(); // 关闭我们的弹窗
     });
 
     // --- 9. 历史管理 ---
@@ -760,8 +662,6 @@ async function openCreatorPopup() {
             $el.on('click', function(e) {
                 if ($(e.target).closest('.pw-hist-del-btn, .pw-hist-title-input').length) return;
                 $('#pw-request').val(item.request);
-                $('#pw-res-name').val(item.data.name);
-                $('#pw-res-title').val(item.data.title || "");
                 $('#pw-res-desc').val(item.data.description);
                 $('#pw-res-wi').val(item.data.wi_entry);
                 $('#pw-result-area').show();
@@ -815,22 +715,33 @@ async function openCreatorPopup() {
 }
 
 // ============================================================================
-// 初始化
+// 初始化 (按钮注入逻辑)
 // ============================================================================
 
 jQuery(async () => {
     injectStyles();
     
-    $("#extensions_settings2").append(`
-        <div class="world-info-cleanup-settings">
-            <div class="inline-drawer">
-                <div class="inline-drawer-toggle inline-drawer-header"><b>${TEXT.PANEL_TITLE}</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>
-                <div class="inline-drawer-content">
-                    <div style="margin:10px 0;"><input id="pw_open_btn" class="menu_button" type="button" value="${TEXT.BTN_OPEN_MAIN}" style="width:100%;font-weight:bold;background:var(--SmartThemeQuoteColor);color:#fff;" /></div>
+    console.log(`${extensionName} v19 loaded. Waiting for Persona panel...`);
+
+    // 核心注入逻辑：轮询检测 Persona 管理面板中的操作区
+    setInterval(() => {
+        // 寻找 Persona 面板中的操作按钮区域
+        // 通常位于 #persona_management 面板内，人设名称旁边或下方
+        // 选择器定位到那一排图标按钮 (Edit, Refresh, etc.)
+        const $actionContainer = $('#persona_header_buttons'); 
+
+        if ($actionContainer.length > 0 && $('#pw-trigger-btn').length === 0) {
+            // 创建魔法棒按钮
+            const $btn = $(`
+                <div id="pw-trigger-btn" class="pw-inject-btn" title="✨ 设定编织者 Pro">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
                 </div>
-            </div>
-        </div>
-    `);
-    $("#pw_open_btn").on("click", openCreatorPopup);
-    console.log(`${extensionName} v19 loaded.`);
+            `);
+            
+            $btn.on('click', openCreatorPopup);
+            
+            // 插入到容器最前面
+            $actionContainer.prepend($btn);
+        }
+    }, 1000); // 每秒检查一次
 });
