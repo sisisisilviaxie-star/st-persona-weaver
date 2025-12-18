@@ -6,9 +6,9 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 // ============================================================================
 
 const extensionName = "st-persona-weaver";
-const STORAGE_KEY_HISTORY = 'pw_history_v15'; 
-const STORAGE_KEY_STATE = 'pw_state_v15'; 
-const STORAGE_KEY_TAGS = 'pw_tags_v9';
+const STORAGE_KEY_HISTORY = 'pw_history_v16'; // 升级版本
+const STORAGE_KEY_STATE = 'pw_state_v16'; 
+const STORAGE_KEY_TAGS = 'pw_tags_v10';
 
 // 默认标签库
 const defaultTags = [
@@ -83,7 +83,7 @@ function loadState() {
 }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v15';
+    const styleId = 'persona-weaver-css-v16';
     if ($(`#${styleId}`).length) return;
 }
 
@@ -120,7 +120,7 @@ async function getWorldBookEntries(bookName) {
             const entries = await window.TavernHelper.getWorldbook(bookName);
             const mapped = entries.map(e => ({
                 uid: e.uid,
-                displayName: e.comment || (Array.isArray(e.keys) ? e.keys.join(', ') : e.keys), // Helper uses 'keys'
+                displayName: e.comment || (Array.isArray(e.keys) ? e.keys.join(', ') : e.keys), 
                 content: e.content,
                 enabled: e.enabled
             }));
@@ -710,9 +710,10 @@ async function openCreatorPopup() {
         }
     });
 
-    // --- 8. 应用 (修复保存逻辑) ---
+    // --- 8. 应用 (核心逻辑重构) ---
     $('#pw-btn-apply').on('click', async function() {
         const name = $('#pw-res-name').val();
+        const title = $('#pw-res-title').val();
         const desc = $('#pw-res-desc').val();
         const wiContent = $('#pw-res-wi').val();
         
@@ -723,37 +724,37 @@ async function openCreatorPopup() {
 
         try {
             // 1. 创建并保存 Persona 文件 (后端 API)
-            // ST 标准接口: /api/personas/save
-            const avatarPath = "default.png"; // 如果有逻辑支持头像上传可修改
+            // 确保 title 被正确发送 (如果 ST API 支持的话，或者作为 description 的一部分)
+            // ST 的 personas 通常只存 name, description, avatar. Title 很多时候是前端展示用的或者 Description 第一行
+            const payload = {
+                name: name,
+                description: desc,
+                avatar: 'default.png' // 使用默认头像防止报错
+            };
+            
+            // 尝试通过 API 保存 Persona
             await fetch('/api/personas/save', {
                 method: 'POST',
                 headers: getRequestHeaders(),
-                body: JSON.stringify({
-                    name: name,
-                    description: desc,
-                    avatar: avatarPath
-                })
+                body: JSON.stringify(payload)
             });
 
-            // 2. 自动切换到新 Persona (使用 Slash Command)
+            // 2. 自动切换到新 Persona (使用 Slash Command /persona-set)
+            // 这一步至关重要，它会触发酒馆内部的逻辑：刷新列表 -> 选中 -> 绑定到聊天 -> 附加到 Prompt
             if (defaultSettings.autoSwitchPersona) {
                 if (window.TavernHelper && window.TavernHelper.triggerSlash) {
                     await window.TavernHelper.triggerSlash(`/persona-set ${name}`);
                 } else {
-                    // Fallback to simpler method if Slash API fails (rare)
-                    console.warn("TavernHelper slash trigger missing, attempting settings switch only.");
-                    const context = getContext();
-                    if(!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
-                    context.powerUserSettings.personas[name] = desc;
-                    context.powerUserSettings.persona_selected = name;
-                    await saveSettingsDebounced();
+                    // Fallback
+                    toastr.warning("TavernHelper 未加载，无法自动切换 Persona。请手动刷新页面。");
                 }
             }
 
-            // 3. 写入世界书 (使用 TavernHelper API)
+            // 3. 写入世界书 (写入当前聊天绑定的书，没有则创建)
             if ($('#pw-wi-toggle').is(':checked') && wiContent) {
-                if (window.TavernHelper && window.TavernHelper.getOrCreateChatWorldbook) {
-                    // 获取当前绑定的世界书，没有则创建
+                if (window.TavernHelper && window.TavernHelper.getOrCreateChatWorldbook && window.TavernHelper.createWorldbookEntries) {
+                    // 获取当前聊天绑定的世界书 (Chat Lore)
+                    // 如果当前聊天没有绑定世界书，会自动创建一个同名的
                     const bookName = await window.TavernHelper.getOrCreateChatWorldbook('current');
                     
                     // 插入条目
@@ -763,25 +764,11 @@ async function openCreatorPopup() {
                         comment: `User: ${name}`,
                         enabled: true,
                         selective: true,
-                        position: { type: 'before_character_definition' } // 默认位置
+                        position: { type: 'before_character_definition' } // 插入位置
                     }]);
-                    toastr.success(`世界书条目已添加: ${bookName}`);
+                    toastr.success(`世界书条目已添加至: ${bookName}`);
                 } else {
-                    // Fallback to old manual API if Helper missing
-                    console.warn("TavernHelper missing, falling back to manual WI api.");
-                    const books = await getContextWorldBooks();
-                    if (books.length > 0) {
-                        const book = books[0];
-                        const r = await fetch('/api/worldinfo/get', { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify({ name: book }) });
-                        if (r.ok) {
-                            const d = await r.json();
-                            if (!d.entries) d.entries = {};
-                            const ids = Object.keys(d.entries).map(Number);
-                            const newId = ids.length ? Math.max(...ids) + 1 : 0;
-                            d.entries[newId] = { uid: newId, key: [name, "User"], content: wiContent, comment: `User: ${name}`, enabled: true, selective: true };
-                            await fetch('/api/worldinfo/edit', { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify({ name: book, data: d }) });
-                        }
-                    }
+                    console.error("TavernHelper functions missing for World Info.");
                 }
             }
 
@@ -909,5 +896,5 @@ jQuery(async () => {
         </div>
     `);
     $("#pw_open_btn").on("click", openCreatorPopup);
-    console.log(`${extensionName} v15 loaded.`);
+    console.log(`${extensionName} v16 loaded.`);
 });
