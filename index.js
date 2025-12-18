@@ -6,9 +6,9 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 // ============================================================================
 
 const extensionName = "st-persona-weaver";
-const STORAGE_KEY_HISTORY = 'pw_history_v18'; 
-const STORAGE_KEY_STATE = 'pw_state_v18'; 
-const STORAGE_KEY_TAGS = 'pw_tags_v12';
+const STORAGE_KEY_HISTORY = 'pw_history_v15'; 
+const STORAGE_KEY_STATE = 'pw_state_v15'; 
+const STORAGE_KEY_TAGS = 'pw_tags_v9';
 
 // 默认标签库
 const defaultTags = [
@@ -44,7 +44,7 @@ const TEXT = {
     TOAST_SAVE_API: "API 设置已保存",
     TOAST_SNAPSHOT: "已存入历史记录",
     TOAST_GEN_FAIL: "生成失败，请检查 API 设置",
-    TOAST_SAVE_SUCCESS: (name) => `设定 "${name}" 已保存并连接!`
+    TOAST_SAVE_SUCCESS: (name) => `设定已保存并切换为: ${name}`
 };
 
 // ============================================================================
@@ -83,7 +83,7 @@ function loadState() {
 }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v18';
+    const styleId = 'persona-weaver-css-v15';
     if ($(`#${styleId}`).length) return;
 }
 
@@ -120,7 +120,7 @@ async function getWorldBookEntries(bookName) {
             const entries = await window.TavernHelper.getWorldbook(bookName);
             const mapped = entries.map(e => ({
                 uid: e.uid,
-                displayName: e.comment || (Array.isArray(e.keys) ? e.keys.join(', ') : e.keys),
+                displayName: e.comment || (Array.isArray(e.keys) ? e.keys.join(', ') : e.keys), // Helper uses 'keys'
                 content: e.content,
                 enabled: e.enabled
             }));
@@ -398,7 +398,7 @@ async function openCreatorPopup() {
         if(tab === 'history') renderHistoryList(); 
     });
 
-    // --- 3. 标签系统 ---
+    // --- 3. 标签系统 (极致紧凑版) ---
     isEditingTags = false; 
 
     const renderTagsList = () => {
@@ -710,10 +710,9 @@ async function openCreatorPopup() {
         }
     });
 
-    // --- 8. 应用 (修复: 复制当前头像逻辑) ---
+    // --- 8. 应用 (修复保存逻辑) ---
     $('#pw-btn-apply').on('click', async function() {
         const name = $('#pw-res-name').val();
-        const title = $('#pw-res-title').val();
         const desc = $('#pw-res-desc').val();
         const wiContent = $('#pw-res-wi').val();
         
@@ -723,62 +722,27 @@ async function openCreatorPopup() {
         $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 保存中...');
 
         try {
-            const context = getContext();
-            
-            // 1. 获取当前正在使用的头像文件
-            const currentAvatarFile = context.powerUserSettings.user_avatar || "default.png";
-            
-            // 2. 将其下载为 Blob
-            // SillyTavern 的用户头像路径通常为 /User/Avatars/filename
-            // 注意: url 可能是 /user/images/avatars/ 或者 /User/Avatars/ 取决于版本，通常小写兼容性更好
-            const avatarUrl = `/user/images/avatars/${currentAvatarFile}`;
-            const imgRes = await fetch(avatarUrl);
-            
-            let imgBlob;
-            if (imgRes.ok) {
-                imgBlob = await imgRes.blob();
-            } else {
-                // 如果获取失败（极罕见），创建一个 1x1 透明 PNG 避免报错
-                const fallbackBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-                imgBlob = await (await fetch(fallbackBase64)).blob();
-            }
-
-            // 3. 上传该 Blob 作为新 Persona 的头像 (文件名 = persona_name.png)
-            const formData = new FormData();
-            formData.append('avatar', imgBlob, `${name}.png`);
-            
-            const headers = getRequestHeaders();
-            const token = headers['X-CSRF-TOKEN'];
-            
-            const uploadRes = await fetch('/api/upload?type=user_avatar', {
-                method: 'POST',
-                headers: { 'X-CSRF-TOKEN': token },
-                body: formData
-            });
-            
-            if (!uploadRes.ok) console.warn("Avatar upload warning:", await uploadRes.text());
-
-            // 4. 保存 Persona 数据 (此时头像文件已存在)
-            const personaData = {
-                name: name,
-                description: desc,
-                avatar: `${name}.png` 
-            };
-            if(title) personaData.title = title;
-
-            const saveRes = await fetch('/api/personas/save', {
+            // 1. 创建并保存 Persona 文件 (后端 API)
+            // ST 标准接口: /api/personas/save
+            const avatarPath = "default.png"; // 如果有逻辑支持头像上传可修改
+            await fetch('/api/personas/save', {
                 method: 'POST',
                 headers: getRequestHeaders(),
-                body: JSON.stringify(personaData)
+                body: JSON.stringify({
+                    name: name,
+                    description: desc,
+                    avatar: avatarPath
+                })
             });
-            
-            if (!saveRes.ok) throw new Error("API Save Failed");
 
-            // 5. 自动切换
+            // 2. 自动切换到新 Persona (使用 Slash Command)
             if (defaultSettings.autoSwitchPersona) {
                 if (window.TavernHelper && window.TavernHelper.triggerSlash) {
                     await window.TavernHelper.triggerSlash(`/persona-set ${name}`);
                 } else {
+                    // Fallback to simpler method if Slash API fails (rare)
+                    console.warn("TavernHelper slash trigger missing, attempting settings switch only.");
+                    const context = getContext();
                     if(!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
                     context.powerUserSettings.personas[name] = desc;
                     context.powerUserSettings.persona_selected = name;
@@ -786,18 +750,38 @@ async function openCreatorPopup() {
                 }
             }
 
-            // 6. 世界书
+            // 3. 写入世界书 (使用 TavernHelper API)
             if ($('#pw-wi-toggle').is(':checked') && wiContent) {
                 if (window.TavernHelper && window.TavernHelper.getOrCreateChatWorldbook) {
+                    // 获取当前绑定的世界书，没有则创建
                     const bookName = await window.TavernHelper.getOrCreateChatWorldbook('current');
+                    
+                    // 插入条目
                     await window.TavernHelper.createWorldbookEntries(bookName, [{
                         keys: [name, "User"],
                         content: wiContent,
                         comment: `User: ${name}`,
                         enabled: true,
-                        selective: true
+                        selective: true,
+                        position: { type: 'before_character_definition' } // 默认位置
                     }]);
-                    toastr.success(`世界书已更新`);
+                    toastr.success(`世界书条目已添加: ${bookName}`);
+                } else {
+                    // Fallback to old manual API if Helper missing
+                    console.warn("TavernHelper missing, falling back to manual WI api.");
+                    const books = await getContextWorldBooks();
+                    if (books.length > 0) {
+                        const book = books[0];
+                        const r = await fetch('/api/worldinfo/get', { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify({ name: book }) });
+                        if (r.ok) {
+                            const d = await r.json();
+                            if (!d.entries) d.entries = {};
+                            const ids = Object.keys(d.entries).map(Number);
+                            const newId = ids.length ? Math.max(...ids) + 1 : 0;
+                            d.entries[newId] = { uid: newId, key: [name, "User"], content: wiContent, comment: `User: ${name}`, enabled: true, selective: true };
+                            await fetch('/api/worldinfo/edit', { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify({ name: book, data: d }) });
+                        }
+                    }
                 }
             }
 
@@ -859,6 +843,7 @@ async function openCreatorPopup() {
                 $('.pw-tab[data-tab="editor"]').click();
             });
 
+            // 编辑标题
             const $titleInput = $el.find('.pw-hist-title-input');
             $titleInput.on('click', function(e) {
                 e.stopPropagation();
@@ -876,6 +861,7 @@ async function openCreatorPopup() {
                 }
             });
 
+            // 删除
             $el.find('.pw-hist-del-btn').on('click', function(e) {
                 e.stopPropagation();
                 if(confirm(`删除这条记录?`)) {
@@ -923,5 +909,5 @@ jQuery(async () => {
         </div>
     `);
     $("#pw_open_btn").on("click", openCreatorPopup);
-    console.log(`${extensionName} v18 loaded.`);
+    console.log(`${extensionName} v15 loaded.`);
 });
