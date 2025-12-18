@@ -6,11 +6,11 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 // ============================================================================
 
 const extensionName = "st-persona-weaver";
-const STORAGE_KEY_HISTORY = 'pw_history_v12'; // 升级版本
-const STORAGE_KEY_STATE = 'pw_state_v12'; 
-const STORAGE_KEY_TAGS = 'pw_tags_v6';
+const STORAGE_KEY_HISTORY = 'pw_history_v13'; // 版本升级
+const STORAGE_KEY_STATE = 'pw_state_v13'; 
+const STORAGE_KEY_TAGS = 'pw_tags_v7';
 
-// 默认标签库
+// 默认标签库 (已移除姓名)
 const defaultTags = [
     { name: "性别", value: "" },
     { name: "年龄", value: "" },
@@ -83,7 +83,7 @@ function loadState() {
 }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v12';
+    const styleId = 'persona-weaver-css-v13';
     if ($(`#${styleId}`).length) return;
 }
 
@@ -179,6 +179,10 @@ async function runGeneration(data, apiConfig) {
         wiText = `\n[Context]:\n${data.wiContext.join('\n\n')}\n`;
     }
 
+    // 获取用户输入的 Name 和 Title
+    const specifiedName = $('#pw-res-name').val() || "";
+    const specifiedTitle = $('#pw-res-title').val() || "";
+
     const systemPrompt = `You are a creative writing assistant.
 Task: Create a User Persona based on Request.
 ${wiText}
@@ -188,11 +192,15 @@ Scenario: ${char.scenario || "None"}
 [User Request]:
 ${data.request}
 
+[Instructions]:
+${specifiedName ? `1. Use the Name: "${specifiedName}".` : "1. Generate a fitting Name."}
+${specifiedTitle ? `2. Use the Title: "${specifiedTitle}".` : "2. Generate a short Title (e.g. Detective, Shy Student)."}
+
 [Response Format]:
 Return ONLY a JSON object:
 {
-    "name": "Name",
-    "title": "Short Title (e.g. Detective, Shy Student)",
+    "name": "${specifiedName || "Name"}",
+    "title": "${specifiedTitle || "Short Title"}",
     "description": ${formatInst},
     "wi_entry": "Concise facts."
 }`;
@@ -265,9 +273,15 @@ async function openCreatorPopup() {
                     <div class="pw-tags-container" id="pw-tags-list"></div>
                 </div>
 
-                <!-- 输入区域 -->
+                <!-- 核心输入区域 -->
                 <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
-                    <textarea id="pw-request" class="pw-textarea" placeholder="在此输入要求，或点击上方标签..." style="min-height:100px;">${savedState.request || ''}</textarea>
+                    <!-- [移动到这里] 姓名与标题输入框 -->
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" id="pw-res-name" class="pw-input" placeholder="姓名 (默认空)" value="${savedState.name || ''}" style="flex:1;">
+                        <input type="text" id="pw-res-title" class="pw-input" placeholder="Title (Optional - AI auto-fills if empty)" value="${savedState.title || ''}" style="flex:1;">
+                    </div>
+
+                    <textarea id="pw-request" class="pw-textarea" placeholder="在此输入设定要求，或点击上方标签..." style="min-height:100px;">${savedState.request || ''}</textarea>
                     
                     <div class="pw-editor-tools">
                         <div class="pw-mini-btn" id="pw-clear"><i class="fa-solid fa-eraser"></i> 清空</div>
@@ -281,16 +295,10 @@ async function openCreatorPopup() {
 
                 <button id="pw-btn-gen" class="pw-btn gen"><i class="fa-solid fa-bolt"></i> 生成 / 润色</button>
 
-                <!-- 结果区域 -->
+                <!-- 结果区域 (仅保留描述和世界书) -->
                 <div id="pw-result-area" style="display: ${savedState.hasResult ? 'block' : 'none'}; border-top: 1px dashed var(--SmartThemeBorderColor); padding-top: 15px; margin-top:5px;">
                     <div style="font-weight:bold; margin-bottom:10px; color:#5b8db8;"><i class="fa-solid fa-check-circle"></i> 生成结果</div>
                     <div style="display:flex; flex-direction:column; gap:10px;">
-                        <!-- 姓名与称号一行 -->
-                        <div style="display:flex; gap:10px;">
-                            <input type="text" id="pw-res-name" class="pw-input" placeholder="姓名" value="${savedState.name || ''}" style="flex:1;">
-                            <input type="text" id="pw-res-title" class="pw-input" placeholder="称号 (Title)" value="${savedState.title || ''}" style="flex:1;">
-                        </div>
-                        
                         <textarea id="pw-res-desc" class="pw-textarea" rows="6" placeholder="用户设定描述">${savedState.desc || ''}</textarea>
                         
                         <div style="background:rgba(0,0,0,0.1); padding:10px; border-radius:8px; border:1px solid var(--SmartThemeBorderColor);">
@@ -423,7 +431,7 @@ async function openCreatorPopup() {
 
         tagsCache.forEach((tag, index) => {
             if (isEditingTags) {
-                // 编辑模式：强制单行
+                // 编辑模式
                 const $row = $(`
                     <div class="pw-tag-edit-row">
                         <input class="pw-tag-edit-input t-name" value="${tag.name}" placeholder="名">
@@ -697,24 +705,29 @@ async function openCreatorPopup() {
         try {
             const data = await runGeneration(config, config);
             
-            $('#pw-res-name').val(data.name);
-            $('#pw-res-title').val(data.title || ""); // 填充 Title
+            // 回填数据，确保如果没生成Name/Title，保持用户输入
+            const finalName = data.name || $('#pw-res-name').val() || "User";
+            const finalTitle = data.title || $('#pw-res-title').val() || "";
+
+            $('#pw-res-name').val(finalName);
+            $('#pw-res-title').val(finalTitle);
             $('#pw-res-desc').val(data.description);
             $('#pw-res-wi').val(data.wi_entry || data.description);
             $('#pw-result-area').fadeIn();
             
             // 自动存历史 -> 标题 = Name + Title
-            const userName = data.name || "User";
-            const userTitle = data.title || "";
-            const finalTitle = userTitle ? `${userName} ${userTitle}` : userName;
+            const finalTitleStr = finalTitle ? `${finalName} ${finalTitle}` : finalName;
             
             saveHistory({ 
                 request: req, 
                 timestamp: new Date().toLocaleString(),
                 targetChar: getContext().characters[getContext().characterId]?.name || "未知", 
                 data: {
-                    ...data,
-                    customTitle: finalTitle
+                    name: finalName,
+                    title: finalTitle,
+                    description: data.description,
+                    wi_entry: data.wi_entry || data.description,
+                    customTitle: finalTitleStr
                 }
             });
             saveCurrentState();
@@ -731,7 +744,6 @@ async function openCreatorPopup() {
         const name = $('#pw-res-name').val();
         const desc = $('#pw-res-desc').val();
         const wiContent = $('#pw-res-wi').val();
-        // 如果想支持 Title 保存到 Persona，需要依赖 ST 具体实现，暂存本地配置或 Desc 中
         
         if (!name) return toastr.warning("名字不能为空");
         
@@ -883,5 +895,5 @@ jQuery(async () => {
         </div>
     `);
     $("#pw_open_btn").on("click", openCreatorPopup);
-    console.log(`${extensionName} v12 loaded.`);
+    console.log(`${extensionName} v13 loaded.`);
 });
