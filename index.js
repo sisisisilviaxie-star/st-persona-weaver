@@ -4,6 +4,7 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 // ============================================================================
 // 1. 常量与配置
 // ============================================================================
+
 const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v19';
 const STORAGE_KEY_STATE = 'pw_state_v19'; 
@@ -36,6 +37,7 @@ const defaultSettings = {
 const TEXT = {
     PANEL_TITLE: "用户设定编织者 Pro",
     BTN_TITLE: "打开设定生成器",
+    TOAST_NO_CHAR: "请先打开一个角色聊天",
     TOAST_API_OK: "API 连接成功",
     TOAST_API_ERR: "API 连接失败",
     TOAST_SAVE_API: "API 设置已保存",
@@ -55,6 +57,7 @@ let isEditingTags = false;
 // ============================================================================
 // 2. 核心逻辑函数
 // ============================================================================
+
 function loadData() {
     try { historyCache = JSON.parse(localStorage.getItem(STORAGE_KEY_HISTORY)) || []; } catch { historyCache = []; }
     try { tagsCache = JSON.parse(localStorage.getItem(STORAGE_KEY_TAGS)) || defaultTags; } catch { tagsCache = defaultTags; }
@@ -81,9 +84,8 @@ function loadState() {
 }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v19'; // 更新版本号
+    const styleId = 'persona-weaver-css-v18';
     if ($(`#${styleId}`).length) return;
-    // CSS 应该在 style.css 中加载，此处如果是动态注入，请确保 link 标签正确
 }
 
 // [核心] 暴力写入 Persona
@@ -115,46 +117,38 @@ async function forceSavePersona(name, description) {
     return true;
 }
 
-// [核心] 获取可用世界书列表 (修复空列表问题)
 async function loadAvailableWorldBooks() {
     availableWorldBooks = [];
     try {
-        const response = await fetch('/api/worldinfo/get', { 
-            method: 'POST', 
-            headers: getRequestHeaders(), 
-            body: JSON.stringify({}) 
-        });
-        
+        const response = await fetch('/api/worldinfo/get', { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify({}) });
         if (response.ok) {
             const data = await response.json();
-            // 兼容不同的 API 返回格式 (Array vs Object.world_names)
             if (Array.isArray(data)) {
-                availableWorldBooks = data.map(item => typeof item === 'string' ? item : (item.name || ""));
-            } else if (data && data.world_names && Array.isArray(data.world_names)) {
+                availableWorldBooks = data.map(item => item.name || item);
+            } else if (data && data.world_names) {
                 availableWorldBooks = data.world_names;
             }
         }
     } catch (e) { console.error("[PW] API load failed", e); }
-    
     availableWorldBooks = [...new Set(availableWorldBooks)].filter(x => x).sort();
 }
 
 // 获取当前上下文绑定的世界书
-async function getContextWorldBooks() {
+async function getContextWorldBooks(extras = []) {
     const context = getContext();
-    const books = new Set(); 
-    const charId = context.characterId;
+    const books = new Set(extras); 
 
+    const charId = context.characterId;
     if (charId !== undefined && context.characters[charId]) {
         const char = context.characters[charId];
         const data = char.data || char;
         
+        // 检查所有可能的绑定位置
         if (data.character_book?.name) books.add(data.character_book.name);
         if (data.extensions?.world) books.add(data.extensions.world);
         if (data.world) books.add(data.world);
+        if (context.chatMetadata?.world_info) books.add(context.chatMetadata.world_info);
     }
-    if (context.chatMetadata?.world_info) books.add(context.chatMetadata.world_info);
-
     return Array.from(books).filter(Boolean);
 }
 
@@ -178,23 +172,26 @@ async function getWorldBookEntries(bookName) {
     return [];
 }
 
+async function fetchModels(url, key) {
+    try {
+        const endpoint = url.includes('v1') ? `${url.replace(/\/$/, '')}/models` : `${url.replace(/\/$/, '')}/v1/models`;
+        const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${key}` }
+        });
+        if (!response.ok) throw new Error("Fetch failed");
+        const data = await response.json();
+        return (data.data || data).map(m => m.id).sort();
+    } catch (e) { console.error(e); return []; }
+}
+
 // [核心] 生成与润色逻辑
 async function runGeneration(data, apiConfig) {
     const context = getContext();
+    const char = context.characters[context.characterId];
     
-    // [新需求] 支持无角色卡情况
-    let targetName = "General Roleplay";
-    let targetScenario = "None";
-    
-    if (context.characterId !== undefined && context.characters[context.characterId]) {
-        const char = context.characters[context.characterId];
-        targetName = char.name;
-        targetScenario = char.scenario || "None";
-    }
-
     // 获取当前名字
-    let currentName = $('h5#your_name').text().trim();
-    if (!currentName) currentName = "User";
+    const currentName = $('h5#your_name').text().trim() || "User";
 
     let wiText = "";
     if (data.wiContext && data.wiContext.length > 0) {
@@ -206,36 +203,44 @@ async function runGeneration(data, apiConfig) {
     if (data.mode === 'refine') {
         // === 润色模式 ===
         systemPrompt = `You are a creative writing assistant optimizing a User Persona.
-Target Context: ${targetName}
-Scenario: ${targetScenario}
+Target Character: ${char.name}
+Scenario: ${char.scenario || "None"}
 ${wiText}
+
 [Current Persona Data]:
 """
 ${data.currentText}
 """
+
 [Refinement Instruction]:
 "${data.request}"
+
 [Task]:
 1. Modify the Persona Data according to the instruction.
 2. If the user provided a specific text segment, focus on modifying that part.
 3. Maintain the "Key: Value" list format.
 4. User Name: "${currentName}" (Immutable).
+
 [Response Format]:
 Return ONLY the Key-Value list text. No Markdown blocks.
 `;
     } else {
         // === 初次生成模式 ===
         const targetKeys = tagsCache.map(t => t.name).filter(n => n).join(', ');
+
         systemPrompt = `You are a creative writing assistant creating a User Persona.
-Target Context: ${targetName}
-Scenario: ${targetScenario}
+Target Character: ${char.name}
+Scenario: ${char.scenario || "None"}
 ${wiText}
+
 [User Request]:
 ${data.request}
+
 [Task]:
 1. Create a detailed Persona for "${currentName}".
 2. Use "Key: Value" format for traits (one per line).
 3. Recommended Keys: ${targetKeys}.
+
 [Response Format]:
 Return ONLY the Key-Value list text.
 Example:
@@ -272,13 +277,19 @@ Personality: ...
 // ============================================================================
 // 3. UI 渲染
 // ============================================================================
+
 async function openCreatorPopup() {
     const context = getContext();
+    if (context.characterId === undefined) {
+        return toastr.warning(TEXT.TOAST_NO_CHAR);
+    }
+
     loadData();
     await loadAvailableWorldBooks();
     const savedState = loadState();
     const config = { ...defaultSettings, ...extension_settings[extensionName], ...savedState.localConfig };
     
+    // [修复] 从 UI 获取最准确的名字
     let currentName = $('h5#your_name').text().trim();
     if (!currentName) currentName = context.powerUserSettings?.persona_selected || "User";
 
@@ -314,52 +325,48 @@ async function openCreatorPopup() {
                 <!-- 标签与输入 -->
                 <div>
                     <div class="pw-tags-header">
-                        <span class="pw-tags-label">设定参考 (非填入)</span>
+                        <span class="pw-tags-label">快速设定 (点击填入)</span>
                         <span class="pw-tags-edit-toggle" id="pw-toggle-edit-tags">编辑标签</span>
                     </div>
                     <div class="pw-tags-container" id="pw-tags-list"></div>
                 </div>
 
-                <textarea id="pw-request" class="pw-textarea" placeholder="在此输入初始设定要求..." style="min-height:80px; flex-shrink:0;">${savedState.request || ''}</textarea>
+                <textarea id="pw-request" class="pw-textarea" placeholder="在此输入初始设定要求..." style="min-height:80px;">${savedState.request || ''}</textarea>
                 <button id="pw-btn-gen" class="pw-btn gen"><i class="fa-solid fa-bolt"></i> 生成设定</button>
 
-                <!-- 结果展示区域 -->
-                <div id="pw-result-area" style="display:none;">
-                    <div style="font-weight:bold; color:#5b8db8; margin-bottom:5px; flex-shrink:0;"><i class="fa-solid fa-list-ul"></i> 设定详情</div>
+                <!-- 结果展示区域 (默认显示，如果之前有结果的话) -->
+                <div id="pw-result-area" style="display:none; margin-top:10px;">
+                    <div style="font-weight:bold; color:#5b8db8; margin-bottom:5px;"><i class="fa-solid fa-list-ul"></i> 设定详情</div>
                     
-                    <!-- 文本框占据中间滚动区域 -->
-                    <textarea id="pw-result-text" class="pw-result-textarea" placeholder="生成的结果将显示在这里..."></textarea>
-                    
-                    <!-- 底部固定区域：润色工具栏 + 动作栏 -->
-                    <div class="pw-fixed-bottom">
-                        <div class="pw-refine-toolbar">
-                            <textarea id="pw-refine-input" class="pw-refine-textarea" rows="1" placeholder="输入修改意见 (选中上方文字后点引用)..."></textarea>
-                            <div class="pw-refine-actions">
-                                <div class="pw-tool-btn" id="pw-insert-selection" title="引用：将选中的文字填入修改框"><i class="fa-solid fa-quote-left"></i> 引用</div>
-                                <div class="pw-tool-btn" id="pw-btn-refine" title="执行润色"><i class="fa-solid fa-magic"></i> 润色</div>
-                                <div class="pw-tool-btn" id="pw-btn-expand" title="全屏编辑"><i class="fa-solid fa-expand"></i></div>
-                            </div>
-                        </div>
+                    <!-- 紧凑的润色工具栏 -->
+                    <div class="pw-refine-toolbar">
+                        <input type="text" id="pw-refine-input" placeholder="输入修改意见 (或点击标签/使用下方引用)...">
+                        <div class="pw-tool-icon" id="pw-insert-selection" title="引用：将选中的文字填入修改框"><i class="fa-solid fa-quote-left"></i> 引用</div>
+                        <div class="pw-tool-icon" id="pw-btn-refine" title="执行润色"><i class="fa-solid fa-magic"></i> 润色</div>
+                        <div class="pw-tool-icon" id="pw-btn-expand" title="全屏编辑"><i class="fa-solid fa-expand"></i></div>
+                    </div>
 
-                        <div class="pw-bottom-actions">
-                            <div class="pw-bottom-left">
-                                <div class="pw-mini-btn" id="pw-clear"><i class="fa-solid fa-eraser"></i> 清空</div>
-                                <div class="pw-mini-btn" id="pw-snapshot"><i class="fa-solid fa-save"></i> 存入历史</div>
+                    <textarea id="pw-result-text" class="pw-result-textarea" placeholder="生成的结果将显示在这里..."></textarea>
+
+                    <!-- 底部动作栏 (始终在最下，防止误触) -->
+                    <div class="pw-bottom-actions">
+                        <div class="pw-bottom-left">
+                            <div class="pw-mini-btn" id="pw-clear"><i class="fa-solid fa-eraser"></i> 清空</div>
+                            <div class="pw-mini-btn" id="pw-snapshot"><i class="fa-solid fa-save"></i> 存入历史</div>
+                        </div>
+                        <div class="pw-bottom-right">
+                            <div class="pw-wi-check-container">
+                                <input type="checkbox" id="pw-wi-toggle" checked>
+                                <span>同步进世界书</span>
                             </div>
-                            <div class="pw-bottom-right">
-                                <div class="pw-wi-check-container">
-                                    <input type="checkbox" id="pw-wi-toggle" checked>
-                                    <span>同步进世界书</span>
-                                </div>
-                                <button id="pw-btn-apply" class="pw-btn save" style="width:auto;"><i class="fa-solid fa-check"></i> 保存并覆盖当前设定</button>
-                            </div>
+                            <button id="pw-btn-apply" class="pw-btn save" style="width:auto;"><i class="fa-solid fa-check"></i> 保存并覆盖当前设定</button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 其他 Tabs -->
+        <!-- 其他 Tabs 保持不变 -->
         <div id="pw-view-context" class="pw-view">
             <div class="pw-scroll-area">
                 <div class="pw-card-section">
@@ -406,7 +413,7 @@ async function openCreatorPopup() {
     `;
 
     callPopup(html, 'text', '', { wide: true, large: true, okButton: "关闭" });
-    
+
     bindEvents();
     renderTagsList();
     renderWiBooks();
@@ -414,14 +421,13 @@ async function openCreatorPopup() {
     if (savedState.resultText) {
         $('#pw-result-text').val(savedState.resultText);
         $('#pw-result-area').show();
-        // 自动调整 flex 布局
-        $('#pw-view-editor').css('display', 'flex');
     }
 }
 
 // ============================================================================
 // 4. 事件绑定
 // ============================================================================
+
 function bindEvents() {
     $(document).off('.pw');
 
@@ -439,14 +445,7 @@ function bindEvents() {
             }
         });
     };
-
     $(document).on('input.pw change.pw', '#pw-request, #pw-result-text, .pw-input', saveCurrentState);
-    
-    // 输入框高度自动伸缩
-    $(document).on('input.pw', '#pw-refine-input', function() {
-        this.style.height = 'auto';
-        this.style.height = (this.scrollHeight) + 'px';
-    });
 
     $(document).on('click.pw', '.pw-tab', function() {
         $('.pw-tab').removeClass('active');
@@ -457,41 +456,32 @@ function bindEvents() {
         if(tab === 'history') renderHistoryList(); 
     });
 
-    // [修改] 引用选中内容 (追加到输入框)
+    // 引用选中内容 (填入润色框)
     $(document).on('click.pw', '#pw-insert-selection', function() {
         const textarea = document.getElementById('pw-result-text');
         if (textarea) {
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
             const selectedText = textarea.value.substring(start, end).trim();
-            
             if (selectedText) {
                 const $input = $('#pw-refine-input');
-                const curVal = $input.val();
-                // 如果当前框里有内容，先换行
-                const prefix = curVal ? (curVal.endsWith('\n') ? '' : '\n') : '';
-                const newContent = `${prefix}"${selectedText}"`;
-                
-                $input.val(curVal + newContent).trigger('input').focus();
-                
-                // 滚动到底部
-                $input[0].scrollTop = $input[0].scrollHeight;
+                $input.val(`将 "${selectedText}" 修改为: `).focus();
             } else {
-                toastr.info("请先在上方文本框中划选文字");
+                toastr.info("请先在文本框中划选文字");
             }
         }
     });
 
-    // [修改] 全屏编辑 - 只更新，不关闭主界面
+    // 放大编辑
     $(document).on('click.pw', '#pw-btn-expand', function() {
         const currentVal = $('#pw-result-text').val();
+        // 简单弹出一个只有 textarea 的大框
         const popupHtml = `<textarea id="pw-expanded-text" class="pw-textarea" style="width:100%; height:600px;">${currentVal}</textarea>`;
         callPopup(popupHtml, 'text', '', { wide: true, large: true, okButton: "应用修改" })
             .then(() => {
+                // 点击应用修改后，回填
                 const newVal = $('#pw-expanded-text').val();
-                if (newVal !== undefined) { // 如果点击了取消，可能是 undefined
-                    $('#pw-result-text').val(newVal).trigger('input');
-                }
+                $('#pw-result-text').val(newVal).trigger('input');
             });
     });
 
@@ -541,22 +531,20 @@ function bindEvents() {
             };
             const responseText = await runGeneration(config, config);
             $('#pw-result-text').val(responseText);
-            
-            // 确保 Flex 布局正确显示
-            $('#pw-result-area').css('display', 'flex');
+            $('#pw-result-area').fadeIn();
             saveCurrentState();
         } catch (e) { toastr.error(`${TEXT.TOAST_GEN_FAIL}: ${e.message}`); } 
         finally { $btn.prop('disabled', false).html(oldText); }
     });
 
-    // [修改] 润色 -> 弹出对比窗口
+    // 润色
     $(document).on('click.pw', '#pw-btn-refine', async function() {
         const refineReq = $('#pw-refine-input').val();
         if (!refineReq) return toastr.warning("请输入润色意见");
         const currentRawText = $('#pw-result-text').val();
         const $btn = $(this);
-        const oldText = $btn.html(); 
-        $btn.html('<i class="fas fa-spinner fa-spin"></i>'); 
+        const oldText = $btn.html(); // 修复这里，应该是获取当前按钮的内容
+        $(this).html('<i class="fas fa-spinner fa-spin"></i>'); // 简单的 loading 状态
         
         try {
             const config = {
@@ -569,30 +557,36 @@ function bindEvents() {
                 indepApiModel: $('#pw-api-model').val()
             };
             const responseText = await runGeneration(config, config);
-            
-            // 弹出对比确认框
-            showDiffPopup(currentRawText, responseText);
-            
+            $('#pw-result-text').val(responseText);
             $('#pw-refine-input').val(''); 
-            $('#pw-refine-input').css('height', 'auto');
+            saveCurrentState();
+            toastr.success("润色完成");
         } catch (e) { toastr.error(`润色失败: ${e.message}`); }
         finally { $btn.html('<i class="fa-solid fa-magic"></i> 润色'); }
     });
 
-    // 保存并覆盖逻辑
+    // [关键] 保存并覆盖逻辑 (修复世界书保存)
     $(document).on('click.pw', '#pw-btn-apply', async function() {
         const name = $('h5#your_name').text();
         const finalContent = $('#pw-result-text').val();
         
         if (!finalContent) return toastr.warning("内容为空");
 
+        // 1. 保存 Persona
         try {
             await forceSavePersona(name, finalContent);
             toastr.success(TEXT.TOAST_SAVE_SUCCESS(name));
         } catch (e) { toastr.error(e.message); return; }
 
+        // 2. 世界书保存 (强化查找逻辑)
         if ($('#pw-wi-toggle').is(':checked')) {
             const context = getContext();
+            
+            // 策略：
+            // 1. 优先找当前扩展选中的书 (window.pwExtraBooks[0])
+            // 2. 其次找角色绑定的书
+            // 3. 最后找全局激活的书 (通过 worldInfo.entries 检测) - 这里简化为提示用户绑定
+            
             const boundBooks = await getContextWorldBooks();
             let targetBook = null;
 
@@ -601,19 +595,23 @@ function bindEvents() {
             } else if (boundBooks.length > 0) {
                 targetBook = boundBooks[0];
             } else {
-                toastr.warning("未找到绑定的世界书，无法同步。请先在 '世界书' 标签页添加一个目标。");
+                // 尝试最后的 fallback: 检查是否有全局启用的书，随机取一本 (不太安全，还是提示比较好)
+                // 或者在这里自动创建一本叫 "User Personas" 的书？先提示吧。
             }
 
             if (targetBook) {
                 try {
                     const h = getRequestHeaders();
+                    // 先获取书的内容，找有没有现成的 Entry
                     const r = await fetch('/api/worldinfo/get', { method: 'POST', headers: h, body: JSON.stringify({ name: targetBook }) });
                     if (r.ok) {
                         const d = await r.json();
                         if (!d.entries) d.entries = {};
                         
                         const entryName = `User: ${name}`;
-                        const entryKeys = [name, "User"]; 
+                        const entryKeys = [name, "User"]; // 关键词
+
+                        // 检查是否存在同名/同Key的条目，存在则覆盖，不存在则新建
                         let targetId = -1;
                         for (const [uid, entry] of Object.entries(d.entries)) {
                             if (entry.comment === entryName || (entry.key && entry.key.includes(name) && entry.key.includes("User"))) {
@@ -641,9 +639,12 @@ function bindEvents() {
                         if (context.updateWorldInfoList) context.updateWorldInfoList();
                     }
                 } catch(e) { console.error("WI Update Failed", e); }
+            } else {
+                toastr.warning(TEXT.TOAST_WI_FAIL);
             }
         }
-        
+
+        // 注意：不存历史，直接关闭
         $('.popup_close').click();
     });
 
@@ -652,69 +653,17 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-api-fetch', async function() { /* ... 同前 ... */ });
     $(document).on('click.pw', '#pw-api-save', () => { saveCurrentState(); toastr.success(TEXT.TOAST_SAVE_API); });
     
+    // 历史记录相关
     $(document).on('input.pw', '#pw-history-search', renderHistoryList);
     $(document).on('click.pw', '#pw-history-search-clear', function() { $('#pw-history-search').val('').trigger('input'); });
     $(document).on('click.pw', '#pw-history-clear-all', function() { if(confirm("清空?")){historyCache=[];saveData();renderHistoryList();} });
-    
-    // [修复] 世界书添加按钮事件绑定
-    $(document).on('click.pw', '#pw-wi-add', () => { 
-        const val = $('#pw-wi-select').val(); 
-        if (val && !window.pwExtraBooks.includes(val)) { 
-            window.pwExtraBooks.push(val); 
-            renderWiBooks(); 
-        } 
-    });
+    $(document).on('click.pw', '#pw-wi-add', () => { const val = $('#pw-wi-select').val(); if (val && !window.pwExtraBooks.includes(val)) { window.pwExtraBooks.push(val); renderWiBooks(); } });
 }
 
 // ============================================================================
-// 5. 对比窗口逻辑 (Diff)
+// 5. 辅助渲染函数
 // ============================================================================
-function showDiffPopup(oldText, newText) {
-    const html = `
-    <div class="pw-diff-container">
-        <div class="pw-diff-pane">
-            <div class="pw-diff-header old"><i class="fa-solid fa-history"></i> 修改前</div>
-            <textarea id="pw-diff-old" class="pw-diff-content" readonly>${oldText}</textarea>
-        </div>
-        <div class="pw-diff-pane">
-            <div class="pw-diff-header new"><i class="fa-solid fa-magic"></i> 润色结果 (可编辑)</div>
-            <textarea id="pw-diff-new" class="pw-diff-content">${newText}</textarea>
-        </div>
-    </div>
-    <div class="pw-diff-actions">
-        <button id="pw-diff-reject" class="pw-btn danger"><i class="fa-solid fa-times"></i> 放弃修改</button>
-        <button id="pw-diff-accept" class="pw-btn save"><i class="fa-solid fa-check"></i> 全部接受</button>
-    </div>
-    <div style="text-align:center; margin-top:5px; font-size:0.9em; opacity:0.7;">提示：您可以手动编辑右侧内容，或从右侧复制部分内容到左侧（虽然最后生效的是右侧）</div>
-    `;
 
-    // 这里使用 callPopup，但不带默认按钮，完全自定义
-    callPopup(html, 'text', '', { wide: true, large: true, okButton: false, cancelButton: false })
-        .then(() => {}); // 这里的 promise 不会被传统的 ok/cancel 触发，我们手动处理关闭
-
-    // 绑定对比窗口的事件
-    // 注意：因为 callPopup 是异步渲染，这里稍微延迟绑定或直接使用 document delegate，但为了保险起见，使用特定的 ID 选择器
-    setTimeout(() => {
-        $('#pw-diff-reject').on('click', () => {
-            // 关闭顶层 popup (对比窗口)
-            // 思路：找到最近的 .popup_wrapper 并关闭
-            $('#pw-diff-reject').closest('.popup_wrapper').find('.popup_close').click();
-        });
-
-        $('#pw-diff-accept').on('click', () => {
-            const finalNewText = $('#pw-diff-new').val();
-            $('#pw-result-text').val(finalNewText).trigger('input');
-            saveState({ resultText: finalNewText }); // 立即保存状态
-            // 关闭对比窗口
-            $('#pw-diff-accept').closest('.popup_wrapper').find('.popup_close').click();
-            toastr.success("已应用润色结果");
-        });
-    }, 100);
-}
-
-// ============================================================================
-// 6. 辅助渲染函数
-// ============================================================================
 const renderTagsList = () => {
     const $container = $('#pw-tags-list').empty();
     const $toggleBtn = $('#pw-toggle-edit-tags');
@@ -728,8 +677,22 @@ const renderTagsList = () => {
             $row.find('.pw-tag-del-btn').on('click', () => { if (confirm("删除?")) { tagsCache.splice(index, 1); saveData(); renderTagsList(); } });
             $container.append($row);
         } else {
-            // [修改] 移除点击事件
             const $chip = $(`<div class="pw-tag-chip"><i class="fa-solid fa-tag" style="opacity:0.5; margin-right:4px;"></i><span>${tag.name}</span>${tag.value ? `<span class="pw-tag-val">${tag.value}</span>` : ''}</div>`);
+            $chip.on('click', () => {
+                const tagText = tag.value ? `${tag.name}: ${tag.value}` : `${tag.name}`;
+                // 逻辑更新：如果结果区打开了，就插入到润色框；否则插入到请求框
+                if ($('#pw-result-area').is(':visible')) {
+                    const $refine = $('#pw-refine-input');
+                    $refine.val($refine.val() + ` 修改 ${tagText} `).focus();
+                } else {
+                    const $text = $('#pw-request');
+                    const cur = $text.val();
+                    const prefix = (cur && !cur.endsWith('\n')) ? '\n' : '';
+                    $text.val(cur + prefix + tagText).focus();
+                    $text[0].scrollTop = $text[0].scrollHeight;
+                }
+                saveData(); 
+            });
             $container.append($chip);
         }
     });
@@ -744,21 +707,8 @@ const renderTagsList = () => {
 };
 
 window.pwExtraBooks = [];
-
-// [修复] 采用用户提供的世界书渲染逻辑，并确保下拉列表正确
 const renderWiBooks = async () => {
     const container = $('#pw-wi-container').empty();
-    
-    // 确保 availableWorldBooks 已经加载，用于下拉列表
-    if (availableWorldBooks.length === 0) await loadAvailableWorldBooks();
-    
-    // 重新渲染下拉列表 (防止之前是空的)
-    const wiSelect = $('#pw-wi-select');
-    if (wiSelect.children('option').length <= 1) { // 只有默认提示项
-        const opts = availableWorldBooks.map(b => `<option value="${b}">${b}</option>`).join('');
-        wiSelect.append(opts);
-    }
-
     const baseBooks = await getContextWorldBooks();
     const allBooks = [...new Set([...baseBooks, ...(window.pwExtraBooks || [])])];
 
@@ -824,8 +774,6 @@ const renderHistoryList = () => {
             $('#pw-request').val(item.request);
             $('#pw-result-text').val(previewText); 
             $('#pw-result-area').show();
-            // 确保布局刷新
-            $('#pw-view-editor').addClass('active');
             $('.pw-tab[data-tab="editor"]').click();
         });
         $el.find('.pw-hist-del-btn').on('click', function(e) { e.stopPropagation(); if(confirm("删除?")) { historyCache.splice(historyCache.indexOf(item), 1); saveData(); renderHistoryList(); } });
@@ -846,5 +794,5 @@ jQuery(async () => {
     addPersonaButton();
     const observer = new MutationObserver(() => { if ($(`#${BUTTON_ID}`).length === 0 && $('.persona_controls_buttons_block').length > 0) addPersonaButton(); });
     observer.observe(document.body, { childList: true, subtree: true });
-    console.log(`${extensionName} v19 loaded.`);
+    console.log(`${extensionName} v18 loaded.`);
 });
