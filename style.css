@@ -95,7 +95,7 @@
 /* =========================================
    5. 结果区域与润色栏
 ========================================= */
-.pw-relative-container { position: relative; }
+.pw-relative-container { position: relative; } /* 确保悬浮按钮定位正确 */
 
 .pw-result-textarea {
     width: 100%; min-height: 250px; background: rgba(0, 0, 0, 0.15);
@@ -129,30 +129,28 @@
 }
 .pw-tool-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); border-color: #e0af68; color: #e0af68; }
 
-/* 悬浮引用按钮 */
+/* [新增] 悬浮引用按钮 (Gold Action Button) */
 .pw-float-quote-btn {
-    position: fixed;
-    top: 10px; right: 10px; /* JS 动态控制 */
+    position: absolute;
+    bottom: 20px; right: 20px;
     background: linear-gradient(135deg, #e0af68, #d08f40);
     color: #1a1a1a;
-    padding: 6px 12px;
-    border-radius: 6px;
+    padding: 8px 16px;
+    border-radius: 30px;
     font-weight: bold;
-    font-size: 0.85em;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+    font-size: 0.9em;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
     cursor: pointer;
-    z-index: 9999;
-    display: none;
-    animation: pw-pop-in 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    align-items: center; gap: 5px;
-    border: 1px solid rgba(255,255,255,0.3);
-    backdrop-filter: blur(4px);
-    pointer-events: auto;
+    z-index: 50;
+    display: none; /* 默认隐藏，JS控制显示 */
+    animation: pw-pop-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    align-items: center; gap: 6px;
+    border: 2px solid rgba(255,255,255,0.2);
 }
-.pw-float-quote-btn:hover { transform: scale(1.05); }
+.pw-float-quote-btn:hover { transform: scale(1.05); box-shadow: 0 6px 16px rgba(0,0,0,0.6); }
 .pw-float-quote-btn:active { transform: scale(0.95); }
 
-@keyframes pw-pop-in { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes pw-pop-in { from { transform: scale(0) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
 
 /* =========================================
    6. 结构化 Diff 对比视图
