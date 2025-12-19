@@ -16,7 +16,7 @@
     padding-right: 5px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     padding-bottom: 10px;
 }
 
@@ -28,7 +28,7 @@
 ========================================= */
 .pw-header {
     flex-shrink: 0;
-    margin-bottom: 15px;
+    margin-bottom: 10px;
     border-bottom: 1px solid var(--SmartThemeBorderColor);
     padding-bottom: 5px;
 }
@@ -84,14 +84,14 @@
 .pw-view.active { display: flex; }
 
 /* =========================================
-   只读信息展示条 (仅名字)
+   信息展示 (只读名字)
 ========================================= */
 .pw-info-display {
     display: flex;
     align-items: center;
     gap: 15px;
     background: rgba(0,0,0,0.15);
-    padding: 10px 12px;
+    padding: 8px 12px;
     border-radius: 8px;
     border: 1px solid var(--SmartThemeBorderColor);
     margin-bottom: 5px;
@@ -103,7 +103,6 @@
     gap: 6px;
     font-weight: bold;
     color: #e0af68;
-    font-size: 1.1em;
 }
 
 /* =========================================
@@ -113,17 +112,17 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 5px;
 }
 
-.pw-tags-label { font-weight: bold; opacity: 0.8; }
-.pw-tags-edit-toggle { cursor: pointer; font-size: 0.9em; color: #5b8db8; }
+.pw-tags-label { font-weight: bold; opacity: 0.8; font-size: 0.9em; }
+.pw-tags-edit-toggle { cursor: pointer; font-size: 0.85em; color: #5b8db8; }
 
 .pw-tags-container {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 15px;
+    gap: 5px;
+    margin-bottom: 10px;
 }
 
 .pw-tag-chip {
@@ -131,9 +130,9 @@
     align-items: center;
     background: rgba(0, 0, 0, 0.2);
     border: 1px solid var(--SmartThemeBorderColor);
-    padding: 4px 10px;
+    padding: 3px 8px;
     border-radius: 12px;
-    font-size: 0.9em;
+    font-size: 0.85em;
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -141,11 +140,12 @@
 .pw-tag-chip:hover {
     background: rgba(255, 255, 255, 0.1);
     transform: translateY(-1px);
+    border-color: #e0af68;
 }
 
 .pw-tag-val {
-    margin-left: 6px;
-    padding-left: 6px;
+    margin-left: 5px;
+    padding-left: 5px;
     border-left: 1px solid rgba(255,255,255,0.2);
     opacity: 0.8;
 }
@@ -153,94 +153,18 @@
 .pw-tag-edit-row { display: flex; gap: 5px; width: 100%; align-items: center; margin-bottom: 4px; }
 .pw-tag-edit-input { flex: 1; background: rgba(0,0,0,0.1); border: 1px solid var(--SmartThemeBorderColor); padding: 4px; border-radius: 4px; color: inherit; }
 .pw-tag-del-btn { cursor: pointer; color: #ff6b6b; padding: 4px; }
-.pw-tag-add-btn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 12px; border: 1px dashed var(--SmartThemeBorderColor); opacity: 0.7; cursor: pointer; }
-.pw-tags-finish-bar { width: 100%; text-align: center; padding: 8px; background: rgba(100,255,100,0.1); border-radius: 6px; cursor: pointer; margin-top: 5px; }
+.pw-tag-add-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 12px; border: 1px dashed var(--SmartThemeBorderColor); opacity: 0.7; cursor: pointer; font-size:0.85em; }
+.pw-tags-finish-bar { width: 100%; text-align: center; padding: 5px; background: rgba(100,255,100,0.1); border-radius: 6px; cursor: pointer; margin-top: 5px; }
 
 /* =========================================
-   KV 列表编辑器 (关键修改)
-========================================= */
-.pw-kv-container {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    background: rgba(0,0,0,0.1);
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid var(--SmartThemeBorderColor);
-    max-height: 400px;
-    overflow-y: auto;
-}
-
-.pw-kv-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(255,255,255,0.05);
-    padding: 6px;
-    border-radius: 6px;
-    transition: background 0.2s;
-}
-
-.pw-kv-row:hover {
-    background: rgba(255,255,255,0.1);
-}
-
-.pw-kv-key {
-    width: 25%;
-    min-width: 80px;
-    font-weight: bold;
-    color: #e0af68;
-    background: transparent;
-    border: none;
-    border-bottom: 1px dashed rgba(255,255,255,0.2);
-    padding: 4px;
-    text-align: right;
-}
-
-.pw-kv-val {
-    flex: 1;
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    padding: 4px;
-    color: inherit;
-}
-
-.pw-kv-val:focus, .pw-kv-key:focus {
-    outline: none;
-    border-bottom: 1px solid #5b8db8;
-    background: rgba(0,0,0,0.2);
-}
-
-.pw-kv-action {
-    opacity: 0.5;
-    cursor: pointer;
-    padding: 4px;
-    font-size: 0.9em;
-}
-.pw-kv-action:hover { opacity: 1; }
-.pw-kv-del:hover { color: #ff6b6b; }
-
-.pw-kv-add-btn {
-    text-align: center;
-    padding: 8px;
-    border: 1px dashed var(--SmartThemeBorderColor);
-    border-radius: 6px;
-    cursor: pointer;
-    opacity: 0.7;
-    margin-top: 5px;
-}
-.pw-kv-add-btn:hover { opacity: 1; background: rgba(255,255,255,0.05); }
-
-/* =========================================
-   输入框与按钮
+   输入框与通用按钮
 ========================================= */
 .pw-input, .pw-textarea {
     background-color: rgba(0, 0, 0, 0.2);
     border: 1px solid var(--SmartThemeBorderColor);
     color: var(--smart-theme-body-color);
     border-radius: 6px;
-    padding: 8px 10px;
+    padding: 8px;
     font-family: inherit;
     font-size: inherit;
     outline: none;
@@ -249,56 +173,109 @@
 .pw-input:focus, .pw-textarea:focus { border-color: var(--smart-theme-input-color); background-color: rgba(0, 0, 0, 0.3); }
 .pw-textarea { resize: vertical; line-height: 1.5; }
 
-/* 恢复了工具栏的样式 */
-.pw-editor-tools { 
-    display: flex; 
-    justify-content: flex-end; /* 靠右对齐 */
-    align-items: center; 
-    gap: 10px; 
-    margin-top: 5px;
-    padding: 5px 0;
-}
-
 .pw-btn {
     display: flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 10px; border-radius: 6px;
+    padding: 8px 15px; border-radius: 6px;
     border: 1px solid var(--SmartThemeBorderColor);
     background: var(--SmartThemeBlurTintColor);
     color: var(--smart-theme-body-color);
-    cursor: pointer; font-weight: bold; width: 100%;
+    cursor: pointer; font-weight: bold; width: auto;
 }
 
 .pw-btn:hover { filter: brightness(1.2); }
-.pw-btn.gen { background: linear-gradient(135deg, rgba(224, 175, 104, 0.2), rgba(0, 0, 0, 0)); border-color: #e0af68; color: #e0af68; margin-top: 10px; }
-.pw-btn.save { background: linear-gradient(135deg, rgba(100, 200, 100, 0.2), rgba(0, 0, 0, 0)); border-color: #9ece6a; color: #9ece6a; margin-left: 10px; width: auto; flex-grow: 1; }
+.pw-btn.gen { background: linear-gradient(135deg, rgba(224, 175, 104, 0.2), rgba(0, 0, 0, 0)); border-color: #e0af68; color: #e0af68; width: 100%; margin-top: 5px;}
+.pw-btn.save { background: linear-gradient(135deg, rgba(100, 200, 100, 0.2), rgba(0, 0, 0, 0)); border-color: #9ece6a; color: #9ece6a; }
 .pw-btn.primary { background: rgba(0,0,0,0.3); }
 .pw-btn.danger { background: rgba(255,100,100,0.1); border-color: #ff6b6b; color: #ff6b6b; }
 
-.pw-mini-btn { 
-    font-size: 0.85em; 
-    opacity: 0.8; 
-    cursor: pointer; 
-    display: flex; 
-    align-items: center; 
-    gap: 4px; 
-    padding: 6px 12px; 
+.pw-mini-btn { font-size: 0.9em; opacity: 0.7; cursor: pointer; display: flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 4px; border: 1px solid transparent; }
+.pw-mini-btn:hover { background: rgba(255,255,255,0.1); opacity: 1; border-color: var(--SmartThemeBorderColor); }
+
+/* =========================================
+   [新] 润色工具栏 (紧贴文本框上方)
+========================================= */
+.pw-refine-toolbar {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    background: rgba(0,0,0,0.2);
+    padding: 5px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-bottom: none; /* 与下方文本框融合 */
+    border-radius: 6px 6px 0 0;
+    margin-top: 10px;
+}
+
+.pw-refine-toolbar input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 4px;
+    font-size: 0.9em;
+}
+.pw-refine-toolbar input:focus { outline: none; }
+
+.pw-tool-icon {
+    padding: 4px 8px;
+    cursor: pointer;
+    opacity: 0.7;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+.pw-tool-icon:hover { opacity: 1; background: rgba(255,255,255,0.1); color: #e0af68; }
+
+/* =========================================
+   [新] 结果文本框 (去掉了上圆角)
+========================================= */
+.pw-result-textarea {
+    width: 100%;
+    min-height: 250px;
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 0 0 6px 6px; /* 只有下边有圆角 */
+    color: var(--smart-theme-body-color);
+    padding: 12px;
+    font-family: inherit;
+    font-size: 1.0em;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+    white-space: pre-wrap;
+    margin-bottom: 5px;
+}
+.pw-result-textarea:focus { background: rgba(0, 0, 0, 0.2); border-color: var(--smart-theme-input-color); }
+
+/* =========================================
+   [新] 底部动作栏 (始终在最下方)
+========================================= */
+.pw-bottom-actions {
+    margin-top: auto; /* 推到底部 */
+    padding-top: 15px;
+    border-top: 1px dashed var(--SmartThemeBorderColor);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.pw-bottom-left { display: flex; gap: 10px; align-items: center; }
+.pw-bottom-right { display: flex; gap: 10px; align-items: center; }
+
+/* 同步世界书 Checkbox */
+.pw-wi-check-container {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9em;
+    background: rgba(0,0,0,0.1);
+    padding: 5px 10px;
     border-radius: 4px;
     border: 1px solid var(--SmartThemeBorderColor);
-    background: rgba(0,0,0,0.2);
-}
-.pw-mini-btn:hover { background: rgba(255,255,255,0.1); opacity: 1; }
-
-/* 润色框 */
-.pw-refine-box {
-    display: flex;
-    gap: 8px;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px dashed var(--SmartThemeBorderColor);
 }
 
 /* =========================================
-   世界书卡片
+   其他视图 (Context, API, History)
 ========================================= */
 .pw-card-section { background: rgba(0, 0, 0, 0.2); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
@@ -316,9 +293,6 @@
 .pw-wi-desc { display: none; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.9em; white-space: pre-wrap; }
 .pw-wi-close-bar { text-align: center; font-size: 0.8em; opacity: 0.6; cursor: pointer; margin-top: 5px; }
 
-/* =========================================
-   历史记录
-========================================= */
 .pw-search-box { position: relative; display: flex; align-items: center; margin-bottom: 10px; }
 .pw-search-input { width: 100%; padding-right: 30px; }
 .pw-search-clear { position: absolute; right: 10px; opacity: 0.5; cursor: pointer; z-index: 2; }
@@ -331,7 +305,7 @@
 .pw-hist-del-btn:hover { opacity: 1; background: rgba(255,0,0,0.1); }
 
 /* =========================================
-   Persona 工具按钮
+   按钮样式
 ========================================= */
 #pw_persona_tool_btn {
     color: var(--smart-theme-body-color); 
@@ -354,4 +328,6 @@
     .pw-api-fetch-btn { width: 100% !important; margin-top: 5px; }
     .pw-history-item { flex-direction: column; }
     .pw-hist-del-btn { border-left: none; border-top: 1px solid var(--SmartThemeBorderColor); padding: 5px; }
+    .pw-bottom-actions { flex-direction: column; align-items: stretch; }
+    .pw-bottom-left, .pw-bottom-right { justify-content: space-between; }
 }
