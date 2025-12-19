@@ -37,7 +37,6 @@ const defaultSettings = {
 const TEXT = {
     PANEL_TITLE: "用户设定编织者 Pro",
     BTN_TITLE: "打开设定生成器",
-    TOAST_NO_CHAR: "请先打开一个角色聊天",
     TOAST_API_OK: "API 连接成功",
     TOAST_API_ERR: "API 连接失败",
     TOAST_SAVE_API: "API 设置已保存",
@@ -88,7 +87,7 @@ function injectStyles() {
     if ($(`#${styleId}`).length) return;
 }
 
-// [核心] 写入 Persona 到内存
+// [核心] 写入 Persona
 async function forceSavePersona(name, description) {
     const context = getContext();
     if (!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
@@ -97,14 +96,8 @@ async function forceSavePersona(name, description) {
 
     const $nameInput = $('#your_name');
     const $descInput = $('#persona_description');
-    
-    if ($nameInput.length) {
-        $nameInput.val(name).trigger('input').trigger('change');
-    }
-    if ($descInput.length) {
-        $descInput.val(description).trigger('input').trigger('change');
-    }
-
+    if ($nameInput.length) { $nameInput.val(name).trigger('input').trigger('change'); }
+    if ($descInput.length) { $descInput.val(description).trigger('input').trigger('change'); }
     const $h5Name = $('h5#your_name');
     if ($h5Name.length) $h5Name.text(name);
 
@@ -135,7 +128,6 @@ async function loadAvailableWorldBooks() {
     availableWorldBooks = [...new Set(availableWorldBooks)].filter(x => x).sort();
 }
 
-// 获取上下文绑定的世界书
 async function getContextWorldBooks(extras = []) {
     const context = getContext();
     const books = new Set(extras); 
@@ -179,25 +171,16 @@ async function fetchModels(url, key) {
     } catch (e) { console.error(e); return []; }
 }
 
-// 核心生成/润色调用
 async function runGeneration(data, apiConfig) {
     const context = getContext();
-    // 允许无卡运行
-    const charName = (context.characterId !== undefined && context.characters[context.characterId]) 
-        ? context.characters[context.characterId].name 
-        : "None (Free Mode)";
+    const charName = (context.characterId !== undefined && context.characters[context.characterId]) ? context.characters[context.characterId].name : "Unknown Character";
     
-    const currentName = $('.persona_name').first().text().trim() || 
-                        $('h5#your_name').text().trim() || 
-                        "User";
+    const currentName = $('.persona_name').first().text().trim() || $('h5#your_name').text().trim() || "User";
 
     let wiText = "";
-    if (data.wiContext && data.wiContext.length > 0) {
-        wiText = `\n[Context]:\n${data.wiContext.join('\n\n')}\n`;
-    }
+    if (data.wiContext && data.wiContext.length > 0) { wiText = `\n[Context]:\n${data.wiContext.join('\n\n')}\n`; }
 
     let systemPrompt = "";
-    
     if (data.mode === 'refine') {
         systemPrompt = `You are a creative writing assistant optimizing a User Persona.
 Target Character: ${charName}
@@ -214,7 +197,7 @@ ${data.currentText}
 [Task]:
 1. Modify the Persona Data according to the instruction.
 2. If text is quoted, focus on modifying that specific part.
-3. Keep the format consistent.
+3. Maintain the list format.
 4. User Name: "${currentName}" (Immutable).
 
 [Response Format]:
@@ -242,35 +225,74 @@ Return ONLY the Key-Value list text.
     let responseContent = "";
     if (apiConfig.apiSource === 'independent') {
         const url = `${apiConfig.indepApiUrl.replace(/\/$/, '')}/chat/completions`;
-        const body = {
-            model: apiConfig.indepApiModel,
-            messages: [{ role: 'system', content: systemPrompt }],
-            temperature: 0.7
-        };
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.indepApiKey}` },
-            body: JSON.stringify(body)
-        });
+        const body = { model: apiConfig.indepApiModel, messages: [{ role: 'system', content: systemPrompt }], temperature: 0.7 };
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.indepApiKey}` }, body: JSON.stringify(body) });
         if (!res.ok) throw new Error("Independent API Error");
         const json = await res.json();
         responseContent = json.choices[0].message.content;
     } else {
         responseContent = await context.generateQuietPrompt(systemPrompt, false, false, "System");
     }
-
     return responseContent.replace(/```json/g, '').replace(/```/g, '').trim();
 }
 
-// 简单的 Diff 计算 (用于对比视图)
-function computeDiff(oldText, newText) {
-    // 这里我们不做复杂的字符级 Diff，而是简单的把旧的标红，新的标绿
-    // 因为 LLM 通常是重写整个段落，复杂的 Diff 可能会很乱
-    // 如果你想看具体差异，把两段文本分别放在两个 div 里对比查看即可
-    return {
-        oldHtml: `<div class="diff-del">${oldText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`,
-        newHtml: `<div class="diff-add">${newText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`
+// [新] 智能按行/Key对比 (用于Diff视图)
+function generateSmartKeyDiffHtml(oldText, newText) {
+    const oldLines = oldText.split('\n');
+    const newLines = newText.split('\n');
+    let html = "";
+
+    // 尝试解析成 Key-Value Map，方便查找
+    // 格式假设: "Key: Value"
+    const parseLine = (line) => {
+        const idx = line.indexOf(':');
+        if (idx === -1) return { key: line.trim(), val: null, raw: line };
+        return { key: line.substring(0, idx).trim(), val: line.substring(idx + 1).trim(), raw: line };
     };
+
+    const newMap = new Map();
+    newLines.forEach(line => {
+        if (!line.trim()) return;
+        const p = parseLine(line);
+        if (p.val !== null) newMap.set(p.key, p.val);
+    });
+
+    // 遍历旧文本
+    oldLines.forEach(line => {
+        if (!line.trim()) {
+            html += `<br>`;
+            return;
+        }
+        
+        const p = parseLine(line);
+        
+        // 1. 如果是纯文本行 (没冒号)，直接比较整行
+        if (p.val === null) {
+            if (newLines.includes(line.trim())) {
+                html += `<div class="diff-same">${line}</div>`; // 没变
+            } else {
+                html += `<div class="diff-change">${line}</div>`; // 变了/没了
+            }
+            return;
+        }
+
+        // 2. 如果是 Key: Value
+        if (newMap.has(p.key)) {
+            const newVal = newMap.get(p.key);
+            if (newVal === p.val) {
+                // 完全一样 -> 灰色
+                html += `<div class="diff-same">${line}</div>`;
+            } else {
+                // 内容变了 -> 红色删除线
+                html += `<div class="diff-change">${line}</div>`;
+            }
+        } else {
+            // Key 在新文本里没了 -> 红色删除线
+            html += `<div class="diff-change">${line}</div>`;
+        }
+    });
+
+    return html;
 }
 
 // ============================================================================
@@ -279,8 +301,6 @@ function computeDiff(oldText, newText) {
 
 async function openCreatorPopup() {
     const context = getContext();
-    // 移除 Character Check，允许无卡运行
-    
     loadData();
     await loadAvailableWorldBooks();
     const savedState = loadState();
@@ -300,9 +320,7 @@ async function openCreatorPopup() {
     const html = `
     <div class="pw-wrapper">
         <div class="pw-header">
-            <div class="pw-top-bar">
-                <div class="pw-title"><i class="fa-solid fa-wand-magic-sparkles" style="color:#e0af68;"></i> 设定编织者 Pro</div>
-            </div>
+            <div class="pw-top-bar"><div class="pw-title"><i class="fa-solid fa-wand-magic-sparkles" style="color:#e0af68;"></i> 设定编织者 Pro</div></div>
             <div class="pw-tabs">
                 <div class="pw-tab active" data-tab="editor"><i class="fa-solid fa-pen-to-square"></i> 编辑</div>
                 <div class="pw-tab" data-tab="context"><i class="fa-solid fa-book"></i> 世界书</div>
@@ -311,14 +329,12 @@ async function openCreatorPopup() {
             </div>
         </div>
 
-        <!-- 编辑视图 -->
         <div id="pw-view-editor" class="pw-view active">
             <div class="pw-scroll-area">
                 <div class="pw-info-display"><div class="pw-info-item"><i class="fa-solid fa-user"></i><span id="pw-display-name">${currentName}</span></div></div>
 
-                <!-- 标签 (只用于填入生成请求) -->
                 <div>
-                    <div class="pw-tags-header"><span class="pw-tags-label">快速设定 (点击填入生成框)</span><span class="pw-tags-edit-toggle" id="pw-toggle-edit-tags">编辑标签</span></div>
+                    <div class="pw-tags-header"><span class="pw-tags-label">快速设定 (点击填入)</span><span class="pw-tags-edit-toggle" id="pw-toggle-edit-tags">编辑标签</span></div>
                     <div class="pw-tags-container" id="pw-tags-list"></div>
                 </div>
 
@@ -333,7 +349,6 @@ async function openCreatorPopup() {
                     
                     <textarea id="pw-result-text" class="pw-result-textarea" placeholder="生成的结果将显示在这里..."></textarea>
 
-                    <!-- 下沉式润色栏 (不随文字滚动，在框下方) -->
                     <div class="pw-refine-toolbar">
                         <textarea id="pw-refine-input" class="pw-refine-input" placeholder="输入润色意见..."></textarea>
                         <div class="pw-refine-actions">
@@ -356,12 +371,12 @@ async function openCreatorPopup() {
             </div>
         </div>
 
-        <!-- Diff Overlay (对比视图) -->
+        <!-- Diff Overlay -->
         <div id="pw-diff-overlay" class="pw-diff-container" style="display:none;">
             <div class="pw-diff-header">润色对比 (左旧右新)</div>
             <div class="pw-diff-body">
                 <div class="pw-diff-col">
-                    <div class="pw-diff-label">修改前</div>
+                    <div class="pw-diff-label">修改前 (仅显示变动)</div>
                     <div id="pw-diff-old" class="pw-diff-box"></div>
                 </div>
                 <div class="pw-diff-col">
@@ -375,12 +390,11 @@ async function openCreatorPopup() {
             </div>
         </div>
 
-        <!-- Fullscreen Overlay (全屏编辑) -->
+        <!-- Fullscreen Overlay -->
         <div id="pw-fullscreen-overlay" class="pw-fullscreen-overlay">
             <div class="pw-fs-header"><span>全屏编辑</span><span id="pw-fs-close" style="cursor:pointer;"><i class="fa-solid fa-chevron-left"></i> 返回</span></div>
             <textarea id="pw-fs-editor" class="pw-fs-editor pw-textarea"></textarea>
             
-            <!-- 全屏模式下的润色栏 -->
             <div class="pw-refine-toolbar" style="margin-top:0;">
                 <textarea id="pw-fs-refine-input" class="pw-refine-input" placeholder="输入润色意见..."></textarea>
                 <div class="pw-refine-actions">
@@ -392,8 +406,8 @@ async function openCreatorPopup() {
 
         <!-- Other Tabs -->
         <div id="pw-view-context" class="pw-view"><div class="pw-scroll-area"><div class="pw-card-section"><div class="pw-wi-controls"><select id="pw-wi-select" class="pw-input pw-wi-select"><option value="">-- 添加参考/目标世界书 --</option>${renderBookOptions()}</select><button id="pw-wi-refresh" class="pw-btn primary pw-wi-refresh-btn"><i class="fa-solid fa-sync"></i></button><button id="pw-wi-add" class="pw-btn primary pw-wi-add-btn"><i class="fa-solid fa-plus"></i></button></div></div><div id="pw-wi-container"></div></div></div>
-        <div id="pw-view-api" class="pw-view"><div class="pw-scroll-area"><div class="pw-card-section"><div class="pw-row"><label>API 来源</label><select id="pw-api-source" class="pw-input" style="flex:1;"><option value="main" ${config.apiSource === 'main'?'selected':''}>使用主 API</option><option value="independent" ${config.apiSource === 'independent'?'selected':''}>独立 API</option></select></div><div id="pw-indep-settings" style="display:${config.apiSource === 'independent' ? 'flex' : 'none'}; flex-direction:column; gap:15px;"><div class="pw-row"><label>URL</label><input type="text" id="pw-api-url" class="pw-input" value="${config.indepApiUrl}" style="flex:1;"></div><div class="pw-row"><label>Key</label><input type="password" id="pw-api-key" class="pw-input" value="${config.indepApiKey}" style="flex:1;"></div><div class="pw-row pw-api-model-row"><label>Model</label><div style="flex:1; display:flex; gap:5px; width:100%;"><input type="text" id="pw-api-model" class="pw-input" value="${config.indepApiModel}" list="pw-model-list" style="flex:1;"><datalist id="pw-model-list"></datalist><button id="pw-api-fetch" class="pw-btn primary pw-api-fetch-btn"><i class="fa-solid fa-cloud-download-alt"></i></button></div></div></div><div style="text-align:right;"><button id="pw-api-save" class="pw-btn primary" style="width:auto;"><i class="fa-solid fa-save"></i> 保存设置</button></div></div></div></div>
-        <div id="pw-view-history" class="pw-view"><div class="pw-scroll-area"><div class="pw-search-box"><input type="text" id="pw-history-search" class="pw-input pw-search-input" placeholder="🔍 搜索历史..."><i class="fa-solid fa-times pw-search-clear" id="pw-history-search-clear"></i></div><div id="pw-history-list" style="display:flex; flex-direction:column;"></div><button id="pw-history-clear-all" class="pw-btn danger"><i class="fa-solid fa-trash-alt"></i> 清空所有历史记录</button></div></div>
+        <div id="pw-view-api" class="pw-view"><div class="pw-scroll-area"><div class="pw-card-section"><div class="pw-row"><label>API 来源</label><select id="pw-api-source" class="pw-input" style="flex:1;"><option value="main" ${config.apiSource === 'main'?'selected':''}>使用主 API</option><option value="independent" ${config.apiSource === 'independent'?'selected':''}>独立 API</option></select></div><div id="pw-indep-settings" style="display:${config.apiSource === 'independent' ? 'flex' : 'none'}; flex-direction:column; gap:15px;"><div class="pw-row"><label>URL</label><input type="text" id="pw-api-url" class="pw-input" value="${config.indepApiUrl}" style="flex:1;"></div><div class="pw-row"><label>Key</label><input type="password" id="pw-api-key" class="pw-input" value="${config.indepApiKey}" style="flex:1;"></div><div class="pw-row pw-api-model-row"><label>Model</label><div style="flex:1; display:flex; gap:5px; width:100%;"><input type="text" id="pw-api-model" class="pw-input" value="${config.indepApiModel}" list="pw-model-list" style="flex:1;"><datalist id="pw-model-list"></datalist><button id="pw-api-fetch" class="pw-btn primary pw-api-fetch-btn" title="获取模型" style="width:auto;"><i class="fa-solid fa-cloud-download-alt"></i></button></div></div></div><div style="text-align:right;"><button id="pw-api-save" class="pw-btn primary" style="width:auto;"><i class="fa-solid fa-save"></i> 保存设置</button></div></div></div></div>
+        <div id="pw-view-history" class="pw-view"><div class="pw-scroll-area"><div class="pw-search-box"><input type="text" id="pw-history-search" class="pw-input pw-search-input" placeholder="🔍 搜索历史..."><i class="fa-solid fa-times pw-search-clear" id="pw-history-search-clear" title="清空搜索"></i></div><div id="pw-history-list" style="display:flex; flex-direction:column;"></div><button id="pw-history-clear-all" class="pw-btn danger"><i class="fa-solid fa-trash-alt"></i> 清空所有历史记录</button></div></div>
     </div>
     `;
 
@@ -432,10 +446,9 @@ function bindEvents() {
     };
     $(document).on('input.pw change.pw', '#pw-request, #pw-result-text, .pw-input', saveCurrentState);
 
-    // 自动高度 Textarea
+    // 自动高度
     const adjustHeight = (el) => {
-        el.style.height = 'auto';
-        el.style.height = (el.scrollHeight) + 'px';
+        el.style.height = 'auto'; el.style.height = (el.scrollHeight) + 'px';
     };
     $(document).on('input.pw', '#pw-refine-input, #pw-fs-refine-input', function() { adjustHeight(this); });
 
@@ -465,7 +478,7 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-insert-selection', () => handleInsert('pw-result-text', 'pw-refine-input'));
     $(document).on('click.pw', '#pw-fs-insert-selection', () => handleInsert('pw-fs-editor', 'pw-fs-refine-input'));
 
-    // 润色 (含对比视图逻辑)
+    // 润色 (智能Diff)
     const handleRefine = async (sourceInputId, sourceTextId) => {
         const $input = $(sourceInputId);
         const refineReq = $input.val();
@@ -484,10 +497,10 @@ function bindEvents() {
             };
             const responseText = await runGeneration(config, config);
             
-            // Show Diff Overlay
-            // 左侧显示旧内容（不可编辑，带删除线样式），右侧显示新内容（可编辑）
-            // 注意：因为我们没有 diff 库，这里直接展示全文，样式由 css 的 .diff-del 控制背景
-            $('#pw-diff-old').html(`<div class="diff-del" style="white-space:pre-wrap;">${currentRawText}</div>`); 
+            // [新] 使用 Key-Based Diff 渲染左侧
+            const diffHtml = generateSmartKeyDiffHtml(currentRawText, responseText);
+            $('#pw-diff-old').html(diffHtml);
+            
             $('#pw-diff-new').val(responseText);
             $('#pw-diff-overlay').fadeIn();
             
@@ -500,32 +513,28 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-btn-refine', () => handleRefine('#pw-refine-input', '#pw-result-text'));
     $(document).on('click.pw', '#pw-fs-refine-btn', () => handleRefine('#pw-fs-refine-input', '#pw-fs-editor'));
 
-    // Diff 确认/取消
     $(document).on('click.pw', '#pw-diff-cancel', () => { $('#pw-diff-overlay').fadeOut(); });
     $(document).on('click.pw', '#pw-diff-confirm', () => { 
         const newText = $('#pw-diff-new').val();
         $('#pw-result-text').val(newText);
-        $('#pw-fs-editor').val(newText); // Sync fullscreen if open
+        $('#pw-fs-editor').val(newText);
         $('#pw-diff-overlay').fadeOut();
         saveCurrentState();
         toastr.success("已应用修改");
     });
 
-    // 全屏覆盖层逻辑 (返回时不关闭，只隐藏)
     $(document).on('click.pw', '#pw-btn-expand', () => {
         const val = $('#pw-result-text').val();
         $('#pw-fs-editor').val(val);
         $('#pw-fullscreen-overlay').addClass('active');
     });
     $(document).on('click.pw', '#pw-fs-close', () => {
-        // 返回：把内容同步回去，隐藏覆盖层
         const val = $('#pw-fs-editor').val();
         $('#pw-result-text').val(val);
         $('#pw-fullscreen-overlay').removeClass('active');
         saveCurrentState();
     });
 
-    // 清空与存入历史
     $(document).on('click.pw', '#pw-clear', function() {
         if(confirm("清空？")) {
             $('#pw-request').val(''); $('#pw-result-area').hide();
@@ -540,7 +549,6 @@ function bindEvents() {
         toastr.success(TEXT.TOAST_SNAPSHOT);
     });
 
-    // 生成
     $(document).on('click.pw', '#pw-btn-gen', async function() {
         const req = $('#pw-request').val();
         if (!req) return toastr.warning("请输入要求");
@@ -562,7 +570,6 @@ function bindEvents() {
         finally { $btn.prop('disabled', false).html('<i class="fa-solid fa-bolt"></i> 生成设定'); }
     });
 
-    // 保存并覆盖
     $(document).on('click.pw', '#pw-btn-apply', async function() {
         const finalContent = $('#pw-result-text').val();
         if (!finalContent) return toastr.warning("内容为空");
@@ -620,7 +627,7 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-history-clear-all', function() { if(confirm("清空?")){historyCache=[];saveData();renderHistoryList();} });
 }
 
-// ... 辅助渲染函数 (Tags, WI, History) 保持之前逻辑不变 ...
+// ... renderTagsList, renderWiBooks, renderHistoryList (保持不变) ...
 const renderTagsList = () => { /* ... same as previous ... */ const $container = $('#pw-tags-list').empty(); const $toggleBtn = $('#pw-toggle-edit-tags'); $toggleBtn.text(isEditingTags ? '取消编辑' : '编辑标签'); $toggleBtn.css('color', isEditingTags ? '#ff6b6b' : '#5b8db8'); tagsCache.forEach((tag, index) => { if (isEditingTags) { const $row = $(`<div class="pw-tag-edit-row"><input class="pw-tag-edit-input t-name" value="${tag.name}"><input class="pw-tag-edit-input t-val" value="${tag.value}"><div class="pw-tag-del-btn"><i class="fa-solid fa-trash"></i></div></div>`); $row.find('input').on('input', function() { tag.name = $row.find('.t-name').val(); tag.value = $row.find('.t-val').val(); saveData(); }); $row.find('.pw-tag-del-btn').on('click', () => { if (confirm("删除?")) { tagsCache.splice(index, 1); saveData(); renderTagsList(); } }); $container.append($row); } else { const $chip = $(`<div class="pw-tag-chip"><i class="fa-solid fa-tag" style="opacity:0.5; margin-right:4px;"></i><span>${tag.name}</span>${tag.value ? `<span class="pw-tag-val">${tag.value}</span>` : ''}</div>`); $chip.on('click', () => { const $text = $('#pw-request'); $text.val($text.val() + (tag.value ? `\n${tag.name}: ${tag.value}` : `\n${tag.name}: `)).focus(); }); $container.append($chip); } }); const $addBtn = $(`<div class="pw-tag-add-btn"><i class="fa-solid fa-plus"></i> ${isEditingTags ? '新增' : '标签'}</div>`); $addBtn.on('click', () => { tagsCache.push({ name: "", value: "" }); saveData(); if (!isEditingTags) isEditingTags = true; renderTagsList(); }); $container.append($addBtn); if (isEditingTags) { const $finishBtn = $(`<div class="pw-tags-finish-bar"><i class="fa-solid fa-check"></i> 完成编辑</div>`); $finishBtn.on('click', () => { isEditingTags = false; renderTagsList(); }); $container.append($finishBtn); } };
 window.pwExtraBooks = [];
 const renderWiBooks = async () => { /* ... same as previous ... */ const container = $('#pw-wi-container').empty(); const baseBooks = await getContextWorldBooks(); const allBooks = [...new Set([...baseBooks, ...(window.pwExtraBooks || [])])]; if (allBooks.length === 0) { container.html('<div style="opacity:0.6; padding:10px; text-align:center;">此角色未绑定世界书，请在“世界书”标签页手动添加或在酒馆主界面绑定。</div>'); return; } for (const book of allBooks) { const isBound = baseBooks.includes(book); const $el = $(`<div class="pw-wi-book"><div class="pw-wi-header"><span><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span style="color:#9ece6a;font-size:0.8em;margin-left:5px;">(已绑定)</span>' : ''}</span><div>${!isBound ? '<i class="fa-solid fa-times remove-book" style="color:#ff6b6b;margin-right:10px;" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div></div><div class="pw-wi-list" data-book="${book}"></div></div>`); $el.find('.remove-book').on('click', (e) => { e.stopPropagation(); window.pwExtraBooks = window.pwExtraBooks.filter(b => b !== book); renderWiBooks(); }); $el.find('.pw-wi-header').on('click', async function() { const $list = $el.find('.pw-wi-list'); const $arrow = $(this).find('.arrow'); if ($list.is(':visible')) { $list.slideUp(); $arrow.removeClass('fa-flip-vertical'); } else { $list.slideDown(); $arrow.addClass('fa-flip-vertical'); if (!$list.data('loaded')) { $list.html('<div style="padding:10px;text-align:center;"><i class="fas fa-spinner fa-spin"></i></div>'); const entries = await getWorldBookEntries(book); $list.empty(); if (entries.length === 0) $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>'); entries.forEach(entry => { const isChecked = entry.enabled ? 'checked' : ''; const $item = $(`<div class="pw-wi-item"><div class="pw-wi-item-row"><input type="checkbox" class="pw-wi-check" ${isChecked} data-content="${encodeURIComponent(entry.content)}"><div style="font-weight:bold; font-size:0.9em; flex:1;">${entry.displayName}</div><i class="fa-solid fa-eye pw-wi-toggle-icon"></i></div><div class="pw-wi-desc">${entry.content}<div class="pw-wi-close-bar"><i class="fa-solid fa-angle-up"></i> 收起</div></div></div>`); $item.find('.pw-wi-toggle-icon').on('click', function(e) { e.stopPropagation(); const $desc = $(this).closest('.pw-wi-item').find('.pw-wi-desc'); if($desc.is(':visible')) { $desc.slideUp(); $(this).css('color', ''); } else { $desc.slideDown(); $(this).css('color', '#5b8db8'); } }); $item.find('.pw-wi-close-bar').on('click', function() { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').css('color', ''); }); $list.append($item); }); $list.data('loaded', true); } } }); container.append($el); } };
