@@ -24,7 +24,7 @@ const TEXT = {
     PANEL_TITLE: "用户设定编织者 Pro",
     BTN_TITLE: "打开设定生成器",
     TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已保存并覆盖！`,
-    TOAST_WI_SUCCESS: (book) => `已写入角色绑定的世界书: ${book}`,
+    TOAST_WI_SUCCESS: (book) => `已写入世界书: ${book}`,
     TOAST_WI_FAIL: "当前角色未绑定世界书，无法同步保存条目",
     TOAST_SNAPSHOT: "已存入历史记录"
 };
@@ -327,7 +327,7 @@ async function openCreatorPopup() {
         $('#pw-result-area').show();
         setTimeout(() => $('#pw-refine-input').trigger('input'), 50);
     }
-    // 恢复状态
+    // 恢复勾选状态
     if (savedState.syncToWorldInfo !== undefined) {
         $('#pw-wi-toggle').prop('checked', savedState.syncToWorldInfo);
     }
@@ -350,18 +350,7 @@ function bindEvents() {
         if($(this).data('tab') === 'history') renderHistoryList(); 
     });
 
-    // 鼠标坐标追踪 (用于悬浮按钮)
-    $(document).on('mouseup touchend', '#pw-result-text', function(e) {
-        if (e.type === 'touchend') {
-            lastClientX = e.changedTouches[0].clientX;
-            lastClientY = e.changedTouches[0].clientY;
-        } else {
-            lastClientX = e.clientX;
-            lastClientY = e.clientY;
-        }
-        setTimeout(checkSelection, 10);
-    });
-    
+    // 悬浮按钮逻辑 (移除HTML中的Quote按钮，改为JS动态生成)
     const checkSelection = () => {
         const el = document.getElementById('pw-result-text');
         if (!el) return;
@@ -369,19 +358,23 @@ function bindEvents() {
         const $btn = $('#pw-float-quote-btn');
 
         if (hasSelection) {
-            // [修复] 计算位置：悬浮在鼠标位置附近
+            // [修复] 位置在右上角
             let top = lastClientY - 45; 
             let left = lastClientX - 40;
             // 边界检查
             if (top < 10) top = lastClientY + 20;
             if (left + 100 > window.innerWidth) left = window.innerWidth - 110;
             if (left < 10) left = 10;
-
-            $btn.css({ top: top + 'px', left: left + 'px', display: 'flex' }).fadeIn(150);
+            
+            // 实际上CSS已经改为Fixed右上角，这里不需要动态计算，直接显示即可
+            // 如果你想要跟随鼠标，需要恢复 CSS 为 absolute 并计算 offset
+            // 根据你的最新要求，不需要动态，只要显示即可
+             $btn.fadeIn(150).css('display', 'flex');
         } else {
             $btn.fadeOut(150);
         }
     };
+    $(document).on('touchend mouseup keyup', '#pw-result-text', checkSelection);
 
     $(document).on('click.pw', '#pw-float-quote-btn', function(e) {
         e.preventDefault(); e.stopPropagation();
@@ -393,12 +386,11 @@ function bindEvents() {
         if (selectedText) {
             const $input = $('#pw-refine-input');
             const cur = $input.val();
-            // 换行追加
             const newText = `修改此段 "${selectedText}": `;
             $input.val(cur ? cur + '\n' + newText : newText).focus();
             adjustHeight($input[0]);
             textarea.setSelectionRange(end, end);
-            checkSelection(); // 隐藏按钮
+            checkSelection(); 
         }
     });
 
@@ -503,7 +495,7 @@ function bindEvents() {
         finally { $btn.prop('disabled', false).html('生成设定'); }
     });
 
-    // 保存并覆盖逻辑
+    // 保存并覆盖逻辑 (World Info 严格修复)
     $(document).on('click.pw', '#pw-btn-apply', async function() {
         const content = $('#pw-result-text').val();
         if (!content) return toastr.warning("内容为空");
@@ -513,38 +505,40 @@ function bindEvents() {
         toastr.success(TEXT.TOAST_SAVE_SUCCESS(name));
 
         if ($('#pw-wi-toggle').is(':checked')) {
-            const context = getContext();
-            const char = context.characters[context.characterId];
-            const targetBook = char?.data?.character_book?.name || char?.data?.extensions?.world || char?.world;
+            const boundBooks = await getContextWorldBooks();
+            let targetBook = boundBooks[0]; // 只用绑定的第一本
 
             if (targetBook) {
                 try {
                     const h = getRequestHeaders();
+                    // 1. 获取完整书内容
                     const r = await fetch('/api/worldinfo/get', { method: 'POST', headers: h, body: JSON.stringify({ name: targetBook }) });
                     if (r.ok) {
                         const d = await r.json();
-                        if (!d.entries) d.entries = {};
+                        // 确保 entries 是对象
+                        if (!d.entries || Array.isArray(d.entries)) d.entries = {};
                         
                         const entryName = `User: ${name}`;
+                        // 2. 查找或创建 UID
                         let targetId = Object.keys(d.entries).find(uid => d.entries[uid].comment === entryName);
-                        
-                        // 确保 targetId 是数字，如果是 undefined 则新建
-                        if (targetId === undefined) {
-                            const ids = Object.keys(d.entries).map(Number);
+                        if (!targetId) {
+                            const ids = Object.keys(d.entries).map(Number).filter(n => !isNaN(n));
                             targetId = ids.length ? Math.max(...ids) + 1 : 0;
-                        } else {
-                            targetId = Number(targetId);
                         }
 
                         d.entries[targetId] = { 
-                            uid: targetId, key: [name, "User"], content: content, 
+                            uid: Number(targetId), key: [name, "User"], content: content, 
                             comment: entryName, enabled: true, selective: true 
                         };
                         
+                        // 3. 回传整个数据对象
                         await fetch('/api/worldinfo/edit', { method: 'POST', headers: h, body: JSON.stringify({ name: targetBook, data: d }) });
                         toastr.success(TEXT.TOAST_WI_SUCCESS(targetBook));
                     }
-                } catch(e) { console.error(e); }
+                } catch(e) { 
+                    console.error(e); 
+                    toastr.error("保存世界书失败，请检查控制台");
+                }
             } else { 
                 toastr.warning(TEXT.TOAST_WI_FAIL); 
             }
@@ -578,7 +572,6 @@ function bindEvents() {
         if (historyCache[index]) { historyCache[index].title = newTitle; saveData(); }
     });
 
-    // 其他事件
     $(document).on('click.pw', '#pw-toggle-edit-tags', () => { isEditingTags = !isEditingTags; renderTagsList(); });
     $(document).on('change.pw', '#pw-api-source', function() { $('#pw-indep-settings').toggle($(this).val() === 'independent'); });
     $(document).on('click.pw', '#pw-api-fetch', async function() { /* same */ });
@@ -679,5 +672,4 @@ jQuery(async () => {
     addPersonaButton();
     const observer = new MutationObserver(() => { if ($(`#${BUTTON_ID}`).length === 0 && $('.persona_controls_buttons_block').length > 0) addPersonaButton(); });
     observer.observe(document.body, { childList: true, subtree: true });
-    console.log(`${extensionName} v18 loaded.`);
 });
