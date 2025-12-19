@@ -95,7 +95,7 @@
 /* =========================================
    5. 结果区域与润色栏
 ========================================= */
-.pw-relative-container { position: relative; } /* 保留，虽然按钮改为fixed，但结构需要 */
+.pw-relative-container { position: relative; }
 
 .pw-result-textarea {
     width: 100%; min-height: 250px; background: rgba(0, 0, 0, 0.15);
@@ -129,19 +129,19 @@
 }
 .pw-tool-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); border-color: #e0af68; color: #e0af68; }
 
-/* [修改] 悬浮引用按钮 (跟随鼠标/手指) */
+/* 悬浮引用按钮 */
 .pw-float-quote-btn {
-    position: fixed; /* 改为 fixed，相对于视口定位 */
-    /* top/left 由 JS 动态计算 */
+    position: fixed;
+    top: 10px; right: 10px; /* JS 动态控制 */
     background: linear-gradient(135deg, #e0af68, #d08f40);
     color: #1a1a1a;
     padding: 6px 12px;
-    border-radius: 6px; /* 方一点，像系统菜单 */
+    border-radius: 6px;
     font-weight: bold;
     font-size: 0.85em;
     box-shadow: 0 4px 15px rgba(0,0,0,0.6);
     cursor: pointer;
-    z-index: 9999; /* 确保最顶层 */
+    z-index: 9999;
     display: none;
     animation: pw-pop-in 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     align-items: center; gap: 5px;
