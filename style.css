@@ -44,7 +44,6 @@
 }
 .pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: #e0af68; font-size: 1.05em; }
 
-/* 标签系统 */
 .pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .pw-tags-label { font-weight: bold; opacity: 0.8; font-size: 0.85em; }
 .pw-tags-edit-toggle { cursor: pointer; font-size: 0.8em; color: #5b8db8; }
@@ -57,7 +56,6 @@
 }
 .pw-tag-chip:hover { background: rgba(255, 255, 255, 0.1); border-color: #e0af68; }
 
-/* 标签编辑模式 */
 .pw-tag-edit-row { display: flex; gap: 4px; width: 100%; align-items: center; margin-bottom: 3px; }
 .pw-tag-edit-input { flex: 1; background: rgba(0,0,0,0.1); border: 1px solid var(--SmartThemeBorderColor); padding: 3px; border-radius: 3px; color: inherit; font-size: 0.9em;}
 .pw-tag-del-btn { cursor: pointer; color: #ff6b6b; padding: 3px; }
@@ -97,10 +95,12 @@
 /* =========================================
    5. 结果区域与润色栏
 ========================================= */
+.pw-relative-container { position: relative; } /* 确保悬浮按钮定位正确 */
+
 .pw-result-textarea {
-    width: 100%; min-height: 200px; background: rgba(0, 0, 0, 0.15);
+    width: 100%; min-height: 250px; background: rgba(0, 0, 0, 0.15);
     border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px 6px 0 0; 
-    color: var(--smart-theme-body-color); padding: 10px;
+    color: var(--smart-theme-body-color); padding: 12px;
     font-family: inherit; font-size: 1.0em; line-height: 1.6;
     resize: vertical; outline: none; white-space: pre-wrap; margin-bottom: 0;
 }
@@ -128,6 +128,29 @@
     height: 32px; display: flex; align-items: center; justify-content: center;
 }
 .pw-tool-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); border-color: #e0af68; color: #e0af68; }
+
+/* [新增] 悬浮引用按钮 (Gold Action Button) */
+.pw-float-quote-btn {
+    position: absolute;
+    bottom: 20px; right: 20px;
+    background: linear-gradient(135deg, #e0af68, #d08f40);
+    color: #1a1a1a;
+    padding: 8px 16px;
+    border-radius: 30px;
+    font-weight: bold;
+    font-size: 0.9em;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    cursor: pointer;
+    z-index: 50;
+    display: none; /* 默认隐藏，JS控制显示 */
+    animation: pw-pop-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    align-items: center; gap: 6px;
+    border: 2px solid rgba(255,255,255,0.2);
+}
+.pw-float-quote-btn:hover { transform: scale(1.05); box-shadow: 0 6px 16px rgba(0,0,0,0.6); }
+.pw-float-quote-btn:active { transform: scale(0.95); }
+
+@keyframes pw-pop-in { from { transform: scale(0) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
 
 /* =========================================
    6. 结构化 Diff 对比视图
@@ -169,7 +192,6 @@
 }
 .pw-diff-opt:hover { border-color: #555; }
 
-/* 单视图模式 (无变化) */
 .pw-diff-opt.single-view { cursor: default; opacity: 0.7; border-style: dotted; background: #222; }
 .pw-diff-opt.single-view:hover { border-color: #333; }
 
@@ -178,11 +200,7 @@
     content: '✔'; position: absolute; top: 2px; right: 5px; color: #e0af68; font-size: 0.8em; font-weight: bold;
 }
 
-.pw-diff-opt-label {
-    font-size: 0.7em; opacity: 0.5; margin-bottom: 2px; display: block;
-    text-transform: uppercase; letter-spacing: 0.5px;
-}
-
+.pw-diff-opt-label { font-size: 0.7em; opacity: 0.5; margin-bottom: 2px; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
 .pw-diff-opt-text { font-size: 0.9em; line-height: 1.4; word-break: break-word; color: #ccc; }
 
 .pw-diff-opt.old.diff-active .pw-diff-opt-text { text-decoration: line-through; opacity: 0.6; color: #ff6b6b; }
@@ -220,49 +238,7 @@
 .pw-wi-check-container:hover { background: rgba(0,0,0,0.2); }
 
 /* =========================================
-   8. 搜索框与历史记录 (修复)
-========================================= */
-.pw-search-box {
-    position: relative; display: flex; align-items: center; margin-bottom: 10px;
-    background: rgba(0,0,0,0.2); border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor);
-}
-.pw-search-icon {
-    position: absolute; left: 10px; opacity: 0.5; pointer-events: none; color: var(--smart-theme-body-color);
-}
-.pw-search-input {
-    width: 100%; padding-left: 32px !important; padding-right: 30px; border: none; background: transparent;
-}
-.pw-search-clear { position: absolute; right: 10px; opacity: 0.5; cursor: pointer; z-index: 2; }
-
-.pw-history-item {
-    background: rgba(0,0,0,0.1); border: 1px solid var(--SmartThemeBorderColor);
-    border-radius: 6px; padding: 10px; margin-bottom: 8px;
-    display: flex; gap: 10px; cursor: pointer; transition: background 0.2s; position: relative;
-}
-.pw-history-item:hover { background: rgba(255,255,255,0.05); }
-
-.pw-hist-main { flex: 1; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
-
-/* 标题编辑框 */
-.pw-hist-title-edit {
-    background: transparent; border: none; border-bottom: 1px dashed transparent;
-    font-weight: bold; color: #e0af68; width: 100%; font-size: 1.0em; padding: 0;
-    transition: border-color 0.2s;
-}
-.pw-hist-title-edit:focus { outline: none; border-bottom-color: #e0af68; }
-.pw-hist-title-edit:hover { border-bottom-color: rgba(224, 175, 104, 0.3); }
-
-.pw-hist-meta { font-size: 0.75em; opacity: 0.6; display: flex; justify-content: space-between; }
-.pw-hist-desc { font-size: 0.85em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-
-.pw-hist-del-btn {
-    display: flex; align-items: center; justify-content: center; padding: 0 8px;
-    color: #ff6b6b; opacity: 0.6; border-left: 1px solid var(--SmartThemeBorderColor);
-}
-.pw-hist-del-btn:hover { opacity: 1; background: rgba(255,0,0,0.1); }
-
-/* =========================================
-   其他通用列表
+   8. 其他列表
 ========================================= */
 .pw-card-section { background: rgba(0, 0, 0, 0.2); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
@@ -279,13 +255,35 @@
 .pw-wi-desc { display: none; margin-top: 5px; padding: 5px; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.85em; white-space: pre-wrap; }
 .pw-wi-close-bar { text-align: center; font-size: 0.8em; opacity: 0.6; cursor: pointer; margin-top: 3px; }
 
+.pw-search-box {
+    position: relative; display: flex; align-items: center; margin-bottom: 10px;
+    background: rgba(0,0,0,0.2); border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor);
+}
+.pw-search-icon { position: absolute; left: 10px; opacity: 0.5; pointer-events: none; color: var(--smart-theme-body-color); }
+.pw-search-input { width: 100%; padding-left: 32px !important; padding-right: 30px; border: none; background: transparent; }
+.pw-search-clear { position: absolute; right: 10px; opacity: 0.5; cursor: pointer; z-index: 2; }
+
+.pw-history-item { background: rgba(0,0,0,0.1); border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 8px; margin-bottom: 6px; display: flex; gap: 8px; cursor: pointer; transition: background 0.2s; }
+.pw-history-item:hover { background: rgba(255,255,255,0.05); }
+.pw-hist-main { flex: 1; display: flex; flex-direction: column; gap: 3px; overflow: hidden; }
+.pw-hist-title-edit {
+    background: transparent; border: none; border-bottom: 1px dashed transparent;
+    font-weight: bold; color: #e0af68; width: 100%; font-size: 1.0em; padding: 0;
+    transition: border-color 0.2s;
+}
+.pw-hist-title-edit:focus { outline: none; border-bottom-color: #e0af68; }
+.pw-hist-title-edit:hover { border-bottom-color: rgba(224, 175, 104, 0.3); }
+.pw-hist-meta { display: flex; gap: 8px; font-size: 0.75em; opacity: 0.6; }
+.pw-hist-desc { font-size: 0.85em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pw-hist-del-btn { display: flex; align-items: center; justify-content: center; padding: 0 8px; color: #ff6b6b; opacity: 0.6; border-left: 1px solid var(--SmartThemeBorderColor); }
+.pw-hist-del-btn:hover { opacity: 1; background: rgba(255,0,0,0.1); }
+
 #pw_persona_tool_btn {
     color: var(--smart-theme-body-color); cursor: pointer; display: flex; align-items: center; justify-content: center;
     width: 30px; height: 30px; margin-right: 5px; font-size: 1.1em; opacity: 0.7; transition: opacity 0.2s;
 }
 #pw_persona_tool_btn:hover { opacity: 1; color: #e0af68; }
 
-/* 移动端 */
 @media screen and (max-width: 600px) {
     .pw-footer { flex-direction: column; align-items: stretch; }
     .pw-footer-left, .pw-footer-right { justify-content: space-between; }
