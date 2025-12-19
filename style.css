@@ -24,7 +24,7 @@
 .pw-scroll-area::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.4); border-radius: 3px; }
 
 /* =========================================
-   顶部 Header 与 Tabs
+   顶部 Header
 ========================================= */
 .pw-header {
     flex-shrink: 0;
@@ -84,25 +84,19 @@
 .pw-view.active { display: flex; }
 
 /* =========================================
-   新增：只读信息展示条 (名字/Title)
+   信息展示 (仅姓名)
 ========================================= */
 .pw-info-display {
     display: flex;
     align-items: center;
-    gap: 15px;
     background: rgba(0,0,0,0.15);
     padding: 10px 12px;
     border-radius: 8px;
     border: 1px solid var(--SmartThemeBorderColor);
     margin-bottom: 5px;
-}
-
-.pw-info-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
     font-weight: bold;
     color: #e0af68;
+    font-size: 1.1em;
 }
 
 /* =========================================
@@ -114,9 +108,6 @@
     align-items: center;
     margin-bottom: 8px;
 }
-
-.pw-tags-label { font-weight: bold; opacity: 0.8; }
-.pw-tags-edit-toggle { cursor: pointer; font-size: 0.9em; color: #5b8db8; }
 
 .pw-tags-container {
     display: flex;
@@ -136,18 +127,7 @@
     cursor: pointer;
     transition: all 0.2s;
 }
-
-.pw-tag-chip:hover {
-    background: rgba(255, 255, 255, 0.1);
-    transform: translateY(-1px);
-}
-
-.pw-tag-val {
-    margin-left: 6px;
-    padding-left: 6px;
-    border-left: 1px solid rgba(255,255,255,0.2);
-    opacity: 0.8;
-}
+.pw-tag-chip:hover { background: rgba(255, 255, 255, 0.1); transform: translateY(-1px); }
 
 .pw-tag-edit-row { display: flex; gap: 5px; width: 100%; align-items: center; margin-bottom: 4px; }
 .pw-tag-edit-input { flex: 1; background: rgba(0,0,0,0.1); border: 1px solid var(--SmartThemeBorderColor); padding: 4px; border-radius: 4px; color: inherit; }
@@ -156,7 +136,7 @@
 .pw-tags-finish-bar { width: 100%; text-align: center; padding: 8px; background: rgba(100,255,100,0.1); border-radius: 6px; cursor: pointer; margin-top: 5px; }
 
 /* =========================================
-   输入框与按钮
+   通用输入框与按钮
 ========================================= */
 .pw-input, .pw-textarea {
     background-color: rgba(0, 0, 0, 0.2);
@@ -164,15 +144,12 @@
     color: var(--smart-theme-body-color);
     border-radius: 6px;
     padding: 8px 10px;
-    font-family: inherit;
-    font-size: inherit;
-    outline: none;
+    font-family: inherit; font-size: inherit; outline: none;
 }
-
 .pw-input:focus, .pw-textarea:focus { border-color: var(--smart-theme-input-color); background-color: rgba(0, 0, 0, 0.3); }
 .pw-textarea { resize: vertical; line-height: 1.5; }
 
-.pw-editor-tools { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.pw-editor-tools { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 5px; }
 
 .pw-btn {
     display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -180,127 +157,79 @@
     border: 1px solid var(--SmartThemeBorderColor);
     background: var(--SmartThemeBlurTintColor);
     color: var(--smart-theme-body-color);
-    cursor: pointer; font-weight: bold; width: 100%;
+    cursor: pointer; font-weight: bold; width: 100%; transition: all 0.2s;
 }
-
 .pw-btn:hover { filter: brightness(1.2); }
 .pw-btn.gen { background: linear-gradient(135deg, rgba(224, 175, 104, 0.2), rgba(0, 0, 0, 0)); border-color: #e0af68; color: #e0af68; }
 .pw-btn.save { background: linear-gradient(135deg, rgba(100, 200, 100, 0.2), rgba(0, 0, 0, 0)); border-color: #9ece6a; color: #9ece6a; margin-top: 10px;}
 .pw-btn.primary { background: rgba(0,0,0,0.3); }
 .pw-btn.danger { background: rgba(255,100,100,0.1); border-color: #ff6b6b; color: #ff6b6b; }
 
-.pw-mini-btn { font-size: 0.85em; opacity: 0.7; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; }
-.pw-mini-btn:hover { background: rgba(255,255,255,0.1); opacity: 1; }
+.pw-mini-btn { font-size: 0.85em; opacity: 0.7; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; border: 1px solid transparent; }
+.pw-mini-btn:hover { background: rgba(255,255,255,0.1); opacity: 1; border-color: var(--SmartThemeBorderColor); }
 
 /* =========================================
-   世界书卡片
+   新增：属性编辑列表 (Key-Value Edit List)
 ========================================= */
-.pw-card-section { background: rgba(0, 0, 0, 0.2); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-.pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
-.pw-row label { font-weight: bold; min-width: 60px; font-size: 0.9em; flex-shrink: 0; }
-.pw-wi-controls { display: flex; gap: 8px; width: 100%; }
-.pw-wi-select { flex-grow: 1; width: auto; min-width: 0; }
-.pw-wi-add-btn { flex-shrink: 0; width: auto; padding: 0 15px; }
-
-.pw-wi-book { border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
-.pw-wi-header { padding: 10px; background: rgba(0,0,0,0.2); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-.pw-wi-list { display: none; padding: 10px; border-top: 1px solid var(--SmartThemeBorderColor); }
-.pw-wi-item { background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px; margin-bottom: 5px; }
-.pw-wi-item-row { display: flex; align-items: center; gap: 8px; }
-.pw-wi-check { transform: scale(1.2); cursor: pointer; }
-.pw-wi-desc { display: none; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.9em; white-space: pre-wrap; }
-.pw-wi-close-bar { text-align: center; font-size: 0.8em; opacity: 0.6; cursor: pointer; margin-top: 5px; }
-
-/* =========================================
-   历史记录
-========================================= */
-.pw-search-box { position: relative; display: flex; align-items: center; margin-bottom: 10px; }
-.pw-search-input { width: 100%; padding-right: 30px; }
-.pw-search-clear { position: absolute; right: 10px; opacity: 0.5; cursor: pointer; z-index: 2; }
-.pw-history-item { background: rgba(0,0,0,0.1); border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; margin-bottom: 8px; display: flex; gap: 10px; cursor: pointer; transition: background 0.2s; }
-.pw-history-item:hover { background: rgba(255,255,255,0.05); }
-.pw-hist-main { flex: 1; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
-.pw-hist-meta { display: flex; gap: 10px; font-size: 0.8em; opacity: 0.6; }
-.pw-hist-desc { font-size: 0.85em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pw-hist-del-btn { display: flex; align-items: center; justify-content: center; padding: 0 10px; color: #ff6b6b; opacity: 0.6; border-left: 1px solid var(--SmartThemeBorderColor); }
-.pw-hist-del-btn:hover { opacity: 1; background: rgba(255,0,0,0.1); }
-
-/* =========================================
-   Persona 工具按钮
-========================================= */
-#pw_persona_tool_btn {
-    color: var(--smart-theme-body-color); 
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px; 
-    height: 30px;
-    margin-right: 5px;
-    font-size: 1.1em;
-    opacity: 0.7;
-    transition: opacity 0.2s;
-}
-#pw_persona_tool_btn:hover { opacity: 1; color: #e0af68; }
-
-@media screen and (max-width: 600px) {
-    .pw-row { flex-direction: column; align-items: stretch; gap: 5px; }
-    .pw-api-model-row { flex-direction: column; }
-    .pw-api-fetch-btn { width: 100% !important; margin-top: 5px; }
-    .pw-history-item { flex-direction: column; }
-    .pw-hist-del-btn { border-left: none; border-top: 1px solid var(--SmartThemeBorderColor); padding: 5px; }
-}
-/* ... 保留之前的通用样式 (pw-wrapper, pw-header, pw-tabs 等) ... */
-/* ... 请保留 pw-info-display 等样式 ... */
-
-/* =========================================
-   修改：结果展示区域 (文本列表模式)
-========================================= */
-
-/* 结果区域的容器 */
-.pw-result-container {
+.pw-result-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-top: 10px;
-    border-top: 2px solid var(--SmartThemeBorderColor);
-    padding-top: 15px;
+    gap: 8px;
+    margin-bottom: 10px;
 }
 
-/* 那个灰色的文本框，模仿你的截图风格 */
-.pw-result-textarea {
-    width: 100%;
-    min-height: 200px; /* 足够高，显示列表 */
-    background: rgba(0, 0, 0, 0.15); /*稍微深一点的背景 */
+.pw-result-row {
+    display: flex;
+    align-items: center;
+    background: rgba(0,0,0,0.1);
     border: 1px solid var(--SmartThemeBorderColor);
-    border-radius: 8px;
+    border-radius: 6px;
+    padding: 0;
+    overflow: hidden;
+}
+
+.pw-key-label {
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.2);
+    min-width: 80px;
+    font-weight: bold;
+    color: #e0af68;
+    border-right: 1px solid var(--SmartThemeBorderColor);
+    text-align: right;
+    font-size: 0.9em;
+    flex-shrink: 0;
+}
+
+.pw-val-input {
+    flex-grow: 1;
+    background: transparent;
+    border: none;
     color: var(--smart-theme-body-color);
-    padding: 12px;
-    font-family: inherit; /* 或者用 monospace 看起来更像代码/数据 */
-    font-size: 1.0em;
-    line-height: 1.6;
-    resize: vertical;
+    padding: 8px 10px;
+    font-family: inherit;
     outline: none;
-    white-space: pre-wrap; /* 保留换行 */
 }
+.pw-val-input:focus { background: rgba(255,255,255,0.05); }
 
-.pw-result-textarea:focus {
-    background: rgba(0, 0, 0, 0.2);
-    border-color: var(--smart-theme-input-color);
-}
-
-/* 润色区域 */
+/* 润色栏 */
 .pw-refine-box {
     display: flex;
     gap: 8px;
     align-items: center;
+    padding-top: 10px;
+    border-top: 1px dashed var(--SmartThemeBorderColor);
 }
 
-/* 底部保存栏 */
-.pw-save-bar {
-    background: rgba(0,0,0,0.1);
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid var(--SmartThemeBorderColor);
-    margin-top: 5px;
-}
+/* =========================================
+   世界书与历史
+========================================= */
+.pw-wi-book { border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; margin-bottom: 8px; }
+.pw-wi-header { padding: 8px 10px; background: rgba(0,0,0,0.2); cursor: pointer; display: flex; justify-content: space-between; }
+.pw-wi-list { display: none; padding: 10px; border-top: 1px solid var(--SmartThemeBorderColor); }
+.pw-history-item { background: rgba(0,0,0,0.1); border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; margin-bottom: 8px; display: flex; gap: 10px; cursor: pointer; }
+.pw-hist-main { flex: 1; overflow: hidden; }
+.pw-hist-del-btn { color: #ff6b6b; padding: 0 5px; cursor: pointer; display: flex; align-items: center; }
+
+/* 按钮样式 */
+#pw_persona_tool_btn { color: var(--smart-theme-body-color); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin-right: 5px; font-size: 1.1em; opacity: 0.7; }
+#pw_persona_tool_btn:hover { opacity: 1; color: #e0af68; }
