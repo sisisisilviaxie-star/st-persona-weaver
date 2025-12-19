@@ -39,21 +39,24 @@ let availableWorldBooks = [];
 let isEditingTags = false; 
 
 // ============================================================================
-// 2. 核心数据解析逻辑
+// 2. 核心数据解析逻辑 (用于 Diff)
 // ============================================================================
 
+// 将文本解析为键值对 Map，兼容多行文本
 function parseTextToMap(text) {
     const map = new Map();
     if (!text) return map;
     const lines = text.split('\n');
     lines.forEach(line => {
+        // 简单策略：寻找第一个冒号
         const idx = line.indexOf(':');
         if (idx !== -1) {
             const key = line.substring(0, idx).trim();
             const val = line.substring(idx + 1).trim();
             if (key) map.set(key, val);
         } else if (line.trim()) {
-            map.set(`Line_${Math.random().toString(36).substr(2, 4)}`, line.trim());
+            // 处理没有冒号的行 (当作描述)
+            map.set(`Info_${Math.random().toString(36).substr(2, 4)}`, line.trim());
         }
     });
     return map;
@@ -226,7 +229,7 @@ async function openCreatorPopup() {
                 <div class="pw-info-display"><div class="pw-info-item"><i class="fa-solid fa-user"></i><span id="pw-display-name">${currentName}</span></div></div>
 
                 <div>
-                    <div class="pw-tags-header"><span class="pw-tags-label">快速设定 (点击填入)</span><span class="pw-tags-edit-toggle" id="pw-toggle-edit-tags">编辑标签</span></div>
+                    <div class="pw-tags-header"><span class="pw-tags-label">快速设定 (点击填入生成框)</span><span class="pw-tags-edit-toggle" id="pw-toggle-edit-tags">编辑标签</span></div>
                     <div class="pw-tags-container" id="pw-tags-list"></div>
                 </div>
 
@@ -250,14 +253,16 @@ async function openCreatorPopup() {
                     <div class="pw-mini-btn" id="pw-snapshot">存入历史</div>
                 </div>
                 <div class="pw-footer-right">
+                    <!-- 默认不勾选 -->
                     <label class="pw-wi-check-container"><input type="checkbox" id="pw-wi-toggle"><span>同步进世界书</span></label>
                     <button id="pw-btn-apply" class="pw-btn save">保存并覆盖当前设定</button>
                 </div>
             </div>
         </div>
 
+        <!-- 结构化对比层 -->
         <div id="pw-diff-overlay" class="pw-diff-container" style="display:none;">
-            <div class="pw-diff-header">润色对比</div>
+            <div class="pw-diff-header">润色对比 (智能合并)</div>
             <div class="pw-diff-scroll" id="pw-diff-list"></div>
             <div class="pw-diff-actions">
                 <button class="pw-btn danger" id="pw-diff-cancel">放弃</button>
@@ -306,7 +311,7 @@ function bindEvents() {
         } else { toastr.info("请先划选文字"); }
     });
 
-    // [核心] 结构化对比渲染 (智能去重)
+    // [核心] 结构化对比渲染 (智能合并无变化行)
     $(document).on('click.pw', '#pw-btn-refine', async function() {
         const refineReq = $('#pw-refine-input').val();
         if (!refineReq) return toastr.warning("请输入润色意见");
@@ -329,18 +334,17 @@ function bindEvents() {
                 const valNew = (newMap.get(key) || "").trim();
                 if (!valOld && !valNew) return;
 
-                // [关键修复] 严格比较内容是否相同
                 const isChanged = valOld !== valNew;
                 if (isChanged) changeCount++;
 
                 if (!isChanged) {
-                    // [紧凑优化] 内容未变：显示单行绿色框
+                    // [智能合并] 内容未变：显示单行绿色框
                     const $row = $(`
                         <div class="pw-diff-row" data-key="${key}">
                             <div class="pw-diff-attr-name" style="color:#666;border-color:#444;">${key}</div>
                             <div class="pw-diff-options">
                                 <div class="pw-diff-opt unchanged selected" data-val="${valNew}">
-                                    <span class="pw-diff-opt-label">内容未变 (保留)</span>
+                                    <span class="pw-diff-opt-label">内容未变 (默认保留)</span>
                                     <div class="pw-diff-opt-text" style="color:#888;">${valNew}</div>
                                 </div>
                             </div>
@@ -390,7 +394,6 @@ function bindEvents() {
         let finalLines = [];
         $('.pw-diff-row').each(function() {
             const key = $(this).data('key');
-            // 优先取编辑框的值，如果隐藏了(unchanged)则取 data-val
             let val = $(this).find('.pw-diff-custom-input').val();
             if (!$(this).find('.pw-diff-edit-area').is(':visible')) {
                 val = $(this).find('.pw-diff-opt.selected').data('val');
@@ -398,8 +401,11 @@ function bindEvents() {
             val = (val || "").trim();
             if (!val) return; 
 
-            if (key.startsWith('Line_') || key.startsWith('Info_')) finalLines.push(val);
-            else finalLines.push(`${key}: ${val}`);
+            if (key.startsWith('Info_')) {
+                finalLines.push(val);
+            } else {
+                finalLines.push(`${key}: ${val}`);
+            }
         });
         $('#pw-result-text').val(finalLines.join('\n'));
         $('#pw-diff-overlay').fadeOut();
@@ -422,6 +428,7 @@ function bindEvents() {
         finally { $btn.prop('disabled', false).html('生成设定'); }
     });
 
+    // 保存并覆盖逻辑 (严格限制世界书 + 强制刷新)
     $(document).on('click.pw', '#pw-btn-apply', async function() {
         const content = $('#pw-result-text').val();
         if (!content) return toastr.warning("内容为空");
@@ -448,8 +455,9 @@ function bindEvents() {
                     d.entries[targetId] = { uid: targetId, key: [name, "User"], content: content, comment: entryName, enabled: true, selective: true };
                     await fetch('/api/worldinfo/edit', { method: 'POST', headers: h, body: JSON.stringify({ name: targetBook, data: d }) });
                     
-                    // [修复] 强制刷新世界书
+                    // [修复] 强制刷新世界书显示
                     if (context.updateWorldInfoList) await context.updateWorldInfoList(); 
+                    // 尝试重载当前书以确保立即生效
                     if (context.loadWorldInfo) await context.loadWorldInfo(targetBook);
 
                     toastr.success(TEXT.TOAST_WI_SUCCESS(targetBook));
@@ -459,7 +467,9 @@ function bindEvents() {
         $('.popup_close').click();
     });
 
-    $(document).on('click.pw', '#pw-clear', function() { if(confirm("确定清空？")) { $('#pw-request').val(''); $('#pw-result-area').hide(); $('#pw-result-text').val(''); } });
+    $(document).on('click.pw', '#pw-clear', function() {
+        if(confirm("确定清空？")) { $('#pw-request').val(''); $('#pw-result-area').hide(); $('#pw-result-text').val(''); }
+    });
     $(document).on('click.pw', '#pw-snapshot', function() {
         const text = $('#pw-result-text').val();
         if (!text) return toastr.warning("内容为空");
