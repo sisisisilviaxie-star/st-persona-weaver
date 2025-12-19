@@ -2,15 +2,20 @@
    新增：用户面板快捷入口按钮样式
    ========================================= */
 #pw-quick-btn {
-    width: 30px;
-    height: 30px;
+    /* 强制宽高，防止被 flex 挤压 */
+    width: 30px !important; 
+    height: 30px !important;
+    min-width: 30px !important;
+    
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     border-radius: 5px;
-    transition: background 0.2s;
-    margin-left: 2px;
+    margin-right: 2px;
+    
+    /* 调试用：如果还看不到，这个红色边框会帮你定位它是否被渲染了 */
+    /* border: 1px solid red; */ 
 }
 
 #pw-quick-btn:hover {
@@ -19,5 +24,6 @@
 
 #pw-quick-btn i {
     font-size: 1.1em;
+    color: #e0af68; /* 金色图标 */
     filter: drop-shadow(0 0 2px rgba(0,0,0,0.5));
 }
