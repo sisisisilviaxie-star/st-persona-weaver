@@ -952,78 +952,79 @@ jQuery(async () => {
 
     // 核心注入函数
     const injectButton = () => {
-        // 1. 找到容器：用户人设按钮栏
-        const $container = $('#user_persona_buttons');
+        // 1. 获取你指定的容器
+        const $container = $('#persona_controls_buttons_block');
         
-        // 如果容器还没出来，什么都不做，交给 Observer 处理
+        // 容器没渲染出来，直接退出，等下一次检查
         if (!$container.length) return;
 
-        // 2. 如果按钮已经存在，直接返回
+        // 2. 防止重复注入
         if ($('#pw-quick-btn').length > 0) return;
 
-        // 3. 找到目标锚点：编辑按钮（小铅笔）
-        // 标准 ID 是 #edit_user_persona
-        let $pencil = $('#edit_user_persona');
-        
-        // 双重保险：如果 ID 变了，通过图标类名找
-        if (!$pencil.length) {
-            $pencil = $container.find('.fa-pen-to-square').closest('.menu_button, div');
-        }
-
-        // 4. 创建按钮
+        // 3. 创建按钮
         const $btn = $(`
             <div id="pw-quick-btn" class="menu_button" title="设定编织者 Pro: 生成/优化当前人设">
-                <i class="fa-solid fa-wand-magic-sparkles" style="color:#e0af68;"></i>
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
             </div>
         `);
         
-        // 绑定事件
+        // 绑定点击事件
         $btn.on("click", (e) => {
-            e.stopPropagation(); // 防止冒泡，避免触发容器可能的折叠逻辑
+            e.stopPropagation();
             openCreatorPopup();
         });
 
-        // 5. 插入到小铅笔前面
+        // 4. 获取你指定的小铅笔按钮
+        const $pencil = $('#persona_rename_button');
+
+        // 5. 插入逻辑
         if ($pencil.length) {
+            // 有铅笔，插在铅笔前面
             $pencil.before($btn);
-            console.log(`[${extensionName}] Button injected BEFORE the pencil.`);
+            console.log(`[${extensionName}] 成功插入到 persona_rename_button 前面`);
         } else {
-            // 实在找不到笔，就插到最前面
+            // 没有铅笔（极少见），插在容器最前面
             $container.prepend($btn);
-            console.log(`[${extensionName}] Pencil not found, prepended button.`);
+            console.log(`[${extensionName}] 未找到铅笔，直接插入到容器头部`);
         }
     };
 
-    // 启动一个专门的观察者，盯着 #user_persona_buttons 及其父级
-    // 这样当 ST 重绘这个区域（例如切换人设、修改设置后）时，按钮会被自动补回
+    // ==========================================
+    // 强力监控策略
+    // ==========================================
+
+    // 策略 1: 观察者模式 (性能最高，反应最快)
+    // 只要 DOM 有变化，就检查一次
     const observer = new MutationObserver((mutations) => {
-        // 检查我们的按钮是否丢失了
-        if ($('#user_persona_buttons').length && !$('#pw-quick-btn').length) {
+        // 只有当我们的按钮不存在时才尝试注入，节省性能
+        if (!$('#pw-quick-btn').length) {
             injectButton();
         }
     });
-
-    // 监听 body 的变化（虽然范围大，但我们在回调里做了严格检查，性能损耗可控）
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // 利用文档中提到的事件系统进行初始化挂载
+    // 策略 2: 定时器轮询 (最笨但最有效的方法)
+    // 防止 MutationObserver 漏掉某些特定的 React 更新
+    // 每 1 秒检查一次，检查 10 次就停止，或者一直检查也行（这里设置一直检查，性能损耗忽略不计）
+    const intervalId = setInterval(() => {
+        if ($('#persona_controls_buttons_block').length && !$('#pw-quick-btn').length) {
+            console.log(`[${extensionName}] 检测到按钮丢失，重新注入...`);
+            injectButton();
+        }
+    }, 1000);
+
+    // 策略 3: 酒馆事件 (官方推荐)
     const eventSource = SillyTavern?.eventSource;
     const eventTypes = SillyTavern?.eventTypes;
-
-    if (eventSource && eventTypes) {
-        // APP 准备好时尝试注入
+    if (eventSource) {
+        // 在所有可能重绘 UI 的时刻尝试注入
         eventSource.on(eventTypes.APP_READY, injectButton);
-        // UI 或设置重载时尝试注入（防止按钮被覆盖）
         eventSource.on(eventTypes.SETTINGS_UPDATED, injectButton);
         eventSource.on(eventTypes.USER_MESSAGE_RENDERED, injectButton);
-    } else {
-        console.warn(`[${extensionName}] SillyTavern Event System not found, falling back to direct injection.`);
     }
 
-    // 立即尝试一次（应对热重载）
+    // 立即运行一次
     injectButton();
-    // 延迟尝试一次（应对慢速加载）
-    setTimeout(injectButton, 2000);
 
-    console.log(`${extensionName} v18 loaded.`);
+    console.log(`${extensionName} v18 loaded. Targeting #persona_controls_buttons_block`);
 });
