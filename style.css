@@ -2,165 +2,82 @@
    1. 容器与基础布局
 ========================================= */
 .pw-wrapper {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    max-height: 85vh;
-    font-size: 14px;
-    color: var(--smart-theme-body-color);
-    position: relative;
+    display: flex; flex-direction: column; height: 100%; max-height: 85vh;
+    font-size: 14px; color: var(--smart-theme-body-color); position: relative;
     box-sizing: border-box;
 }
 
 .pw-scroll-area {
-    flex-grow: 1;
-    overflow-y: auto;
-    padding-right: 5px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding-bottom: 10px;
-    min-height: 0; /* Firefox flex fix */
+    flex-grow: 1; overflow-y: auto; padding-right: 5px;
+    display: flex; flex-direction: column; gap: 8px; /* 间距缩小 */
+    padding-bottom: 10px; min-height: 0;
 }
-
-.pw-scroll-area::-webkit-scrollbar { width: 6px; }
+.pw-scroll-area::-webkit-scrollbar { width: 5px; }
 .pw-scroll-area::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.4); border-radius: 3px; }
 
 /* =========================================
-   2. 顶部 Header 与 Tabs
+   2. 顶部 Header
 ========================================= */
-.pw-header {
-    flex-shrink: 0;
-    margin-bottom: 10px;
-    border-bottom: 1px solid var(--SmartThemeBorderColor);
-    padding-bottom: 5px;
-}
+.pw-header { flex-shrink: 0; margin-bottom: 8px; border-bottom: 1px solid var(--SmartThemeBorderColor); padding-bottom: 5px; }
+.pw-top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.pw-title { font-size: 1.1em; font-weight: bold; display: flex; align-items: center; gap: 8px; }
 
-.pw-top-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
-.pw-title {
-    font-size: 1.2em;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.pw-tabs {
-    display: flex;
-    flex-direction: row;
-    gap: 5px;
-    overflow-x: auto;
-}
-
+.pw-tabs { display: flex; flex-direction: row; gap: 4px; overflow-x: auto; }
 .pw-tab {
-    padding: 6px 12px;
-    cursor: pointer;
-    border-radius: 6px 6px 0 0;
-    opacity: 0.6;
-    transition: all 0.2s;
-    white-space: nowrap;
-    border: 1px solid transparent;
-    display: flex;
-    align-items: center;
-    gap: 5px;
+    padding: 5px 10px; cursor: pointer; border-radius: 6px 6px 0 0;
+    opacity: 0.6; transition: all 0.2s; white-space: nowrap; border: 1px solid transparent;
+    display: flex; align-items: center; gap: 5px; font-size: 0.9em;
 }
-
 .pw-tab:hover { opacity: 0.9; background: rgba(128,128,128,0.1); }
-.pw-tab.active {
-    opacity: 1;
-    background: var(--SmartThemeBlurTintColor);
-    border-bottom: 2px solid #e0af68;
-    color: var(--smart-theme-body-color);
-    font-weight: bold;
-}
+.pw-tab.active { opacity: 1; background: var(--SmartThemeBlurTintColor); border-bottom: 2px solid #e0af68; color: var(--smart-theme-body-color); font-weight: bold; }
 
 .pw-view { display: none; flex-grow: 1; overflow: hidden; flex-direction: column; height: 100%; }
 .pw-view.active { display: flex; }
 
 /* =========================================
-   3. 常用组件样式
+   3. 组件样式 (紧凑化)
 ========================================= */
-/* 名字展示条 */
 .pw-info-display {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(0,0,0,0.15);
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid var(--SmartThemeBorderColor);
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(0,0,0,0.15); padding: 8px;
+    border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor);
     margin-bottom: 5px;
 }
-.pw-info-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: bold;
-    color: #e0af68;
-    font-size: 1.1em;
-}
+.pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: #e0af68; font-size: 1em; }
 
-/* 标签容器 */
-.pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-.pw-tags-label { font-weight: bold; opacity: 0.8; font-size: 0.9em; }
-.pw-tags-edit-toggle { cursor: pointer; font-size: 0.85em; color: #5b8db8; }
-
-.pw-tags-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-bottom: 10px;
-}
-
+.pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.pw-tags-label { font-weight: bold; opacity: 0.8; font-size: 0.85em; }
+.pw-tags-edit-toggle { cursor: pointer; font-size: 0.8em; color: #5b8db8; }
+.pw-tags-container { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .pw-tag-chip {
-    display: inline-flex;
-    align-items: center;
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--SmartThemeBorderColor);
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 0.85em;
-    cursor: pointer;
-    transition: all 0.2s;
+    display: inline-flex; align-items: center; background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--SmartThemeBorderColor); padding: 2px 8px;
+    border-radius: 10px; font-size: 0.8em; cursor: pointer; transition: all 0.2s;
 }
 .pw-tag-chip:hover { background: rgba(255, 255, 255, 0.1); border-color: #e0af68; }
 
-/* 标签编辑行 */
-.pw-tag-edit-row { display: flex; gap: 5px; width: 100%; align-items: center; margin-bottom: 4px; }
-.pw-tag-edit-input { flex: 1; background: rgba(0,0,0,0.1); border: 1px solid var(--SmartThemeBorderColor); padding: 4px; border-radius: 4px; color: inherit; }
+.pw-tag-edit-row { display: flex; gap: 4px; width: 100%; align-items: center; margin-bottom: 4px; }
+.pw-tag-edit-input { flex: 1; background: rgba(0,0,0,0.1); border: 1px solid var(--SmartThemeBorderColor); padding: 2px 4px; border-radius: 4px; color: inherit; }
 .pw-tag-del-btn { cursor: pointer; color: #ff6b6b; padding: 4px; }
-.pw-tag-add-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 12px; border: 1px dashed var(--SmartThemeBorderColor); opacity: 0.7; cursor: pointer; font-size:0.85em; }
-.pw-tags-finish-bar { width: 100%; text-align: center; padding: 5px; background: rgba(100,255,100,0.1); border-radius: 6px; cursor: pointer; margin-top: 5px; }
+.pw-tag-add-btn { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; border: 1px dashed var(--SmartThemeBorderColor); opacity: 0.7; cursor: pointer; font-size:0.8em; }
+.pw-tags-finish-bar { width: 100%; text-align: center; padding: 4px; background: rgba(100,255,100,0.1); border-radius: 6px; cursor: pointer; margin-top: 4px; font-size: 0.9em;}
 
 /* =========================================
    4. 输入框与按钮
 ========================================= */
 .pw-input, .pw-textarea {
-    background-color: rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--SmartThemeBorderColor);
-    color: var(--smart-theme-body-color);
-    border-radius: 6px;
-    padding: 8px;
-    font-family: inherit;
-    font-size: inherit;
-    outline: none;
+    background-color: rgba(0, 0, 0, 0.2); border: 1px solid var(--SmartThemeBorderColor);
+    color: var(--smart-theme-body-color); border-radius: 6px; padding: 8px;
+    font-family: inherit; font-size: inherit; outline: none;
 }
 .pw-input:focus, .pw-textarea:focus { border-color: var(--smart-theme-input-color); background-color: rgba(0, 0, 0, 0.3); }
 .pw-textarea { resize: vertical; line-height: 1.5; }
 
 .pw-btn {
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 8px 15px; border-radius: 6px;
-    border: 1px solid var(--SmartThemeBorderColor);
-    background: var(--SmartThemeBlurTintColor);
-    color: var(--smart-theme-body-color);
-    cursor: pointer; font-weight: bold; width: auto; transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 6px 12px; border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor);
+    background: var(--SmartThemeBlurTintColor); color: var(--smart-theme-body-color);
+    cursor: pointer; font-weight: bold; width: auto; transition: all 0.2s; font-size: 0.9em;
 }
 .pw-btn:hover { filter: brightness(1.2); transform: translateY(-1px); }
 .pw-btn.gen { background: linear-gradient(135deg, rgba(224, 175, 104, 0.2), rgba(0, 0, 0, 0)); border-color: #e0af68; color: #e0af68; width: 100%; margin-top: 5px;}
@@ -169,274 +86,153 @@
 .pw-btn.danger { background: rgba(255,100,100,0.1); border-color: #ff6b6b; color: #ff6b6b; }
 
 .pw-mini-btn { 
-    font-size: 0.9em; opacity: 0.8; cursor: pointer; 
-    display: flex; align-items: center; gap: 5px; 
-    padding: 8px 12px; border-radius: 4px; border: 1px solid var(--SmartThemeBorderColor); 
+    font-size: 0.85em; opacity: 0.8; cursor: pointer; display: flex; align-items: center; gap: 4px; 
+    padding: 6px 10px; border-radius: 4px; border: 1px solid var(--SmartThemeBorderColor); 
     background: rgba(255,255,255,0.05); color: var(--smart-theme-body-color);
 }
 .pw-mini-btn:hover { background: rgba(255,255,255,0.15); opacity: 1; border-color: #e0af68; }
 
 /* =========================================
-   5. 结果区域与润色栏 (布局调整)
+   5. 结果展示区 & 润色栏
 ========================================= */
 .pw-result-textarea {
-    width: 100%;
-    min-height: 250px;
-    background: rgba(0, 0, 0, 0.15);
-    border: 1px solid var(--SmartThemeBorderColor);
-    border-radius: 6px 6px 0 0; /* 上圆角 */
-    color: var(--smart-theme-body-color);
-    padding: 12px;
-    font-family: inherit; font-size: 1.0em; line-height: 1.6;
-    resize: vertical; outline: none; white-space: pre-wrap;
-    margin-bottom: 0;
+    width: 100%; min-height: 200px; background: rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px 6px 0 0; 
+    color: var(--smart-theme-body-color); padding: 10px;
+    font-family: inherit; font-size: 0.95em; line-height: 1.5;
+    resize: vertical; outline: none; white-space: pre-wrap; margin-bottom: 0;
 }
 .pw-result-textarea:focus { background: rgba(0, 0, 0, 0.2); border-color: var(--smart-theme-input-color); }
 
 .pw-refine-toolbar {
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-    background: rgba(0,0,0,0.2);
-    padding: 10px;
-    border: 1px solid var(--SmartThemeBorderColor);
-    border-top: none; /* 紧贴上方 */
-    border-radius: 0 0 6px 6px; 
-    margin-bottom: 5px;
+    display: flex; gap: 8px; align-items: flex-start;
+    background: rgba(0,0,0,0.2); padding: 8px;
+    border: 1px solid var(--SmartThemeBorderColor); border-top: none;
+    border-radius: 0 0 6px 6px; margin-bottom: 5px;
 }
 
 .pw-refine-input {
-    flex: 1;
-    border: 1px solid transparent;
-    background: rgba(255,255,255,0.05);
-    padding: 8px;
-    font-size: 0.95em;
-    color: var(--smart-theme-body-color);
-    border-radius: 4px;
-    resize: none;
-    overflow-y: hidden;
-    min-height: 38px;
-    line-height: 1.4;
+    flex: 1; border: 1px solid transparent; background: rgba(255,255,255,0.05); padding: 6px;
+    font-size: 0.9em; color: var(--smart-theme-body-color); border-radius: 4px;
+    resize: none; overflow-y: hidden; min-height: 36px; line-height: 1.4;
 }
 .pw-refine-input:focus { outline: none; border-color: var(--smart-theme-input-color); background: rgba(0,0,0,0.3); }
 
-.pw-refine-actions {
-    display: flex;
-    gap: 5px;
-    align-items: flex-start;
-}
+.pw-refine-actions { display: flex; gap: 5px; align-items: flex-start; flex-shrink: 0; }
 
 .pw-tool-btn {
-    padding: 0 12px;
-    cursor: pointer;
-    opacity: 0.9;
-    border-radius: 4px;
-    font-size: 0.9em;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid transparent;
-    white-space: nowrap;
-    height: 38px; /* 与输入框对其 */
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    padding: 0 10px; cursor: pointer; opacity: 0.9; border-radius: 4px; font-size: 0.85em;
+    background: rgba(255,255,255,0.08); border: 1px solid transparent;
+    white-space: nowrap; height: 36px; /* 对齐输入框 */
+    display: flex; align-items: center; justify-content: center;
 }
 .pw-tool-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); border-color: #e0af68; color: #e0af68; }
 
 /* =========================================
-   6. [核心] 结构化 Diff 对比视图
+   6. [核心] 结构化 Diff (紧凑版)
 ========================================= */
 .pw-diff-container {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    background: #151515; /* 深色不透明背景，确保文字清晰 */
-    padding: 15px;
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    z-index: 100;
-    box-sizing: border-box;
-    color: #e0e0e0;
+    display: flex; flex-direction: column; gap: 10px; background: #151515;
+    padding: 10px; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 100; box-sizing: border-box; color: #e0e0e0;
 }
-
 .pw-diff-header {
-    font-size: 1.3em;
-    font-weight: bold;
-    color: #e0af68;
-    text-align: center;
-    margin-bottom: 5px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #333;
+    font-size: 1.1em; font-weight: bold; color: #e0af68; text-align: center;
+    padding-bottom: 8px; border-bottom: 1px solid #333;
 }
+.pw-diff-scroll { flex: 1; overflow-y: auto; padding-right: 5px; display: flex; flex-direction: column; gap: 8px; }
 
-.pw-diff-scroll {
-    flex: 1;
-    overflow-y: auto;
-    padding-right: 5px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-/* 每一个属性行 */
+/* 属性行 (紧凑) */
 .pw-diff-row {
-    background: #252525;
-    border: 1px solid #444;
-    border-radius: 8px;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    background: #252525; border: 1px solid #444; border-radius: 6px;
+    padding: 8px; display: flex; flex-direction: column; gap: 6px;
 }
-
 .pw-diff-attr-name {
-    font-weight: bold;
-    color: #9ece6a; /* 绿色标题 */
-    font-size: 1.1em;
-    padding-bottom: 5px;
-    border-bottom: 1px dashed #444;
+    font-weight: bold; color: #e0af68; font-size: 0.95em;
+    padding-bottom: 2px; border-bottom: 1px dashed #333;
 }
 
 /* 选项区域 */
-.pw-diff-options {
-    display: flex;
-    gap: 10px;
-}
+.pw-diff-options { display: flex; gap: 8px; }
 
 .pw-diff-opt {
-    flex: 1;
-    padding: 10px;
-    border: 2px solid #333;
-    border-radius: 6px;
-    cursor: pointer;
-    position: relative;
-    background: #1e1e1e;
-    transition: all 0.2s;
-    min-width: 0; /* 防止内容撑开 */
+    flex: 1; padding: 6px 8px; border: 1px solid #333; border-radius: 4px;
+    cursor: pointer; position: relative; background: #1e1e1e; transition: all 0.2s; min-width: 0;
 }
-
 .pw-diff-opt:hover { border-color: #666; }
 
 /* 选中状态 */
-.pw-diff-opt.selected {
-    border-color: #e0af68;
-    background: rgba(224, 175, 104, 0.1);
-}
-.pw-diff-opt.selected::after {
-    content: '✔';
-    position: absolute;
-    top: 5px; right: 8px;
-    color: #e0af68;
-    font-weight: bold;
-}
+.pw-diff-opt.selected { border-color: #e0af68; background: rgba(224, 175, 104, 0.08); }
+.pw-diff-opt.selected::after { content: '✔'; position: absolute; top: 4px; right: 6px; color: #e0af68; font-size: 0.8em; }
 
-.pw-diff-opt-label {
-    font-size: 0.8em;
-    opacity: 0.6;
-    margin-bottom: 5px;
-    display: block;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+/* 无变化状态 (合并显示) */
+.pw-diff-opt.unchanged {
+    border-color: #4caf50; background: rgba(76, 175, 80, 0.05); grid-column: span 2; width: 100%;
 }
+.pw-diff-opt.unchanged .pw-diff-opt-label { color: #4caf50; }
 
-.pw-diff-opt-text {
-    font-size: 1em;
-    line-height: 1.5;
-    word-break: break-word;
-    color: #ddd;
-}
+.pw-diff-opt-label { font-size: 0.7em; opacity: 0.5; margin-bottom: 2px; display: block; text-transform: uppercase; }
+.pw-diff-opt-text { font-size: 0.9em; line-height: 1.4; word-break: break-word; color: #ddd; }
 
 /* 差异高亮 */
-.pw-diff-opt.old .pw-diff-opt-text {
-    text-decoration: line-through;
-    opacity: 0.6;
-    color: #ff6b6b;
-}
-.pw-diff-opt.new .pw-diff-opt-text {
-    color: #9ece6a;
-}
+.pw-diff-opt.old .pw-diff-opt-text { text-decoration: line-through; opacity: 0.6; color: #ff6b6b; }
+.pw-diff-opt.new .pw-diff-opt-text { color: #9ece6a; }
 
 /* 编辑区 */
-.pw-diff-edit-area { margin-top: 5px; }
+.pw-diff-edit-area { margin-top: 2px; }
 .pw-diff-custom-input {
-    width: 100%;
-    background: #111;
-    border: 1px solid #444;
-    color: #fff;
-    padding: 10px;
-    border-radius: 4px;
-    font-size: 1em;
-    min-height: 40px;
-    font-family: inherit;
-    line-height: 1.5;
-    box-sizing: border-box;
+    width: 100%; background: #111; border: 1px solid #444; color: #bbb;
+    padding: 6px; border-radius: 4px; font-size: 0.9em; min-height: 30px;
+    font-family: inherit; line-height: 1.4; box-sizing: border-box;
 }
-.pw-diff-custom-input:focus {
-    border-color: #e0af68;
-    outline: none;
-}
+.pw-diff-custom-input:focus { border-color: #e0af68; outline: none; color: #fff; }
 
 .pw-diff-actions {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-    padding-top: 10px;
-    border-top: 1px solid #333;
-    flex-shrink: 0;
+    display: flex; justify-content: center; gap: 15px; padding-top: 10px;
+    border-top: 1px solid #333; flex-shrink: 0;
 }
 
 /* =========================================
-   7. 底部动作栏 (Footer)
+   7. 底部 Footer
 ========================================= */
 .pw-footer {
-    margin-top: auto;
-    padding-top: 15px;
-    border-top: 1px dashed var(--SmartThemeBorderColor);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-    flex-shrink: 0;
+    margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--SmartThemeBorderColor);
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; flex-shrink: 0;
 }
-
-.pw-footer-left { display: flex; gap: 10px; align-items: center; }
-.pw-footer-right { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+.pw-footer-left { display: flex; gap: 8px; align-items: center; }
+.pw-footer-right { display: flex; gap: 8px; align-items: center; margin-left: auto; }
 
 .pw-wi-check-container {
-    display: flex; align-items: center; gap: 5px; font-size: 0.9em;
-    background: rgba(0,0,0,0.1); padding: 8px 12px; border-radius: 4px;
+    display: flex; align-items: center; gap: 5px; font-size: 0.85em;
+    background: rgba(0,0,0,0.1); padding: 6px 10px; border-radius: 4px;
     border: 1px solid var(--SmartThemeBorderColor); cursor: pointer;
 }
 .pw-wi-check-container:hover { background: rgba(0,0,0,0.2); }
 
 /* =========================================
-   8. 其他视图 (世界书, 历史等)
+   8. 通用列表
 ========================================= */
-.pw-card-section { background: rgba(0, 0, 0, 0.2); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-.pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
-.pw-wi-controls { display: flex; gap: 8px; width: 100%; align-items: center; }
+.pw-wi-controls { display: flex; gap: 5px; width: 100%; align-items: center; }
 .pw-wi-select { flex-grow: 1; width: auto; min-width: 0; }
 .pw-wi-refresh-btn { flex-shrink: 0; padding: 8px; width: auto; }
+.pw-wi-book { border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; margin-bottom: 5px; overflow: hidden; }
+.pw-wi-header { padding: 8px; background: rgba(0,0,0,0.2); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.pw-wi-list { display: none; padding: 8px; border-top: 1px solid var(--SmartThemeBorderColor); }
+.pw-wi-item { background: rgba(255,255,255,0.05); padding: 6px; border-radius: 4px; margin-bottom: 4px; }
+.pw-wi-item-row { display: flex; align-items: center; gap: 6px; }
+.pw-wi-check { transform: scale(1.1); cursor: pointer; }
+.pw-wi-desc { display: none; margin-top: 5px; padding: 6px; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.85em; white-space: pre-wrap; }
+.pw-wi-close-bar { text-align: center; font-size: 0.75em; opacity: 0.6; cursor: pointer; margin-top: 4px; }
 
-.pw-wi-book { border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
-.pw-wi-header { padding: 10px; background: rgba(0,0,0,0.2); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-.pw-wi-list { display: none; padding: 10px; border-top: 1px solid var(--SmartThemeBorderColor); }
-.pw-wi-item { background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px; margin-bottom: 5px; }
-.pw-wi-item-row { display: flex; align-items: center; gap: 8px; }
-.pw-wi-check { transform: scale(1.2); cursor: pointer; }
-.pw-wi-desc { display: none; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.9em; white-space: pre-wrap; }
-.pw-wi-close-bar { text-align: center; font-size: 0.8em; opacity: 0.6; cursor: pointer; margin-top: 5px; }
-
-.pw-history-item { background: rgba(0,0,0,0.1); border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; margin-bottom: 8px; display: flex; gap: 10px; cursor: pointer; transition: background 0.2s; }
+.pw-history-item { background: rgba(0,0,0,0.1); border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 8px; margin-bottom: 6px; display: flex; gap: 8px; cursor: pointer; transition: background 0.2s; }
 .pw-history-item:hover { background: rgba(255,255,255,0.05); }
-.pw-hist-main { flex: 1; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
-.pw-hist-meta { display: flex; gap: 10px; font-size: 0.8em; opacity: 0.6; }
+.pw-hist-main { flex: 1; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+.pw-hist-meta { display: flex; gap: 8px; font-size: 0.75em; opacity: 0.6; }
 .pw-hist-desc { font-size: 0.85em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pw-hist-del-btn { display: flex; align-items: center; justify-content: center; padding: 0 10px; color: #ff6b6b; opacity: 0.6; border-left: 1px solid var(--SmartThemeBorderColor); }
+.pw-hist-del-btn { display: flex; align-items: center; justify-content: center; padding: 0 8px; color: #ff6b6b; opacity: 0.6; border-left: 1px solid var(--SmartThemeBorderColor); }
 .pw-hist-del-btn:hover { opacity: 1; background: rgba(255,0,0,0.1); }
 
-/* Persona 面板上的入口按钮 */
+/* 按钮位置 */
 #pw_persona_tool_btn {
     color: var(--smart-theme-body-color); 
     cursor: pointer; display: flex; align-items: center; justify-content: center;
@@ -445,18 +241,16 @@
 }
 #pw_persona_tool_btn:hover { opacity: 1; color: #e0af68; }
 
-/* =========================================
-   9. 移动端适配
-========================================= */
+/* 移动端适配 */
 @media screen and (max-width: 600px) {
     .pw-footer { flex-direction: column; align-items: stretch; }
     .pw-footer-left, .pw-footer-right { justify-content: space-between; }
     
-    .pw-refine-toolbar { flex-direction: column; align-items: stretch; }
+    .pw-refine-toolbar { flex-direction: column; align-items: stretch; gap: 5px; }
     .pw-refine-input { width: 100%; }
-    .pw-refine-actions { justify-content: flex-end; }
+    .pw-refine-actions { justify-content: flex-end; width: 100%; }
     .pw-tool-btn { flex: 1; justify-content: center; }
     
-    /* [关键] 移动端 Diff 视图：上下排列 */
+    /* 移动端 Diff: 上下排列 */
     .pw-diff-options { flex-direction: column; gap: 5px; }
 }
