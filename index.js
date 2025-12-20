@@ -1,10 +1,10 @@
-、import { extension_settings, getContext } from "../../../extensions.js";
+import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v20';
 const STORAGE_KEY_STATE = 'pw_state_v20'; 
-const STORAGE_KEY_TEMPLATE = 'pw_template_v1'; 
+const STORAGE_KEY_TEMPLATE = 'pw_template_v1';
 const STORAGE_KEY_PROMPTS = 'pw_prompts_v2';
 const BUTTON_ID = 'pw_persona_tool_btn';
 
@@ -109,62 +109,50 @@ let promptsCache = { initial: defaultSystemPromptInitial, refine: defaultSystemP
 let availableWorldBooks = []; 
 let isEditingTemplate = false; 
 let pollInterval = null; 
+let lastRawResponse = ""; // [需求3] 存储原始返回
 
 // ============================================================================
-// 1. 核心数据解析逻辑 (YAML 块级解析 v2 - 智能缩进检测) [需求3, 7]
+// 1. 核心数据解析逻辑 (YAML 块级解析)
 // ============================================================================
 
 function parseYamlToBlocks(text) {
     const map = new Map();
     if (!text) return map;
     
-    const lines = text.split('\n');
-    if (lines.length === 0) return map;
-
-    // 1. 检测最小缩进 (Base Indentation)
-    // 防止 AI 整体缩进导致无法识别顶层 Key
-    let baseIndent = Infinity;
-    const topLevelCandidateRegex = /^\s*([^:\s\-]+?)[：:]/;
+    // [修复] 移除可能存在的 Markdown 代码块标记，防止解析错误
+    const cleanText = text.replace(/^```[a-z]*\n?/im, '').replace(/```$/im, '').trim();
     
-    for (const line of lines) {
-        if (!line.trim()) continue; // 跳过空行
-        const match = line.match(topLevelCandidateRegex);
-        if (match) {
-            // 计算当前行的缩进空格数
-            const indent = line.search(/\S/);
-            if (indent < baseIndent) baseIndent = indent;
-        }
-    }
-    if (baseIndent === Infinity) baseIndent = 0; // 没找到任何 Key，默认为 0
-
+    const lines = cleanText.split('\n');
     let currentKey = null;
     let currentBuffer = [];
 
-    lines.forEach((line, index) => {
-        // 跳过纯空行，除非在 block 内部
-        if (!line.trim() && !currentKey) return;
+    // [修复] 更宽容的正则，允许少量前导空格，支持中文冒号
+    const topLevelKeyRegex = /^\s*([^:\s\-]+?)[ \t]*[:：]/;
 
-        const currentIndent = line.search(/\S/);
-        const match = line.match(topLevelCandidateRegex);
+    lines.forEach((line) => {
+        // 判定是否为顶级Key：行首无缩进或只有极少缩进，且匹配 Key: 模式
+        // 且不是列表项 (- 开头)
+        const isTopLevel = topLevelKeyRegex.test(line) && !line.trim().startsWith('-');
+        const indentLevel = line.search(/\S|$/); // 获取缩进级别
 
-        // 判断是否为顶层 Key: 必须匹配 Key 格式，且缩进等于最小缩进
-        if (match && currentIndent === baseIndent) {
-            // 保存之前的 block
+        // 严格模式：顶级Key缩进必须为0 (或者非常小，比如兼容性处理)
+        if (isTopLevel && indentLevel <= 1) {
+            // 保存上一个块
             if (currentKey) {
                 map.set(currentKey, currentBuffer.join('\n'));
             }
-            // 开始新的 block
+            // 开启新块
+            const match = line.match(topLevelKeyRegex);
             currentKey = match[1].trim(); 
-            currentBuffer = [line]; 
+            currentBuffer = [line];
         } else {
-            // 属于当前 block 的内容
+            // 属于当前块的内容
             if (currentKey) {
                 currentBuffer.push(line);
             }
         }
     });
 
-    // 保存最后一个 block
     if (currentKey) {
         map.set(currentKey, currentBuffer.join('\n'));
     }
@@ -232,7 +220,7 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v21';
+    const styleId = 'persona-weaver-css-v22';
     if ($(`#${styleId}`).length) return;
 }
 
@@ -379,6 +367,8 @@ async function runGeneration(data, apiConfig) {
     } else {
         responseContent = await context.generateQuietPrompt(systemPrompt, false, false, "System");
     }
+    // [需求3] 保存原始内容以便查看
+    lastRawResponse = responseContent;
     return responseContent.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
 }
 
@@ -431,13 +421,12 @@ async function openCreatorPopup() {
                     </div>
                     <!-- 模版芯片区域 -->
                     <div class="pw-tags-container" id="pw-template-chips"></div>
-                    <!-- 模版纯文本编辑区域 -->
+                    <!-- [需求4] 模版编辑器 & 快捷键 -->
                     <div class="pw-template-editor-area" id="pw-template-editor">
-                        <!-- [需求4] 快捷工具栏 -->
                         <div class="pw-template-toolbar">
-                            <div class="pw-tool-shortcut" data-insert="  ">缩进(2格)</div>
-                            <div class="pw-tool-shortcut" data-insert="- ">-</div>
-                            <div class="pw-tool-shortcut" data-insert=": ">:</div>
+                            <div class="pw-shortcut-btn" data-key="  ">下一层</div>
+                            <div class="pw-shortcut-btn" data-key=": ">冒号</div>
+                            <div class="pw-shortcut-btn" data-key="\n">回车</div>
                         </div>
                         <textarea id="pw-template-text" class="pw-template-textarea">${currentTemplate}</textarea>
                         <div style="text-align:right; padding:5px;"><button class="pw-mini-btn" id="pw-save-template">保存模版</button></div>
@@ -445,7 +434,7 @@ async function openCreatorPopup() {
                 </div>
 
                 <textarea id="pw-request" class="pw-textarea" placeholder="在此输入要求，或点击上方模版块插入结构..." style="min-height:200px;">${savedState.request || ''}</textarea>
-                <!-- [需求1] 按钮文字修正 -->
+                <!-- [需求1] 按钮改名 -->
                 <button id="pw-btn-gen" class="pw-btn gen">生成设定</button>
 
                 <div id="pw-result-area" style="display:none; margin-top:15px;">
@@ -479,6 +468,9 @@ async function openCreatorPopup() {
             <div class="pw-diff-header">润色对比 (点击选择保留项)</div>
             <div class="pw-diff-scroll" id="pw-diff-list"></div>
             <div class="pw-diff-actions">
+                <!-- [需求3] 查看原始内容 -->
+                <button class="pw-btn primary" id="pw-diff-raw" style="font-size:0.85em;">查看原始返回</button>
+                <div style="flex:1;"></div>
                 <button class="pw-btn danger" id="pw-diff-cancel">放弃修改</button>
                 <button class="pw-btn save" id="pw-diff-confirm">应用已选修改</button>
             </div>
@@ -488,6 +480,7 @@ async function openCreatorPopup() {
 
         <div id="pw-view-context" class="pw-view"><div class="pw-scroll-area"><div class="pw-card-section"><div class="pw-wi-controls"><select id="pw-wi-select" class="pw-input pw-wi-select"><option value="">-- 添加参考/目标世界书 --</option>${renderBookOptions()}</select><button id="pw-wi-refresh" class="pw-btn primary pw-wi-refresh-btn"><i class="fa-solid fa-sync"></i></button><button id="pw-wi-add" class="pw-btn primary pw-wi-add-btn"><i class="fa-solid fa-plus"></i></button></div></div><div id="pw-wi-container"></div></div></div>
         
+        <!-- [需求5] API 页面适配 -->
         <div id="pw-view-api" class="pw-view">
             <div class="pw-scroll-area">
                 <div class="pw-card-section">
@@ -495,36 +488,24 @@ async function openCreatorPopup() {
                     <div id="pw-indep-settings" style="display:${config.apiSource === 'independent' ? 'flex' : 'none'}; flex-direction:column; gap:15px;">
                         <div class="pw-row"><label>URL</label><input type="text" id="pw-api-url" class="pw-input" value="${config.indepApiUrl}" style="flex:1;" placeholder="http://.../v1"></div>
                         <div class="pw-row"><label>Key</label><input type="password" id="pw-api-key" class="pw-input" value="${config.indepApiKey}" style="flex:1;"></div>
-                        <!-- [需求5] 下拉框选择模型 -->
-                        <div class="pw-row"><label>Model</label><div style="flex:1; display:flex; gap:5px; width:100%;">
-                            <select id="pw-api-model" class="pw-input" style="flex:1;">
-                                <option value="${config.indepApiModel}">${config.indepApiModel}</option>
-                            </select>
-                            <button id="pw-api-fetch" class="pw-btn primary pw-api-fetch-btn" title="刷新模型列表" style="width:auto;"><i class="fa-solid fa-sync"></i></button>
-                        </div></div>
+                        <!-- [需求5] 模型选择下拉框 -->
+                        <div class="pw-row"><label>Model</label><div style="flex:1; display:flex; gap:5px; width:100%;"><select id="pw-api-model-select" class="pw-select" style="flex:1;"><option value="${config.indepApiModel}">${config.indepApiModel}</option></select><button id="pw-api-fetch" class="pw-btn primary pw-api-fetch-btn" title="刷新模型列表" style="width:auto;"><i class="fa-solid fa-sync"></i></button></div></div>
                         <div style="text-align:right;"><button id="pw-api-test" class="pw-btn" style="width:auto; font-size:0.9em;"><i class="fa-solid fa-plug"></i> 测试连接</button></div>
                     </div>
                 </div>
 
                 <div class="pw-card-section pw-prompt-editor-block">
-                    <!-- [需求6] 分离的重置按钮 -->
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span class="pw-prompt-label">初始生成指令</span>
-                        <button class="pw-mini-btn" id="pw-reset-prompt-initial" style="font-size:0.7em;">恢复默认</button>
-                    </div>
+                    <div style="display:flex; justify-content:space-between;"><span class="pw-prompt-label">初始生成指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-initial" style="font-size:0.7em;">恢复默认</button></div>
                     <div class="pw-var-btns">
-                        <div class="pw-var-btn" data-ins="{{user}}">User</div>
-                        <div class="pw-var-btn" data-ins="{{char}}">Char</div>
-                        <div class="pw-var-btn" data-ins="{{tags}}">模版</div>
-                        <div class="pw-var-btn" data-ins="{{input}}">要求</div>
-                        <div class="pw-var-btn" data-ins="{{wi}}">世界书</div>
+                        <div class="pw-var-btn" data-ins="{{user}}">User名</div>
+                        <div class="pw-var-btn" data-ins="{{char}}">Char名</div>
+                        <div class="pw-var-btn" data-ins="{{tags}}">模版内容</div>
+                        <div class="pw-var-btn" data-ins="{{input}}">用户要求</div>
+                        <div class="pw-var-btn" data-ins="{{wi}}">世界书内容</div>
                     </div>
                     <textarea id="pw-prompt-initial" class="pw-textarea" style="height:150px; font-size:0.85em;">${promptsCache.initial}</textarea>
                     
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-                        <span class="pw-prompt-label">润色指令</span>
-                        <button class="pw-mini-btn" id="pw-reset-prompt-refine" style="font-size:0.7em;">恢复默认</button>
-                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-top:15px;"><span class="pw-prompt-label">润色指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-refine" style="font-size:0.7em;">恢复默认</button></div>
                     <div class="pw-var-btns">
                         <div class="pw-var-btn" data-ins="{{current}}">当前文本</div>
                         <div class="pw-var-btn" data-ins="{{input}}">润色意见</div>
@@ -565,6 +546,7 @@ function bindEvents() {
         if($(this).data('tab') === 'history') renderHistoryList(); 
     });
 
+    // 模版编辑器逻辑
     $(document).on('click.pw', '#pw-toggle-edit-template', () => {
         isEditingTemplate = !isEditingTemplate;
         if(isEditingTemplate) {
@@ -578,18 +560,6 @@ function bindEvents() {
         }
     });
 
-    // [需求4] 编辑器快捷键插入
-    $(document).on('click.pw', '.pw-tool-shortcut', function() {
-        const text = $(this).data('insert');
-        const $el = $('#pw-template-text');
-        const start = $el[0].selectionStart;
-        const end = $el[0].selectionEnd;
-        const val = $el.val();
-        $el.val(val.substring(0, start) + text + val.substring(end));
-        $el[0].selectionStart = $el[0].selectionEnd = start + text.length;
-        $el.focus();
-    });
-
     $(document).on('click.pw', '#pw-save-template', () => {
         const val = $('#pw-template-text').val();
         currentTemplate = val;
@@ -600,6 +570,20 @@ function bindEvents() {
         $('#pw-template-chips').css('display', 'flex');
         $('#pw-toggle-edit-template').text("编辑模版").css('color', '#5b8db8');
         toastr.success("模版已更新");
+    });
+
+    // [需求4] 编辑器快捷键
+    $(document).on('click.pw', '.pw-shortcut-btn', function() {
+        const key = $(this).data('key');
+        const $text = $('#pw-template-text');
+        const el = $text[0];
+        const start = el.selectionStart;
+        const end = el.selectionEnd;
+        const val = el.value;
+        const insertText = key === '\n' ? '\n' : key;
+        el.value = val.substring(0, start) + insertText + val.substring(end);
+        el.selectionStart = el.selectionEnd = start + insertText.length;
+        el.focus();
     });
 
     $(document).on('click.pw', '.pw-var-btn', function() {
@@ -654,14 +638,15 @@ function bindEvents() {
                     apiSource: $('#pw-api-source').val(),
                     indepApiUrl: $('#pw-api-url').val(),
                     indepApiKey: $('#pw-api-key').val(),
-                    indepApiModel: $('#pw-api-model').val(), // 这里的 value 是 select 的值
+                    indepApiModel: $('#pw-api-model-select').val() || $('#pw-api-model').val(),
                     extraBooks: window.pwExtraBooks || []
                 }
             });
         }, 500); 
     };
-    $(document).on('input.pw change.pw', '#pw-request, #pw-result-text, #pw-wi-toggle, .pw-input', saveCurrentState);
+    $(document).on('input.pw change.pw', '#pw-request, #pw-result-text, #pw-wi-toggle, .pw-input, .pw-select', saveCurrentState);
 
+    // Diff 逻辑
     $(document).on('click.pw', '#pw-btn-refine', async function() {
         const refineReq = $('#pw-refine-input').val();
         if (!refineReq) return toastr.warning("请输入润色意见");
@@ -670,10 +655,15 @@ function bindEvents() {
 
         try {
             const wiContent = await collectActiveWorldInfoContent();
-            const config = { mode: 'refine', request: refineReq, currentText: oldText, wiContext: wiContent, apiSource: $('#pw-api-source').val(), indepApiUrl: $('#pw-api-url').val(), indepApiKey: $('#pw-api-key').val(), indepApiModel: $('#pw-api-model').val() };
+            // [需求5] 保存 Model Select 的值
+            const modelVal = $('#pw-api-source').val() === 'independent' ? $('#pw-api-model-select').val() : null;
+            const config = { 
+                mode: 'refine', request: refineReq, currentText: oldText, wiContext: wiContent, 
+                apiSource: $('#pw-api-source').val(), indepApiUrl: $('#pw-api-url').val(), 
+                indepApiKey: $('#pw-api-key').val(), indepApiModel: modelVal 
+            };
             const responseText = await runGeneration(config, config);
             
-            // 使用新版 Block Parser
             const oldMap = parseYamlToBlocks(oldText);
             const newMap = parseYamlToBlocks(responseText);
             const allKeys = [...new Set([...oldMap.keys(), ...newMap.keys()])];
@@ -705,9 +695,15 @@ function bindEvents() {
                 $list.append($row);
             });
 
-            if (changeCount === 0) toastr.info("AI 认为无需修改");
+            if (changeCount === 0 && !responseText) {
+                // [需求2] 如果返回空，提示用户查看原始返回
+                toastr.warning("AI 返回内容为空或无法解析，请点击“查看原始返回”");
+            } else if (changeCount === 0) {
+                toastr.info("AI 认为无需修改");
+            }
+            
             $('#pw-diff-overlay').fadeIn();
-            // 润色后不清空输入框，方便微调
+            $('#pw-refine-input').val('');
         } catch (e) { toastr.error(e.message); }
         finally { $btn.removeClass('fa-spinner fa-spin').addClass('fa-magic'); }
     });
@@ -730,25 +726,34 @@ function bindEvents() {
         toastr.success("修改已应用");
     });
 
+    // [需求3] 查看原始返回
+    $(document).on('click.pw', '#pw-diff-raw', () => {
+        callPopup(`<textarea style="width:100%;height:400px;background:#222;color:#ccc;border:none;">${lastRawResponse}</textarea>`, 'text', '', { wide: true });
+    });
+
     $(document).on('click.pw', '#pw-diff-cancel', () => $('#pw-diff-overlay').fadeOut());
 
     $(document).on('click.pw', '#pw-btn-gen', async function() {
         const req = $('#pw-request').val();
         if (!req) return toastr.warning("请输入要求");
         const $btn = $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        // [需求2] 重置逻辑：清空润色框和结果框
+        $('#pw-refine-input').val('');
+        $('#pw-result-text').val('');
+        
         try {
             const wiContent = await collectActiveWorldInfoContent();
-            const config = { mode: 'initial', request: req, wiContext: wiContent, apiSource: $('#pw-api-source').val(), indepApiUrl: $('#pw-api-url').val(), indepApiKey: $('#pw-api-key').val(), indepApiModel: $('#pw-api-model').val() };
+            const modelVal = $('#pw-api-source').val() === 'independent' ? $('#pw-api-model-select').val() : null;
+            const config = { 
+                mode: 'initial', request: req, wiContext: wiContent, 
+                apiSource: $('#pw-api-source').val(), indepApiUrl: $('#pw-api-url').val(), 
+                indepApiKey: $('#pw-api-key').val(), indepApiModel: modelVal 
+            };
             const text = await runGeneration(config, config);
-            
-            // [需求2] 重新生成直接覆盖结果
             $('#pw-result-text').val(text);
             $('#pw-result-area').fadeIn();
             $('#pw-request').addClass('minimized');
-            
-            // [需求2] 仅清空润色框的输入（可选），保留润色框本身显示
-            $('#pw-refine-input').val(''); 
-            
             saveCurrentState();
         } catch (e) { toastr.error(e.message); } 
         finally { $btn.prop('disabled', false).html('生成设定'); }
@@ -812,7 +817,7 @@ function bindEvents() {
 
     $(document).on('change.pw', '#pw-api-source', function() { $('#pw-indep-settings').toggle($(this).val() === 'independent'); });
     
-    // Fetch Models & Update Select
+    // [需求5] 修复 Fetch Models 并填充下拉框
     $(document).on('click.pw', '#pw-api-fetch', async function() { 
         const url = $('#pw-api-url').val().replace(/\/$/, '');
         const key = $('#pw-api-key').val();
@@ -829,12 +834,9 @@ function bindEvents() {
             if(!data) throw new Error("连接失败或无法获取模型列表");
             
             const models = (data.data || data).map(m => m.id).sort();
-            const $select = $('#pw-api-model').empty();
+            const $select = $('#pw-api-model-select').empty();
             models.forEach(m => $select.append(`<option value="${m}">${m}</option>`));
-            
-            // 自动选中第一个
-            if(models.length > 0) $select.val(models[0]).trigger('change');
-            
+            if(models.length > 0) $select.val(models[0]);
             toastr.success(`获取到 ${models.length} 个模型`);
         } catch(e) { toastr.error(e.message); }
         finally { $btn.removeClass('fa-spin'); }
@@ -843,7 +845,7 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-api-test', async function() {
         const url = $('#pw-api-url').val().replace(/\/$/, '');
         const key = $('#pw-api-key').val();
-        const model = $('#pw-api-model').val();
+        const model = $('#pw-api-model-select').val();
         const $btn = $(this).html('<i class="fas fa-spinner fa-spin"></i> 测试中...');
         try {
             const ep = url.includes('v1') ? `${url}/chat/completions` : `${url}/v1/chat/completions`;
@@ -863,19 +865,13 @@ function bindEvents() {
         saveData(); 
         toastr.success("设置与Prompt已保存"); 
     });
-
-    // [需求6] 分离的重置按钮逻辑
-    $(document).on('click.pw', '#pw-reset-prompt-initial', () => {
-        if(confirm("恢复初始生成指令为默认？")) {
-            $('#pw-prompt-initial').val(defaultSystemPromptInitial);
-            toastr.info("初始指令已恢复，请保存");
-        }
+    
+    // [需求6] 分别恢复默认
+    $(document).on('click.pw', '#pw-reset-initial', () => {
+        if(confirm("恢复初始生成Prompt？")) $('#pw-prompt-initial').val(defaultSystemPromptInitial);
     });
-    $(document).on('click.pw', '#pw-reset-prompt-refine', () => {
-        if(confirm("恢复润色指令为默认？")) {
-            $('#pw-prompt-refine').val(defaultSystemPromptRefine);
-            toastr.info("润色指令已恢复，请保存");
-        }
+    $(document).on('click.pw', '#pw-reset-refine', () => {
+        if(confirm("恢复润色Prompt？")) $('#pw-prompt-refine').val(defaultSystemPromptRefine);
     });
 
     $(document).on('click.pw', '#pw-wi-refresh', async () => {
@@ -891,7 +887,7 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-history-clear-all', function() { if(confirm("清空?")){historyCache=[];saveData();renderHistoryList();} });
 }
 
-// [需求2] 渲染模版块 Chips
+// 渲染模版块 Chips (基于 YAML)
 const renderTemplateChips = () => {
     const $container = $('#pw-template-chips').empty();
     const blocks = parseYamlToBlocks(currentTemplate);
@@ -977,11 +973,11 @@ function startPolling() {
         if (container.length > 0 && btn.length === 0) {
             addPersonaButton();
         }
-    }, 2000); 
+    }, 2000);
 }
 
 jQuery(async () => {
     injectStyles();
     addPersonaButton();
     startPolling();
-});、
+});
