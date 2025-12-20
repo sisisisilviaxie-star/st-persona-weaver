@@ -62,10 +62,12 @@
 
 /* 模版编辑区域 */
 .pw-template-editor-area { display: none; margin-bottom: 10px; }
+.pw-template-tools { display: flex; gap: 5px; margin-bottom: 5px; }
 .pw-template-textarea {
-    width: 100%; height: 200px; font-family: monospace; font-size: 0.85em;
+    width: 100%; height: 250px; font-family: monospace; font-size: 0.9em;
     background: rgba(0,0,0,0.2); border: 1px solid var(--SmartThemeBorderColor);
     color: var(--smart-theme-body-color); padding: 5px; border-radius: 4px; resize: vertical;
+    white-space: pre; overflow-x: auto;
 }
 
 /* =========================================
@@ -108,49 +110,50 @@
 .pw-mini-btn:hover { background: rgba(255,255,255,0.15); opacity: 1; border-color: #e0af68; }
 
 /* =========================================
-   5. 结果区域与润色栏 (竖向按钮)
+   5. 结果区域与润色栏 (高度优化版)
 ========================================= */
-.pw-relative-container { position: relative; }
+.pw-relative-container { position: relative; flex: 1; display: flex; flex-direction: column; }
 
 .pw-result-textarea {
-    width: 100%; min-height: 350px; background: rgba(0, 0, 0, 0.15);
+    width: 100%; flex: 1; background: rgba(0, 0, 0, 0.15);
     border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px 6px 0 0; 
     color: var(--smart-theme-body-color); padding: 12px;
     font-family: inherit; font-size: 1.0em; line-height: 1.6;
-    resize: vertical; outline: none; white-space: pre-wrap; margin-bottom: 0;
+    resize: none; outline: none; white-space: pre-wrap; margin-bottom: 0;
 }
 
+/* [需求3] 润色栏高度压缩 */
 .pw-refine-toolbar {
-    display: flex; gap: 0; align-items: stretch; /* 让高度拉伸 */
+    display: flex; gap: 0; align-items: stretch;
     background: rgba(0,0,0,0.2); 
     border: 1px solid var(--SmartThemeBorderColor); border-top: none;
     border-radius: 0 0 6px 6px; margin-bottom: 5px;
     position: relative; overflow: hidden;
+    height: 80px; /* 固定高度为以前的约 1/5 */
+    flex-shrink: 0;
 }
 
 .pw-refine-input {
     flex: 1; border: none; background: transparent; padding: 10px;
     font-size: 0.9em; color: var(--smart-theme-body-color); 
-    resize: none; min-height: 60px; /* 增加默认高度 */
-    line-height: 1.4; outline: none;
+    resize: none; height: 100%;
+    line-height: 1.4; outline: none; box-sizing: border-box;
 }
 
 .pw-refine-actions { 
-    width: 40px; border-left: 1px solid var(--SmartThemeBorderColor);
+    width: 36px; border-left: 1px solid var(--SmartThemeBorderColor);
     background: rgba(255,255,255,0.05); display: flex; flex-direction: column;
 }
 
-/* 竖向润色按钮 */
 .pw-tool-btn-vertical {
     width: 100%; height: 100%; cursor: pointer; opacity: 0.8;
     display: flex; align-items: center; justify-content: center;
-    writing-mode: vertical-lr; /* 竖排文字 */
-    letter-spacing: 4px; font-weight: bold; color: #e0af68;
+    writing-mode: vertical-lr; /* 竖排 */
+    letter-spacing: 2px; font-weight: bold; color: #e0af68; font-size: 0.9em;
     transition: all 0.2s;
 }
 .pw-tool-btn-vertical:hover { background: rgba(224, 175, 104, 0.15); opacity: 1; }
 
-/* 悬浮引用按钮 */
 .pw-float-quote-btn {
     position: fixed; top: 25%; right: 0;
     background: linear-gradient(135deg, #e0af68, #d08f40);
@@ -193,7 +196,7 @@
 .pw-diff-actions { display: flex; justify-content: center; gap: 15px; padding-top: 8px; border-top: 1px solid #333; flex-shrink: 0; }
 
 /* =========================================
-   7. 底部动作栏 (简化版)
+   7. 底部动作栏
 ========================================= */
 .pw-footer {
     margin-top: auto; padding-top: 8px; border-top: 1px solid var(--SmartThemeBorderColor);
@@ -230,7 +233,7 @@
 .pw-wi-sync-toggle.active { opacity: 1; border-color: #9ece6a; color: #9ece6a; background: rgba(158, 206, 106, 0.1); }
 
 /* =========================================
-   8. Prompt 编辑器样式 & 历史记录
+   8. Prompt 编辑器 & 历史记录 & API
 ========================================= */
 .pw-prompt-editor-block { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--SmartThemeBorderColor); }
 .pw-prompt-label { font-weight: bold; margin-bottom: 5px; display: block; color: #e0af68; }
@@ -245,10 +248,13 @@
 .pw-hist-action-btn:hover { opacity: 1; color: #5b8db8; }
 .pw-hist-action-btn.del:hover { color: #ff6b6b; }
 
-/* 其他列表样式保持不变 */
+/* API 页面适配 */
+.pw-api-select-group { display: flex; gap: 5px; flex: 1; align-items: center; width: 100%; }
+.pw-api-select { flex: 1; min-width: 0; background-color: rgba(0, 0, 0, 0.2); border: 1px solid var(--SmartThemeBorderColor); color: var(--smart-theme-body-color); border-radius: 6px; padding: 8px; }
+
+/* 其他列表样式 */
 .pw-card-section { background: rgba(0, 0, 0, 0.2); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
-/* 修复 API 页面手机适配 */
 .pw-row-wrap { flex-wrap: wrap; }
 .pw-wi-controls { display: flex; gap: 6px; width: 100%; align-items: center; }
 .pw-wi-select { flex-grow: 1; width: auto; min-width: 0; }
