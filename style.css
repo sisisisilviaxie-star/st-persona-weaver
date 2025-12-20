@@ -89,36 +89,71 @@
     font-size: 0.85em; opacity: 0.8; cursor: pointer; display: flex; align-items: center; gap: 4px; 
     padding: 6px 10px; border-radius: 4px; border: 1px solid var(--SmartThemeBorderColor); 
     background: rgba(255,255,255,0.05); color: var(--smart-theme-body-color);
+    flex-grow: 1; justify-content: center; /* 紧凑布局 */
 }
 .pw-mini-btn:hover { background: rgba(255,255,255,0.15); opacity: 1; border-color: #e0af68; }
 
 /* =========================================
-   5. 结果区域与润色栏
+   5. 结果区域与润色栏 (含展开/收起)
 ========================================= */
-.pw-relative-container { position: relative; } /* 确保悬浮按钮定位正确 */
+.pw-relative-container { position: relative; transition: all 0.3s ease; }
+
+/* 展开按钮样式 */
+.pw-expand-btn {
+    position: absolute; right: 5px; top: 5px;
+    background: rgba(0,0,0,0.5); color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px; padding: 2px 6px;
+    font-size: 0.8em; cursor: pointer; z-index: 10;
+    opacity: 0.6; transition: opacity 0.2s;
+}
+.pw-expand-btn:hover { opacity: 1; }
 
 .pw-result-textarea {
-    width: 100%; min-height: 250px; background: rgba(0, 0, 0, 0.15);
+    width: 100%; min-height: 150px; background: rgba(0, 0, 0, 0.15);
     border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px 6px 0 0; 
-    color: var(--smart-theme-body-color); padding: 12px;
+    color: var(--smart-theme-body-color); padding: 12px; padding-top: 25px; /* 给展开按钮留位置 */
     font-family: inherit; font-size: 1.0em; line-height: 1.6;
     resize: vertical; outline: none; white-space: pre-wrap; margin-bottom: 0;
+    transition: all 0.3s ease;
 }
 .pw-result-textarea:focus { background: rgba(0, 0, 0, 0.2); border-color: var(--smart-theme-input-color); }
+
+/* 结果区域展开状态 */
+.pw-result-textarea.expanded {
+    position: fixed; top: 5%; left: 5%; width: 90%; height: 80vh; 
+    z-index: 999; background: #1a1a1a; box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    border: 1px solid #e0af68; border-radius: 8px; resize: none;
+}
 
 .pw-refine-toolbar {
     display: flex; gap: 5px; align-items: flex-start;
     background: rgba(0,0,0,0.2); padding: 6px;
     border: 1px solid var(--SmartThemeBorderColor); border-top: none;
     border-radius: 0 0 6px 6px; margin-bottom: 5px;
+    position: relative;
 }
 
 .pw-refine-input {
-    flex: 1; border: 1px solid transparent; background: rgba(255,255,255,0.05); padding: 5px 8px;
+    flex: 1; border: 1px solid transparent; background: rgba(255,255,255,0.05); padding: 5px 8px; padding-right: 30px;
     font-size: 0.9em; color: var(--smart-theme-body-color); border-radius: 4px;
     resize: none; overflow-y: hidden; min-height: 32px; line-height: 1.4;
+    transition: all 0.3s ease;
 }
 .pw-refine-input:focus { outline: none; border-color: var(--smart-theme-input-color); background: rgba(0,0,0,0.3); }
+
+/* 润色框展开状态 (利用 absolute 覆盖) */
+.pw-refine-toolbar.expanded {
+    position: fixed; bottom: 0; left: 0; width: 100%; height: 50vh;
+    z-index: 1000; background: #222; padding: 10px; border-top: 2px solid #e0af68;
+    box-sizing: border-box; flex-direction: column;
+}
+.pw-refine-toolbar.expanded .pw-refine-input {
+    height: 100% !important; max-height: unset; resize: none;
+}
+.pw-refine-toolbar.expanded .pw-refine-actions {
+    width: 100%; justify-content: flex-end; margin-top: 10px;
+}
 
 .pw-refine-actions { display: flex; gap: 5px; align-items: flex-start; }
 
@@ -129,11 +164,12 @@
 }
 .pw-tool-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); border-color: #e0af68; color: #e0af68; }
 
-/* [修复] 悬浮引用按钮 - 固定在屏幕底部，防止被遮挡 */
+/* [修改] 悬浮引用按钮 - 改为右侧中上部 */
 .pw-float-quote-btn {
-    position: fixed; /* 强制固定定位 */
-    bottom: 120px; /* 避开底部键盘区域 */
+    position: fixed;
+    top: 40%; /* 垂直居中偏上 */
     right: 20px;
+    bottom: auto; /* 清除底部定位 */
     background: linear-gradient(135deg, #e0af68, #d08f40);
     color: #1a1a1a;
     padding: 10px 20px;
@@ -142,7 +178,7 @@
     font-size: 0.95em;
     box-shadow: 0 6px 16px rgba(0,0,0,0.6);
     cursor: pointer;
-    z-index: 9999; /* 确保在最顶层 */
+    z-index: 9999;
     display: none;
     align-items: center; gap: 8px;
     border: 2px solid rgba(255,255,255,0.3);
@@ -219,25 +255,61 @@
 }
 
 /* =========================================
-   7. 底部动作栏
+   7. 底部动作栏 (紧凑化设计)
 ========================================= */
 .pw-footer {
-    margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--SmartThemeBorderColor);
-    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+    margin-top: auto; padding-top: 8px; border-top: 1px solid var(--SmartThemeBorderColor);
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
     flex-shrink: 0;
 }
-.pw-footer-left { display: flex; gap: 8px; align-items: center; }
-.pw-footer-right { display: flex; gap: 8px; align-items: center; margin-left: auto; }
 
-.pw-wi-check-container {
-    display: flex; align-items: center; gap: 4px; font-size: 0.85em;
-    background: rgba(0,0,0,0.1); padding: 6px 10px; border-radius: 4px;
-    border: 1px solid var(--SmartThemeBorderColor); cursor: pointer;
+.pw-footer-group {
+    display: flex; gap: 6px; align-items: center;
+    flex: 1; /* 均分空间 */
 }
-.pw-wi-check-container:hover { background: rgba(0,0,0,0.2); }
+.pw-footer-group.right { justify-content: flex-end; flex: 1.5; } /* 右侧稍微宽一点 */
+
+/* 紧凑按钮样式 */
+.pw-compact-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 6px;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--SmartThemeBorderColor);
+    color: var(--smart-theme-body-color); cursor: pointer; transition: all 0.2s;
+    font-size: 1.1em;
+}
+.pw-compact-btn:hover { background: rgba(255,255,255,0.15); border-color: #e0af68; color: #e0af68; }
+.pw-compact-btn.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
+
+/* 勾选框样式优化 */
+.pw-wi-check-compact {
+    display: flex; align-items: center; justify-content: center;
+    height: 36px; padding: 0 10px; border-radius: 6px;
+    background: rgba(0,0,0,0.2); border: 1px solid var(--SmartThemeBorderColor);
+    cursor: pointer; font-size: 0.85em; gap: 6px; white-space: nowrap;
+}
+.pw-wi-check-compact:hover { background: rgba(255,255,255,0.05); }
+.pw-wi-check-compact input { cursor: pointer; }
+
+/* 主保存按钮保持醒目，但稍微调小 */
+.pw-btn.save.compact { 
+    margin: 0; padding: 0 15px; height: 36px; 
+    font-size: 0.9em; flex-shrink: 0; 
+}
 
 /* =========================================
-   8. 其他列表
+   8. Prompt 编辑器样式 (API Tab)
+========================================= */
+.pw-prompt-section { margin-top: 15px; border-top: 1px dashed var(--SmartThemeBorderColor); padding-top: 10px; }
+.pw-prompt-label { font-weight: bold; color: #e0af68; margin-bottom: 5px; display: block; font-size: 0.95em; }
+.pw-var-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 5px; }
+.pw-var-btn {
+    font-size: 0.8em; padding: 2px 6px; background: rgba(255,255,255,0.1); 
+    border: 1px solid var(--SmartThemeBorderColor); border-radius: 4px; cursor: pointer; opacity: 0.8;
+}
+.pw-var-btn:hover { opacity: 1; border-color: #e0af68; color: #e0af68; }
+
+/* =========================================
+   9. 其他列表
 ========================================= */
 .pw-card-section { background: rgba(0, 0, 0, 0.2); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
@@ -284,8 +356,8 @@
 #pw_persona_tool_btn:hover { opacity: 1; color: #e0af68; }
 
 @media screen and (max-width: 600px) {
-    .pw-footer { flex-direction: column; align-items: stretch; }
-    .pw-footer-left, .pw-footer-right { justify-content: space-between; }
+    .pw-footer { flex-wrap: wrap; }
+    .pw-footer-group { flex: 100%; justify-content: space-between; }
     .pw-refine-toolbar { flex-direction: column; align-items: stretch; gap: 6px; }
     .pw-refine-input { width: 100%; box-sizing: border-box; }
     .pw-refine-actions { justify-content: flex-end; width: 100%; }
