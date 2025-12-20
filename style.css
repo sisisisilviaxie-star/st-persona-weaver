@@ -36,7 +36,7 @@
 .pw-view.active { display: flex; }
 
 /* =========================================
-   3. 组件样式
+   3. 组件样式 (模版管理)
 ========================================= */
 .pw-info-display {
     display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.15);
@@ -48,14 +48,14 @@
 .pw-tags-label { font-weight: bold; opacity: 0.8; font-size: 0.85em; }
 .pw-tags-actions { display: flex; gap: 10px; align-items: center; }
 .pw-tags-edit-toggle { cursor: pointer; font-size: 0.8em; color: #5b8db8; }
-.pw-insert-template-btn { cursor: pointer; font-size: 0.8em; color: #9ece6a; }
+.pw-insert-template-btn { cursor: pointer; font-size: 0.8em; color: #9ece6a; font-weight: bold;}
 
 .pw-tags-container { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .pw-tag-chip {
     display: inline-flex; align-items: center; background: rgba(0, 0, 0, 0.2);
     border: 1px solid var(--SmartThemeBorderColor); padding: 2px 8px; border-radius: 10px;
     font-size: 0.85em; cursor: pointer; transition: all 0.2s;
-    max-width: 100%; overflow: hidden;
+    max-width: 100%; overflow: hidden; color: var(--smart-theme-body-color);
 }
 .pw-tag-chip:hover { background: rgba(255, 255, 255, 0.1); border-color: #e0af68; }
 .pw-tag-val { opacity: 0.7; font-size: 0.9em; margin-left: 2px; }
@@ -77,12 +77,11 @@
 .pw-input:focus, .pw-textarea:focus { border-color: var(--smart-theme-input-color); background-color: rgba(0, 0, 0, 0.3); }
 .pw-textarea { resize: vertical; line-height: 1.5; }
 
-/* 初始请求框：默认大一点 */
+/* 初始请求框 */
 #pw-request {
     min-height: 200px; 
     transition: min-height 0.3s ease, height 0.3s ease;
 }
-/* 生成后变小 */
 #pw-request.minimized {
     min-height: 80px;
     height: 80px !important;
@@ -108,7 +107,7 @@
 .pw-mini-btn:hover { background: rgba(255,255,255,0.15); opacity: 1; border-color: #e0af68; }
 
 /* =========================================
-   5. 结果区域与润色栏 (高度优化)
+   5. 结果区域与润色栏 (新布局)
 ========================================= */
 .pw-relative-container { position: relative; }
 
@@ -122,34 +121,46 @@
     resize: vertical; outline: none; white-space: pre-wrap; margin-bottom: 0;
 }
 
+/* [需求3] 润色栏新布局 */
 .pw-refine-toolbar {
-    display: flex; gap: 5px; align-items: flex-start;
-    background: rgba(0,0,0,0.2); padding: 8px;
+    display: flex; gap: 0; /* 紧贴 */
+    background: rgba(0,0,0,0.2); 
     border: 1px solid var(--SmartThemeBorderColor); border-top: none;
     border-radius: 0 0 6px 6px; margin-bottom: 5px;
+    padding: 0; overflow: hidden; /* 保证圆角 */
     position: relative;
+    align-items: stretch; /* 等高 */
 }
 
 .pw-refine-input {
-    flex: 1; border: 1px solid transparent; background: rgba(255,255,255,0.05); padding: 6px 8px; 
-    font-size: 0.9em; color: var(--smart-theme-body-color); border-radius: 4px;
+    flex: 1; /* 占据最大空间 */
+    border: none; background: rgba(255,255,255,0.05); padding: 10px; 
+    font-size: 0.95em; color: var(--smart-theme-body-color);
     resize: none; overflow-y: hidden; 
-    min-height: 40px; 
-    line-height: 1.4;
+    min-height: 60px; /* 加高 */
+    line-height: 1.4; border-radius: 0;
 }
-.pw-refine-input:focus { outline: none; border-color: var(--smart-theme-input-color); background: rgba(0,0,0,0.3); }
+.pw-refine-input:focus { outline: none; background: rgba(0,0,0,0.3); }
 
-.pw-refine-actions { display: flex; gap: 5px; align-items: flex-start; flex-shrink: 0; }
-
-.pw-tool-btn {
-    padding: 0 10px; cursor: pointer; opacity: 0.9; border-radius: 4px; font-size: 0.9em;
-    background: rgba(255,255,255,0.08); border: 1px solid transparent; white-space: nowrap;
-    height: 40px; display: flex; align-items: center; justify-content: center;
-    min-width: 60px;
+/* 竖向润色按钮 */
+.pw-refine-btn-vertical {
+    width: 40px; /* 窄 */
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.08); 
+    border-left: 1px solid var(--SmartThemeBorderColor);
+    cursor: pointer; opacity: 0.9;
+    writing-mode: vertical-lr; /* 竖排文字 */
+    text-orientation: upright;
+    font-weight: bold; letter-spacing: 2px;
+    color: var(--smart-theme-body-color);
+    transition: all 0.2s;
 }
-.pw-tool-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); border-color: #e0af68; color: #e0af68; }
+.pw-refine-btn-vertical:hover {
+    background: rgba(224, 175, 104, 0.2);
+    color: #e0af68; opacity: 1;
+}
 
-/* 悬浮引用按钮 - 固定在右上侧，贴边，缩小 */
+/* 悬浮引用按钮 */
 .pw-float-quote-btn {
     position: fixed; 
     top: 25%; right: 0;
@@ -262,7 +273,7 @@
 .pw-hist-action-btn:hover { opacity: 1; color: #5b8db8; }
 .pw-hist-action-btn.del:hover { color: #ff6b6b; }
 
-/* 其他列表样式保持不变 */
+/* 其他列表样式 */
 .pw-card-section { background: rgba(0, 0, 0, 0.2); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
 .pw-wi-controls { display: flex; gap: 6px; width: 100%; align-items: center; }
@@ -294,9 +305,5 @@
 
 @media screen and (max-width: 600px) {
     .pw-footer { flex-wrap: wrap; }
-    .pw-refine-toolbar { flex-direction: column; align-items: stretch; gap: 6px; }
-    .pw-refine-input { width: 100%; box-sizing: border-box; padding-right: 30px; }
-    .pw-refine-actions { justify-content: flex-end; width: 100%; }
-    .pw-tool-btn { flex: 1; justify-content: center; }
     .pw-diff-options { flex-direction: column; gap: 5px; }
 }
