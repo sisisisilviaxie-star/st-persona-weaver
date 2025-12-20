@@ -5,7 +5,7 @@ const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v20';
 const STORAGE_KEY_STATE = 'pw_state_v20'; 
 const STORAGE_KEY_TAGS = 'pw_tags_v12';
-const STORAGE_KEY_PROMPTS = 'pw_prompts_v1'; // 新增 Prompts 存储
+const STORAGE_KEY_PROMPTS = 'pw_prompts_v1';
 const BUTTON_ID = 'pw_persona_tool_btn';
 
 const defaultTags = [
@@ -15,7 +15,6 @@ const defaultTags = [
     { name: "秘密", value: "" }
 ];
 
-// 默认 Prompt，强制 Key: Value 格式
 const defaultSystemPromptInitial = 
 `Creating User Persona for {{user}} (Target: {{char}}).
 {{wi}}
@@ -46,8 +45,9 @@ const TEXT = {
     PANEL_TITLE: "用户设定编织者 Pro",
     BTN_TITLE: "打开设定生成器",
     TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已保存并覆盖！`,
-    TOAST_WI_SUCCESS: (book) => `已写入角色绑定的世界书: ${book}`,
-    TOAST_WI_FAIL: "当前角色未绑定世界书，无法同步保存条目",
+    TOAST_WI_SUCCESS: (book) => `已实时更新世界书: ${book}`,
+    TOAST_WI_FAIL: "当前角色未绑定世界书，无法同步",
+    TOAST_WI_ERROR: "TavernHelper API 未加载，无法写入世界书",
     TOAST_SNAPSHOT: "已存入历史记录"
 };
 
@@ -56,9 +56,10 @@ let tagsCache = [];
 let promptsCache = { initial: defaultSystemPromptInitial, refine: defaultSystemPromptRefine };
 let availableWorldBooks = []; 
 let isEditingTags = false; 
+let observer = null; // 全局 Observer 引用，用于防卡死
 
 // ============================================================================
-// 1. 核心数据解析逻辑 (Key-Value 强力清洗)
+// 1. 核心数据解析逻辑
 // ============================================================================
 
 function parseTextToMap(text) {
@@ -66,33 +67,22 @@ function parseTextToMap(text) {
     if (!text) return map;
     const lines = text.split('\n');
     
-    // 构建 Tags 白名单 (可选，如果只想抓 Tag 列表里的)
-    const allowedKeys = tagsCache.map(t => t.name.toLowerCase());
-    
     lines.forEach((line, index) => {
-        // 1. 忽略空行
         if (!line.trim()) return;
-
-        // 2. 必须包含冒号，否则视为杂项丢弃 (除非是极个别情况，暂不处理)
         const idx = line.indexOf(':');
         if (idx === -1) return;
 
-        // 3. 清洗 Key: 去除 [], *, - 等符号
         let rawKey = line.substring(0, idx).trim();
         let cleanKey = rawKey.replace(/[\[\]\*\-\(\)]/g, '').trim(); 
-        
-        // 4. 获取 Value
         let val = line.substring(idx + 1).trim();
 
         if (cleanKey && val) {
-            // 这里可以做白名单校验，但为了灵活性，保留所有看起来像 Key: Value 的行
             map.set(cleanKey, val);
         }
     });
     return map;
 }
 
-// 模糊匹配 Key 的辅助函数
 function findMatchingKey(targetKey, map) {
     if (map.has(targetKey)) return targetKey;
     for (const key of map.keys()) {
@@ -154,7 +144,6 @@ function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_
 function injectStyles() {
     const styleId = 'persona-weaver-css-v20';
     if ($(`#${styleId}`).length) return;
-    // CSS 已在 style.css 中定义，此处仅保留逻辑入口
 }
 
 async function forceSavePersona(name, description) {
@@ -173,6 +162,79 @@ async function forceSavePersona(name, description) {
 
     await saveSettingsDebounced();
     return true;
+}
+
+// [新] 使用 TavernHelper 同步世界书
+async function syncToWorldInfoViaHelper(userName, content) {
+    if (!window.TavernHelper) {
+        toastr.error(TEXT.TOAST_WI_ERROR);
+        return;
+    }
+
+    // 1. 确定目标世界书 (角色绑定的主世界书)
+    let targetBook = null;
+    try {
+        // TavernHelper 提供的 API 获取当前角色绑定的书
+        const charBooks = window.TavernHelper.getCharWorldbookNames('current');
+        if (charBooks && charBooks.primary) {
+            targetBook = charBooks.primary;
+        } else if (charBooks && charBooks.additional && charBooks.additional.length > 0) {
+            targetBook = charBooks.additional[0]; // 降级：如果没有主书，用第一本附加书
+        }
+    } catch (e) { console.warn("[PW] Failed to get char books via helper", e); }
+
+    // 再次尝试通过旧方法获取上下文书
+    if (!targetBook) {
+        const boundBooks = await getContextWorldBooks();
+        if (boundBooks.length > 0) targetBook = boundBooks[0];
+    }
+
+    if (!targetBook) {
+        toastr.warning(TEXT.TOAST_WI_FAIL);
+        return;
+    }
+
+    try {
+        // 2. 获取条目
+        const entries = await window.TavernHelper.getLorebookEntries(targetBook);
+        
+        // 3. 查找是否已存在该条目 (通过 Comment 标识)
+        // 标识符： "User: <UserName>"
+        const entryComment = `User: ${userName}`;
+        const existingEntry = entries.find(e => e.comment === entryComment);
+
+        if (existingEntry) {
+            // === 更新逻辑 ===
+            if (existingEntry.content !== content) {
+                await window.TavernHelper.setLorebookEntries(targetBook, [{
+                    uid: existingEntry.uid,
+                    content: content,
+                    enabled: true // 确保它是启用的
+                }]);
+                console.log(`[PW] Updated entry ${existingEntry.uid} in ${targetBook}`);
+            }
+        } else {
+            // === 创建逻辑 ===
+            const newEntry = {
+                comment: entryComment,
+                keys: [userName, "User"],
+                content: content,
+                enabled: true,
+                selective: true, // 绿灯
+                constant: false,
+                position: {
+                    type: 'before_character_definition' // 默认插入位置
+                }
+            };
+            await window.TavernHelper.createLorebookEntries(targetBook, [newEntry]);
+            console.log(`[PW] Created new entry in ${targetBook}`);
+        }
+        
+        toastr.success(TEXT.TOAST_WI_SUCCESS(targetBook));
+    } catch (e) {
+        console.error("[PW] TavernHelper Sync Error:", e);
+        toastr.error("同步世界书时发生错误，请查看控制台");
+    }
 }
 
 async function loadAvailableWorldBooks() {
@@ -207,9 +269,22 @@ async function getContextWorldBooks(extras = []) {
     return Array.from(books).filter(Boolean);
 }
 
-// 保持 World Info Loading 不变
+// 保持 World Info Loading (读取用于Prompt上下文) 不变
 async function getWorldBookEntries(bookName) {
     let entriesData = null;
+    if (window.TavernHelper && typeof window.TavernHelper.getLorebookEntries === 'function') {
+        try {
+             const entries = await window.TavernHelper.getLorebookEntries(bookName);
+             return entries.map(e => ({
+                uid: e.uid,
+                displayName: e.comment || (Array.isArray(e.keys) ? e.keys.join(', ') : e.keys) || "无标题",
+                content: e.content || "",
+                enabled: e.enabled
+             }));
+        } catch(e) {}
+    }
+
+    // 降级方案
     if (window.SillyTavern && typeof window.SillyTavern.loadWorldInfo === 'function') {
         try {
             const data = await window.SillyTavern.loadWorldInfo(bookName);
@@ -250,7 +325,6 @@ async function runGeneration(data, apiConfig) {
 
     const tagsList = tagsCache.map(t => t.name).join(', ');
     
-    // 使用用户自定义 Prompt 或默认 Prompt，并替换变量
     let systemTemplate = data.mode === 'refine' ? promptsCache.refine : promptsCache.initial;
     
     let systemPrompt = systemTemplate
@@ -326,12 +400,10 @@ async function openCreatorPopup() {
                 <div id="pw-result-area" style="display:none; margin-top:15px;">
                     <div class="pw-relative-container">
                         <textarea id="pw-result-text" class="pw-result-textarea" placeholder="生成的结果将显示在这里..."></textarea>
-                        <div class="pw-expand-btn" data-target="pw-result-text" title="展开/收起"><i class="fa-solid fa-expand"></i></div>
                     </div>
                     
                     <div class="pw-refine-toolbar">
                         <textarea id="pw-refine-input" class="pw-refine-input" placeholder="输入润色意见..."></textarea>
-                        <div class="pw-expand-btn" data-target="pw-refine-input" title="展开/收起" style="position:absolute; right:70px; top:5px;"><i class="fa-solid fa-expand"></i></div>
                         <div class="pw-refine-actions">
                             <div class="pw-tool-btn" id="pw-btn-refine" title="执行润色"><i class="fa-solid fa-magic"></i> 润色</div>
                         </div>
@@ -339,7 +411,6 @@ async function openCreatorPopup() {
                 </div>
             </div>
 
-            <!-- 简化后的 Footer -->
             <div class="pw-footer">
                 <div class="pw-footer-group">
                     <div class="pw-compact-btn danger" id="pw-clear" title="清空"><i class="fa-solid fa-eraser"></i></div>
@@ -361,7 +432,6 @@ async function openCreatorPopup() {
             </div>
         </div>
 
-        <!-- 悬浮引用按钮 (固定屏幕右侧) -->
         <div id="pw-float-quote-btn" class="pw-float-quote-btn"><i class="fa-solid fa-pen-to-square"></i> 修改此段</div>
 
         <div id="pw-view-context" class="pw-view"><div class="pw-scroll-area"><div class="pw-card-section"><div class="pw-wi-controls"><select id="pw-wi-select" class="pw-input pw-wi-select"><option value="">-- 添加参考/目标世界书 --</option>${renderBookOptions()}</select><button id="pw-wi-refresh" class="pw-btn primary pw-wi-refresh-btn"><i class="fa-solid fa-sync"></i></button><button id="pw-wi-add" class="pw-btn primary pw-wi-add-btn"><i class="fa-solid fa-plus"></i></button></div></div><div id="pw-wi-container"></div></div></div>
@@ -377,7 +447,6 @@ async function openCreatorPopup() {
                     </div>
                 </div>
 
-                <!-- Prompt 编辑器 -->
                 <div class="pw-card-section pw-prompt-editor-block">
                     <div style="display:flex; justify-content:space-between;"><span class="pw-prompt-label">初始生成指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-prompts" style="font-size:0.7em;">恢复默认</button></div>
                     <div class="pw-var-btns">
@@ -420,13 +489,12 @@ async function openCreatorPopup() {
 }
 
 // ============================================================================
-// 4. 事件绑定
+// 4. 事件绑定 (防卡死优化)
 // ============================================================================
 
 function bindEvents() {
     $(document).off('.pw');
     const adjustHeight = (el) => { 
-        if($(el).closest('.pw-expand-wrapper').length) return; // 展开模式下不自动调整
         el.style.height = 'auto'; 
         el.style.height = (el.scrollHeight) + 'px'; 
     };
@@ -440,37 +508,9 @@ function bindEvents() {
         if($(this).data('tab') === 'history') renderHistoryList(); 
     });
 
-    // 展开/收起 逻辑
-    $(document).on('click.pw', '.pw-expand-btn', function() {
-        const targetId = $(this).data('target');
-        const $target = $(`#${targetId}`);
-        const $icon = $(this).find('i');
-        
-        if ($target.parent().hasClass('pw-expand-wrapper')) {
-            // 收起
-            $target.unwrap();
-            $icon.removeClass('fa-compress').addClass('fa-expand');
-            // 恢复定位
-            if (targetId === 'pw-refine-input') {
-                $(this).css({ position: 'absolute', right: '70px', top: '5px' }).appendTo('.pw-refine-toolbar');
-                $target.prependTo('.pw-refine-toolbar'); // 确保顺序
-            } else {
-                $(this).appendTo('.pw-relative-container');
-            }
-        } else {
-            // 展开
-            $target.wrap('<div class="pw-expand-wrapper"></div>');
-            $icon.removeClass('fa-expand').addClass('fa-compress');
-            // 移动按钮到 wrapper
-            $(this).appendTo($target.parent()).css({ position: 'absolute', right: '5px', top: '5px' });
-            $target.focus();
-        }
-    });
-
-    // Prompt 变量插入
     $(document).on('click.pw', '.pw-var-btn', function() {
         const ins = $(this).data('ins');
-        const $activeText = $(this).parent().next('textarea'); // 假设按钮下方就是对应的 Textarea
+        const $activeText = $(this).parent().next('textarea'); 
         if ($activeText.length) {
             const el = $activeText[0];
             const start = el.selectionStart;
@@ -482,7 +522,6 @@ function bindEvents() {
         }
     });
 
-    // 悬浮引用逻辑 (修正位置)
     const checkSelection = () => {
         const el = document.getElementById('pw-result-text');
         if (!el) return;
@@ -509,20 +548,25 @@ function bindEvents() {
         }
     });
 
+    // 防抖保存，减少卡顿
+    let saveTimeout;
     const saveCurrentState = () => {
-        saveState({
-            request: $('#pw-request').val(),
-            resultText: $('#pw-result-text').val(),
-            hasResult: $('#pw-result-area').is(':visible'),
-            wiSyncChecked: $('#pw-wi-sync-btn').hasClass('active'),
-            localConfig: {
-                apiSource: $('#pw-api-source').val(),
-                indepApiUrl: $('#pw-api-url').val(),
-                indepApiKey: $('#pw-api-key').val(),
-                indepApiModel: $('#pw-api-model').val(),
-                extraBooks: window.pwExtraBooks || []
-            }
-        });
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            saveState({
+                request: $('#pw-request').val(),
+                resultText: $('#pw-result-text').val(),
+                hasResult: $('#pw-result-area').is(':visible'),
+                wiSyncChecked: $('#pw-wi-sync-btn').hasClass('active'),
+                localConfig: {
+                    apiSource: $('#pw-api-source').val(),
+                    indepApiUrl: $('#pw-api-url').val(),
+                    indepApiKey: $('#pw-api-key').val(),
+                    indepApiModel: $('#pw-api-model').val(),
+                    extraBooks: window.pwExtraBooks || []
+                }
+            });
+        }, 500); // 500ms 防抖
     };
     $(document).on('input.pw change.pw', '#pw-request, #pw-result-text, #pw-wi-toggle, .pw-input', saveCurrentState);
 
@@ -538,7 +582,6 @@ function bindEvents() {
             const config = { mode: 'refine', request: refineReq, currentText: oldText, wiContext: wiContent, apiSource: $('#pw-api-source').val(), indepApiUrl: $('#pw-api-url').val(), indepApiKey: $('#pw-api-key').val(), indepApiModel: $('#pw-api-model').val() };
             const responseText = await runGeneration(config, config);
             
-            // 使用新版清洗 Parser
             const oldMap = parseTextToMap(oldText);
             const newMap = parseTextToMap(responseText);
             const allKeys = [...new Set([...oldMap.keys(), ...newMap.keys()])];
@@ -549,7 +592,6 @@ function bindEvents() {
             allKeys.forEach(key => {
                 const matchedKeyInOld = findMatchingKey(key, oldMap) || key;
                 const matchedKeyInNew = findMatchingKey(key, newMap) || key;
-
                 const valOld = oldMap.get(matchedKeyInOld) || "";
                 const valNew = newMap.get(matchedKeyInNew) || "";
                 
@@ -567,7 +609,6 @@ function bindEvents() {
                             <div class="pw-diff-opt new selected diff-active" data-val="${valNew}"><span class="pw-diff-opt-label">新版本</span><div class="pw-diff-opt-text">${valNew || "(删除)"}</div></div>
                         </div>`;
                 }
-
                 const $row = $(`<div class="pw-diff-row" data-key="${key}"><div class="pw-diff-attr-name">${key}</div>${optionsHtml}<div class="pw-diff-edit-area"><textarea class="pw-diff-custom-input" placeholder="可微调...">${valNew}</textarea></div></div>`);
                 $list.append($row);
             });
@@ -615,12 +656,12 @@ function bindEvents() {
         finally { $btn.prop('disabled', false).html('生成设定'); }
     });
 
-    // Sync Toggle
     $(document).on('click.pw', '#pw-wi-sync-btn', function() {
         $(this).toggleClass('active');
         saveCurrentState();
     });
 
+    // 关键保存逻辑
     $(document).on('click.pw', '#pw-btn-apply', async function() {
         const content = $('#pw-result-text').val();
         if (!content) return toastr.warning("内容为空");
@@ -630,25 +671,8 @@ function bindEvents() {
         toastr.success(TEXT.TOAST_SAVE_SUCCESS(name));
 
         if ($('#pw-wi-sync-btn').hasClass('active')) {
-            const boundBooks = await getContextWorldBooks();
-            let targetBook = boundBooks[0]; 
-            if (targetBook) {
-                try {
-                    const h = getRequestHeaders();
-                    const r = await fetch('/api/worldinfo/get', { method: 'POST', headers: h, body: JSON.stringify({ name: targetBook }) });
-                    if (r.ok) {
-                        const d = await r.json();
-                        if (!d.entries) d.entries = {};
-                        const entryName = `User: ${name}`;
-                        let targetId = Object.keys(d.entries).find(uid => d.entries[uid].comment === entryName) || 
-                                       (Object.keys(d.entries).length ? Math.max(...Object.keys(d.entries).map(Number)) + 1 : 0);
-                        d.entries[targetId] = { uid: Number(targetId), key: [name, "User"], content: content, comment: entryName, enabled: true, selective: true };
-                        await fetch('/api/worldinfo/edit', { method: 'POST', headers: h, body: JSON.stringify({ name: targetBook, data: d }) });
-                        if (window.SillyTavern && window.SillyTavern.loadWorldInfo) { await window.SillyTavern.loadWorldInfo(targetBook); }
-                        toastr.success(TEXT.TOAST_WI_SUCCESS(targetBook));
-                    }
-                } catch(e) { console.error("WI Error:", e); }
-            } else { toastr.warning(TEXT.TOAST_WI_FAIL); }
+            // [Fix] 使用新 TavernHelper 逻辑
+            await syncToWorldInfoViaHelper(name, content);
         }
         $('.popup_close').click();
     });
@@ -678,7 +702,6 @@ function bindEvents() {
     $(document).on('change.pw', '#pw-api-source', function() { $('#pw-indep-settings').toggle($(this).val() === 'independent'); });
     $(document).on('click.pw', '#pw-api-fetch', async function() { /* same */ });
     
-    // Save Prompts & API
     $(document).on('click.pw', '#pw-api-save', () => { 
         promptsCache.initial = $('#pw-prompt-initial').val();
         promptsCache.refine = $('#pw-prompt-refine').val();
@@ -706,7 +729,7 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-history-clear-all', function() { if(confirm("清空?")){historyCache=[];saveData();renderHistoryList();} });
 }
 
-// ... 辅助渲染函数 (Tags, History, WiBooks) 保持基本不变 ...
+// ... 辅助渲染函数 (Tags, History, WiBooks) 保持不变 ...
 const renderTagsList = () => {
     const $container = $('#pw-tags-list').empty();
     const $toggleBtn = $('#pw-toggle-edit-tags');
@@ -783,9 +806,25 @@ function addPersonaButton() {
     container.prepend(newButton);
 }
 
+// [优化] 防卡死 Observer
+function initObserver() {
+    if (observer) observer.disconnect();
+    
+    observer = new MutationObserver(() => { 
+        if ($(`#${BUTTON_ID}`).length === 0 && $('.persona_controls_buttons_block').length > 0) {
+            // 只有当按钮真的不存在时才添加
+            addPersonaButton();
+        }
+    });
+
+    // 尽量减少监听范围
+    const target = document.querySelector('.persona_controls_buttons_block') || document.body;
+    observer.observe(target, { childList: true, subtree: true });
+}
+
 jQuery(async () => {
     injectStyles();
     addPersonaButton();
-    const observer = new MutationObserver(() => { if ($(`#${BUTTON_ID}`).length === 0 && $('.persona_controls_buttons_block').length > 0) addPersonaButton(); });
-    observer.observe(document.body, { childList: true, subtree: true });
+    // 延迟初始化 Observer，防止页面加载时的冲突
+    setTimeout(initObserver, 2000);
 });
