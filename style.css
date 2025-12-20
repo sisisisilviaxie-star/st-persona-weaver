@@ -121,15 +121,14 @@
     resize: vertical; outline: none; white-space: pre-wrap; margin-bottom: 0;
 }
 
-/* [需求3] 润色栏新布局 */
 .pw-refine-toolbar {
     display: flex; gap: 0; /* 紧贴 */
     background: rgba(0,0,0,0.2); 
     border: 1px solid var(--SmartThemeBorderColor); border-top: none;
     border-radius: 0 0 6px 6px; margin-bottom: 5px;
-    padding: 0; overflow: hidden; /* 保证圆角 */
+    padding: 0; overflow: hidden; 
     position: relative;
-    align-items: stretch; /* 等高 */
+    align-items: stretch; 
 }
 
 .pw-refine-input {
@@ -303,7 +302,15 @@
 }
 #pw_persona_tool_btn:hover { opacity: 1; color: #e0af68; }
 
+/* [需求4] 移动端 API 页面适配 */
 @media screen and (max-width: 600px) {
     .pw-footer { flex-wrap: wrap; }
     .pw-diff-options { flex-direction: column; gap: 5px; }
+    
+    /* API 页面移动端适配 */
+    .pw-row { flex-direction: column; align-items: stretch; gap: 5px; margin-bottom: 10px; }
+    .pw-row label { margin-bottom: 2px; opacity: 0.8; }
+    .pw-row input, .pw-row select { width: 100%; box-sizing: border-box; }
+    #pw-indep-settings { gap: 10px; }
+    #pw-api-fetch { width: 100% !important; margin-top: 5px; }
 }
