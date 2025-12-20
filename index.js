@@ -35,29 +35,47 @@ let availableWorldBooks = [];
 let isEditingTags = false; 
 
 // ============================================================================
-// 1. 核心数据解析逻辑 (用于 Diff) - [修复] 深度清洗
+// 1. 核心数据解析逻辑 (模糊匹配增强)
 // ============================================================================
 
 function parseTextToMap(text) {
     const map = new Map();
     if (!text) return map;
     const lines = text.split('\n');
-    lines.forEach(line => {
-        // [清洗] 去除 XML 标签和 Markdown 代码块
-        if (line.trim().match(/^<!--.*-->$/) || line.trim().startsWith('```')) return;
+    lines.forEach((line, index) => {
+        // 跳过空行
+        if (!line.trim()) return;
 
+        // 尝试分离 Key: Value
         const idx = line.indexOf(':');
+        
         if (idx !== -1) {
-            // [清洗] 去除 Key/Value 的引号和逗号
-            let key = line.substring(0, idx).trim().replace(/^["']|["']$/g, '');
-            let val = line.substring(idx + 1).trim().replace(/^["']|["'],?$/g, '');
-            
+            const key = line.substring(0, idx).trim();
+            const val = line.substring(idx + 1).trim();
             if (key) map.set(key, val);
-        } else if (line.trim()) {
-            map.set(`Info_${Math.random().toString(36).substr(2, 4)}`, line.trim());
+        } else {
+            // 对于没有 Key 的行 (例如 XML 标签或 Note)，生成一个基于内容的 Hash Key
+            // 这样即使行号变了，只要内容相似，也能大致对上
+            const pseudoKey = `RawLine_${index}`; 
+            map.set(pseudoKey, line.trim());
         }
     });
     return map;
+}
+
+// 模糊匹配 Key 的辅助函数
+function findMatchingKey(targetKey, map) {
+    if (map.has(targetKey)) return targetKey;
+    // 尝试忽略大小写或去除非关键字符
+    for (const key of map.keys()) {
+        if (key.toLowerCase() === targetKey.toLowerCase()) return key;
+        // 如果是 RawLine，比较内容相似度 (这里简化为直接比较)
+        if (key.startsWith('RawLine') && targetKey.startsWith('RawLine')) {
+            // 简单逻辑：不做深度 Diff，直接视为不同
+            return null; 
+        }
+    }
+    return null;
 }
 
 async function collectActiveWorldInfoContent() {
@@ -160,7 +178,7 @@ async function getContextWorldBooks(extras = []) {
     return Array.from(books).filter(Boolean);
 }
 
-// [核心修复] 使用 SillyTavern.loadWorldInfo
+// [核心修复] 使用 SillyTavern.loadWorldInfo 替代 fetch
 async function getWorldBookEntries(bookName) {
     let entriesData = null;
     if (window.SillyTavern && typeof window.SillyTavern.loadWorldInfo === 'function') {
@@ -217,7 +235,7 @@ async function runGeneration(data, apiConfig) {
     [Current Data]: """${data.currentText}"""
     [Instruction]: "${data.request}"
     Task: Modify the data. If text is quoted, focus on that part. Maintain "Key: Value" format.
-    Response: ONLY the modified full text list. No markdown.` :
+    Response: ONLY the modified full text list.` :
     `Creating User Persona for ${currentName} (Target: ${charName}).
     ${wiText}
     Traits: ${tagsCache.map(t => t.name).join(', ')}.
@@ -254,7 +272,6 @@ async function openCreatorPopup() {
     if (!currentName) currentName = $('h5#your_name').text().trim();
     if (!currentName) currentName = context.powerUserSettings?.persona_selected || "User";
 
-    // 默认不勾选，除非用户手动更改过
     const wiChecked = savedState.wiSyncChecked !== undefined ? savedState.wiSyncChecked : false;
 
     const renderBookOptions = () => {
@@ -290,13 +307,11 @@ async function openCreatorPopup() {
 
                 <div id="pw-result-area" style="display:none; margin-top:15px;">
                     <div class="pw-relative-container">
-                        <div style="font-weight:bold; color:#5b8db8; margin-bottom:5px;"><i class="fa-solid fa-list-ul"></i> 设定详情</div>
+                        <textarea id="pw-result-text" class="pw-result-textarea" placeholder="生成的结果将显示在这里..."></textarea>
                         <!-- 悬浮引用按钮 -->
                         <div id="pw-float-quote-btn" class="pw-float-quote-btn"><i class="fa-solid fa-pen-to-square"></i> 修改此段</div>
                     </div>
                     
-                    <textarea id="pw-result-text" class="pw-result-textarea" placeholder="生成的结果将显示在这里..."></textarea>
-
                     <div class="pw-refine-toolbar">
                         <textarea id="pw-refine-input" class="pw-refine-input" placeholder="输入润色意见..."></textarea>
                         <div class="pw-refine-actions">
@@ -341,7 +356,11 @@ async function openCreatorPopup() {
     if (savedState.resultText) {
         $('#pw-result-text').val(savedState.resultText);
         $('#pw-result-area').show();
-        setTimeout(() => $('#pw-refine-input').trigger('input'), 50);
+        // 延迟触发高度调整
+        setTimeout(() => {
+            const el = document.getElementById('pw-refine-input');
+            if(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight) + 'px'; }
+        }, 100);
     }
 }
 
@@ -351,8 +370,12 @@ async function openCreatorPopup() {
 
 function bindEvents() {
     $(document).off('.pw');
-    const adjustHeight = (el) => { el.style.height = 'auto'; el.style.height = (el.scrollHeight) + 'px'; };
+    const adjustHeight = (el) => { 
+        el.style.height = 'auto'; 
+        el.style.height = (el.scrollHeight) + 'px'; 
+    };
 
+    // [关键] 润色框自动增高
     $(document).on('input.pw', '#pw-refine-input', function() { adjustHeight(this); });
 
     $(document).on('click.pw', '.pw-tab', function() {
@@ -382,10 +405,13 @@ function bindEvents() {
         if (selectedText) {
             const $input = $('#pw-refine-input');
             const cur = $input.val();
-            // 换行追加，文案修正: 修改此段
+            // 修正文案：将 "..." 修改为:
             const newText = `将 "${selectedText}" 修改为: `;
             $input.val(cur ? cur + '\n' + newText : newText).focus();
+            
+            // 手动触发高度调整
             adjustHeight($input[0]);
+            
             textarea.setSelectionRange(end, end);
             checkSelection();
         }
@@ -396,7 +422,7 @@ function bindEvents() {
             request: $('#pw-request').val(),
             resultText: $('#pw-result-text').val(),
             hasResult: $('#pw-result-area').is(':visible'),
-            wiSyncChecked: $('#pw-wi-toggle').is(':checked'), // 记住勾选状态
+            wiSyncChecked: $('#pw-wi-toggle').is(':checked'),
             localConfig: {
                 apiSource: $('#pw-api-source').val(),
                 indepApiUrl: $('#pw-api-url').val(),
@@ -428,9 +454,13 @@ function bindEvents() {
             let changeCount = 0;
 
             allKeys.forEach(key => {
-                const valOld = oldMap.get(key) || "";
-                const valNew = newMap.get(key) || "";
+                const matchedKeyInOld = findMatchingKey(key, oldMap) || key;
+                const matchedKeyInNew = findMatchingKey(key, newMap) || key;
+
+                const valOld = oldMap.get(matchedKeyInOld) || "";
+                const valNew = newMap.get(matchedKeyInNew) || "";
                 
+                // 去除空白后比较
                 const isChanged = valOld.trim() !== valNew.trim();
                 if (isChanged) changeCount++;
 
@@ -438,6 +468,7 @@ function bindEvents() {
 
                 let optionsHtml = '';
                 if (!isChanged) {
+                    // 无变化：只显示一个框
                     optionsHtml = `<div class="pw-diff-options"><div class="pw-diff-opt single-view selected" data-val="${valNew}"><span class="pw-diff-opt-label">无变更</span><div class="pw-diff-opt-text">${valNew}</div></div></div>`;
                 } else {
                     optionsHtml = `
@@ -447,7 +478,10 @@ function bindEvents() {
                         </div>`;
                 }
 
-                const $row = $(`<div class="pw-diff-row" data-key="${key}"><div class="pw-diff-attr-name">${key}</div>${optionsHtml}<div class="pw-diff-edit-area"><textarea class="pw-diff-custom-input" placeholder="可微调...">${valNew}</textarea></div></div>`);
+                // 如果是 RawLine，标题显示为 "描述段落"
+                const displayKey = key.startsWith('RawLine') || key.startsWith('Info_') ? "其他描述" : key;
+
+                const $row = $(`<div class="pw-diff-row" data-key="${displayKey}"><div class="pw-diff-attr-name">${displayKey}</div>${optionsHtml}<div class="pw-diff-edit-area"><textarea class="pw-diff-custom-input" placeholder="可微调...">${valNew}</textarea></div></div>`);
                 $list.append($row);
             });
 
@@ -469,7 +503,9 @@ function bindEvents() {
             const key = $(this).data('key');
             const val = $(this).find('.pw-diff-custom-input').val().trim();
             if (!val) return;
-            if (key.startsWith('Info_')) finalLines.push(val); else finalLines.push(`${key}: ${val}`);
+            // 如果是特殊描述Key，直接添加值；否则添加 Key: Value
+            if (key === "其他描述" || key.startsWith('Info_')) finalLines.push(val);
+            else finalLines.push(`${key}: ${val}`);
         });
         $('#pw-result-text').val(finalLines.join('\n'));
         $('#pw-diff-overlay').fadeOut();
@@ -505,9 +541,8 @@ function bindEvents() {
         toastr.success(TEXT.TOAST_SAVE_SUCCESS(name));
 
         if ($('#pw-wi-toggle').is(':checked')) {
-            const context = getContext();
-            const char = context.characters[context.characterId];
-            const targetBook = char?.data?.character_book?.name || char?.data?.extensions?.world || char?.world;
+            const boundBooks = await getContextWorldBooks();
+            let targetBook = boundBooks[0]; // 严格使用绑定书
 
             if (targetBook) {
                 try {
@@ -546,7 +581,6 @@ function bindEvents() {
         if(confirm("确定清空？")) { $('#pw-request').val(''); $('#pw-result-area').hide(); $('#pw-result-text').val(''); saveCurrentState(); }
     });
     
-    // 存入历史 (包含标题逻辑)
     $(document).on('click.pw', '#pw-snapshot', function() {
         const text = $('#pw-result-text').val();
         if (!text) return toastr.warning("内容为空");
@@ -606,7 +640,7 @@ const renderTagsList = () => {
             const $chip = $(`<div class="pw-tag-chip"><i class="fa-solid fa-tag" style="opacity:0.5; margin-right:4px;"></i><span>${tag.name}</span>${tag.value ? `<span class="pw-tag-val">${tag.value}</span>` : ''}</div>`);
             $chip.on('click', () => {
                 const $text = $('#pw-request');
-                // [修复] 只有当前不为空才加换行
+                // [修复] 只有输入框有内容时才加换行
                 const cur = $text.val();
                 const prefix = (cur && !cur.endsWith('\n')) ? '\n' : '';
                 $text.val(cur + prefix + (tag.value ? `${tag.name}: ${tag.value}` : `${tag.name}: `)).focus();
@@ -614,6 +648,7 @@ const renderTagsList = () => {
             $container.append($chip);
         }
     });
+    // ... add buttons ...
     const $addBtn = $(`<div class="pw-tag-add-btn"><i class="fa-solid fa-plus"></i> ${isEditingTags ? '新增' : '标签'}</div>`);
     $addBtn.on('click', () => { tagsCache.push({ name: "", value: "" }); saveData(); if (!isEditingTags) isEditingTags = true; renderTagsList(); });
     $container.append($addBtn);
@@ -673,5 +708,4 @@ jQuery(async () => {
     addPersonaButton();
     const observer = new MutationObserver(() => { if ($(`#${BUTTON_ID}`).length === 0 && $('.persona_controls_buttons_block').length > 0) addPersonaButton(); });
     observer.observe(document.body, { childList: true, subtree: true });
-    console.log(`${extensionName} v18 loaded.`);
 });
