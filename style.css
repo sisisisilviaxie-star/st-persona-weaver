@@ -93,45 +93,19 @@
 .pw-mini-btn:hover { background: rgba(255,255,255,0.15); opacity: 1; border-color: #e0af68; }
 
 /* =========================================
-   5. [核心] 结果区域与悬浮按钮
+   5. 结果区域与润色栏
 ========================================= */
-/* 相对定位容器，用于放置文本框和悬浮按钮 */
-.pw-relative-container {
-    position: relative;
-    width: 100%;
-}
+.pw-relative-container { position: relative; } /* 确保悬浮按钮定位正确 */
 
 .pw-result-textarea {
     width: 100%; min-height: 250px; background: rgba(0, 0, 0, 0.15);
     border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px 6px 0 0; 
-    color: var(--smart-theme-body-color); padding: 12px; padding-bottom: 40px; /* 底部留白给按钮 */
+    color: var(--smart-theme-body-color); padding: 12px;
     font-family: inherit; font-size: 1.0em; line-height: 1.6;
     resize: vertical; outline: none; white-space: pre-wrap; margin-bottom: 0;
 }
 .pw-result-textarea:focus { background: rgba(0, 0, 0, 0.2); border-color: var(--smart-theme-input-color); }
 
-/* [修复] 悬浮引用按钮 - 位于文本框内右下角 */
-.pw-float-quote-btn {
-    position: absolute;
-    bottom: 15px; right: 15px;
-    background: linear-gradient(135deg, #e0af68, #d08f40);
-    color: #1a1a1a;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-weight: bold;
-    font-size: 0.85em;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-    cursor: pointer;
-    z-index: 50;
-    display: none; /* 默认隐藏 */
-    align-items: center; gap: 5px;
-    border: 1px solid rgba(255,255,255,0.3);
-    backdrop-filter: blur(2px);
-    transition: transform 0.1s;
-}
-.pw-float-quote-btn:active { transform: scale(0.95); }
-
-/* 润色栏 */
 .pw-refine-toolbar {
     display: flex; gap: 5px; align-items: flex-start;
     background: rgba(0,0,0,0.2); padding: 6px;
@@ -154,6 +128,28 @@
     height: 32px; display: flex; align-items: center; justify-content: center;
 }
 .pw-tool-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); border-color: #e0af68; color: #e0af68; }
+
+/* [修复] 悬浮引用按钮 - 固定在屏幕底部，防止被遮挡 */
+.pw-float-quote-btn {
+    position: fixed; /* 强制固定定位 */
+    bottom: 120px; /* 避开底部键盘区域 */
+    right: 20px;
+    background: linear-gradient(135deg, #e0af68, #d08f40);
+    color: #1a1a1a;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-weight: bold;
+    font-size: 0.95em;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.6);
+    cursor: pointer;
+    z-index: 9999; /* 确保在最顶层 */
+    display: none;
+    align-items: center; gap: 8px;
+    border: 2px solid rgba(255,255,255,0.3);
+    backdrop-filter: blur(5px);
+    transition: transform 0.1s;
+}
+.pw-float-quote-btn:active { transform: scale(0.95); }
 
 /* =========================================
    6. 结构化 Diff 对比视图
@@ -195,7 +191,6 @@
 }
 .pw-diff-opt:hover { border-color: #555; }
 
-/* 单视图模式 (无变化) */
 .pw-diff-opt.single-view { cursor: default; opacity: 0.7; border-style: dotted; background: #222; }
 .pw-diff-opt.single-view:hover { border-color: #333; }
 
