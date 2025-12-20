@@ -164,22 +164,21 @@
 .pw-refine-btn-vertical:hover { background: rgba(224, 175, 104, 0.1); opacity: 1; }
 .pw-refine-btn-text { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 2px; }
 
-/* [修复] 悬浮按钮固定定位，极高层级，防止被遮挡或随流移动 */
+/* [修复] 悬浮引用按钮：确保 Z-Index 极高 */
 .pw-float-quote-btn {
     position: fixed; 
-    top: 20%; right: 0;
+    top: 25%; right: 0;
     background: linear-gradient(135deg, #e0af68, #d08f40);
     color: #1a1a1a;
     padding: 8px 12px; 
     border-radius: 20px 0 0 20px; 
     font-weight: bold; font-size: 0.85em; 
-    box-shadow: -2px 2px 8px rgba(0,0,0,0.6);
+    box-shadow: -2px 2px 8px rgba(0,0,0,0.4);
     cursor: pointer; 
     z-index: 2147483647; /* Max Z-Index */
     display: none; align-items: center; gap: 4px;
     border: 1px solid rgba(255,255,255,0.3); border-right: none;
     backdrop-filter: blur(5px);
-    will-change: transform;
 }
 .pw-float-quote-btn:hover { padding-right: 18px; transform: translateX(-2px); }
 
