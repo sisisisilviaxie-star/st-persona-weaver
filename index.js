@@ -82,7 +82,8 @@ const defaultSettings = {
 };
 
 const TEXT = {
-    PANEL_TITLE_HTML: `<i class="fa-solid fa-wand-magic-sparkles" style="color:#e0af68; margin-right: 8px;"></i>User人设生成器`,
+    // 【UI 1】换回金色魔法棒图标
+    PANEL_TITLE: `<i class="fa-solid fa-wand-magic-sparkles" style="color:#e0af68; margin-right:8px;"></i>User人设生成器`,
     BTN_TITLE: "打开设定生成器",
     TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已保存并覆盖！`,
     TOAST_WI_SUCCESS: (book) => `已写入世界书: ${book}`,
@@ -101,85 +102,107 @@ let pollInterval = null;
 let lastRawResponse = "";
 
 // ============================================================================
-// 1. 核心数据解析逻辑 (【V3.9 强力解包 + 递归】)
+// 1. 核心数据解析逻辑 (【重要修复】智能去壳 + KeyValue分离)
 // ============================================================================
 
 function parseYamlToBlocks(text) {
-    // 内部函数：仅执行单层解析
-    function parseLayer(txt) {
-        const map = new Map();
-        if (!txt) return map;
+    const map = new Map();
+    if (!text) return map;
 
-        const cleanText = txt.replace(/^```[a-z]*\n?/im, '').replace(/```$/im, '').trim();
-        let lines = cleanText.split('\n');
-        const topLevelKeyRegex = /^\s*([^:\s\-]+?)[ \t]*[:：]/;
+    // 清理 markdown 代码块标记
+    const cleanText = text.replace(/^```[a-z]*\n?/im, '').replace(/```$/im, '').trim();
+    let lines = cleanText.split('\n');
 
-        let currentKey = null;
-        let currentBuffer = [];
-
-        const flushBuffer = () => {
-            if (currentKey && currentBuffer.length > 0) {
-                let valuePart = "";
-                const firstLine = currentBuffer[0];
-                const match = firstLine.match(topLevelKeyRegex);
-                
-                if (match) {
-                    let inlineContent = firstLine.substring(match[0].length).trim();
-                    let blockContent = currentBuffer.slice(1).join('\n');
-                    
-                    if (inlineContent && blockContent) {
-                        valuePart = inlineContent + '\n' + blockContent;
-                    } else if (inlineContent) {
-                        valuePart = inlineContent;
-                    } else {
-                        valuePart = blockContent;
-                    }
-                } else {
-                    valuePart = currentBuffer.join('\n');
-                }
-                map.set(currentKey, valuePart);
-            }
-        };
-
-        lines.forEach((line) => {
-            // 允许 0~1 缩进容错
-            const isTopLevel = topLevelKeyRegex.test(line) && !line.trim().startsWith('-') && line.search(/\S|$/) <= 1;
+    // 【关键修复逻辑】智能检测并剥离根节点 (Root Key Unwrap)
+    // 如果存在像 "Name:\n  Age: 20" 这样的结构，剥离 "Name:" 并反缩进
+    if (lines.length > 1) {
+        const firstLine = lines[0];
+        // 匹配 "Key:" 结尾
+        if (firstLine.trim().match(/^[^:\s\-]+.*[:：]\s*$/)) {
+            const firstIndent = firstLine.search(/\S|$/);
             
-            if (isTopLevel) {
-                flushBuffer();
-                const match = line.match(topLevelKeyRegex);
-                currentKey = match[1].trim();
-                currentBuffer = [line];
-            } else {
-                if (currentKey) {
-                    currentBuffer.push(line);
+            // 找到后面第一个非空行，检查缩进
+            const secondLineIndex = lines.findIndex((l, i) => i > 0 && l.trim().length > 0);
+            if (secondLineIndex > 0) {
+                const secondLine = lines[secondLineIndex];
+                const secondIndent = secondLine.search(/\S|$/);
+
+                // 如果内容的缩进比第一行深，说明是被包裹的
+                if (secondIndent > firstIndent) {
+                    // 移除第一行
+                    lines.shift();
+                    // 重新计算剩余部分，去除缩进
+                    // 注意：只移除多余的缩进量 (indentDiff)
+                    const indentDiff = secondIndent; // 通常我们会把第二行作为基准0缩进
+                    lines = lines.map(l => {
+                        // 如果该行缩进大于等于基准，剪掉基准长度；否则保持原样（可能是空行）
+                        const currentIndent = l.search(/\S|$/);
+                        if (currentIndent >= indentDiff) {
+                            return l.substring(indentDiff);
+                        } else if (l.trim().length === 0) {
+                            return "";
+                        }
+                        return l.trimStart(); // 兜底
+                    });
                 }
-            }
-        });
-        flushBuffer();
-        return map;
-    }
-
-    // 执行第一层解析
-    let result = parseLayer(text);
-
-    // 【智能递归解包】
-    // 如果结果只有一个 Key，且 Value 很长（包含换行），说明可能被包裹了
-    // 比如： UserPersona:\n  Name: Bob...
-    if (result.size === 1) {
-        const onlyValue = result.values().next().value;
-        if (onlyValue && onlyValue.includes('\n')) {
-            // 尝试解析 Value 内部
-            const innerResult = parseLayer(onlyValue);
-            // 如果内部解析出了多个 Key，或者解析出的 Key 与外层不同，说明解包成功
-            if (innerResult.size > 0) {
-                console.log("[PW] Auto-unwrapped root key.");
-                return innerResult;
             }
         }
     }
 
-    return result;
+    // 宽松匹配 Key：允许 Key 中间有空格（如 "NSFW Content:"），只要不以 '-' 开头
+    const topLevelKeyRegex = /^\s*([^:\-].*?)[ \t]*[:：]/; 
+    
+    let currentKey = null;
+    let currentBuffer = [];
+
+    const flushBuffer = () => {
+        if (currentKey && currentBuffer.length > 0) {
+            let valuePart = "";
+            const firstLine = currentBuffer[0];
+            const match = firstLine.match(topLevelKeyRegex);
+            
+            if (match) {
+                // 1. 提取行内 Value (例如 "Age: 22" -> "22")
+                // 使用 match[0].length 确保切掉整个 "Key: " 部分
+                let inlineContent = firstLine.substring(match[0].length).trim();
+                
+                // 2. 提取块级 Value (后续行)
+                let blockContent = currentBuffer.slice(1).join('\n');
+                
+                if (inlineContent && blockContent) {
+                    valuePart = inlineContent + '\n' + blockContent;
+                } else if (inlineContent) {
+                    valuePart = inlineContent;
+                } else {
+                    valuePart = blockContent; // 保留原有的相对缩进
+                }
+            } else {
+                valuePart = currentBuffer.join('\n');
+            }
+            // 存入 Map
+            map.set(currentKey, valuePart);
+        }
+    };
+
+    lines.forEach((line) => {
+        // 判定是否为顶级 Key：正则匹配且缩进为0 (允许少量容错)
+        const indentLevel = line.search(/\S|$/);
+        const isTopLevel = indentLevel <= 1 && topLevelKeyRegex.test(line) && !line.trim().startsWith('-');
+
+        if (isTopLevel) {
+            flushBuffer(); // 结算上一个块
+            const match = line.match(topLevelKeyRegex);
+            currentKey = match[1].trim(); // 提取 Key 名称
+            currentBuffer = [line];
+        } else {
+            if (currentKey) {
+                currentBuffer.push(line);
+            }
+        }
+    });
+
+    flushBuffer(); // 结算最后一个块
+    return map;
 }
 
 function findMatchingKey(targetKey, map) {
@@ -188,15 +211,6 @@ function findMatchingKey(targetKey, map) {
         if (key.toLowerCase() === targetKey.toLowerCase()) return key;
     }
     return null;
-}
-
-// 【V3.9 新增】强力内容归一化，用于比较是否真正修改
-function normalizeContentForDiff(str) {
-    if (!str) return "";
-    return str
-        .replace(/\r\n/g, '\n') // 统一换行
-        .replace(/\s+/g, ' ')   // 压缩所有空白字符（包括换行、缩进）为一个空格
-        .trim();
 }
 
 async function collectActiveWorldInfoContent() {
@@ -256,7 +270,7 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v39';
+    const styleId = 'persona-weaver-css-v38';
     if ($(`#${styleId}`).length) return;
     
     const css = `
@@ -356,13 +370,6 @@ function injectStyles() {
     }
     .pw-diff-card:not(.selected) .pw-diff-textarea { color: #888; pointer-events: none; }
     
-    /* 无变更样式 */
-    .pw-diff-no-change {
-        text-align: center; color: #888; padding: 10px; 
-        border: 1px dashed #444; border-radius: 6px; font-size: 0.9em;
-        background: rgba(255,255,255,0.02);
-    }
-
     @media screen and (max-width: 600px) {
         .pw-diff-cards { flex-direction: column; }
     }
@@ -617,7 +624,7 @@ async function openCreatorPopup() {
     const html = `
 <div class="pw-wrapper">
     <div class="pw-header">
-        <div class="pw-top-bar"><div class="pw-title">${TEXT.PANEL_TITLE_HTML}</div></div>
+        <div class="pw-top-bar"><div class="pw-title">${TEXT.PANEL_TITLE}</div></div>
         <div class="pw-tabs">
             <div class="pw-tab active" data-tab="editor">编辑</div>
             <div class="pw-tab" data-tab="context">世界书</div>
@@ -967,17 +974,15 @@ function bindEvents() {
                 const valOld = oldMap.get(matchedKeyInOld) || "";
                 const valNew = newMap.get(matchedKeyInNew) || "";
 
-                // 【V3.9 强力对比逻辑】忽略空白字符差异
-                const isChanged = normalizeContentForDiff(valOld) !== normalizeContentForDiff(valNew);
+                // 【优化】忽略换行符差异
+                const isChanged = valOld.replace(/\r\n/g, '\n').trim() !== valNew.replace(/\r\n/g, '\n').trim();
                 
                 if (isChanged) changeCount++;
                 if (!valOld && !valNew) return;
 
-                let optionsHtml = '';
-                if (!isChanged) {
-                    optionsHtml = `<div class="pw-diff-no-change">无变更</div>`;
-                } else {
-                    optionsHtml = `
+                const rowHtml = `
+                <div class="pw-diff-row" data-key="${key}">
+                    <div class="pw-diff-attr-name">${key}</div>
                     <div class="pw-diff-cards">
                         <div class="pw-diff-card old" data-val="${encodeURIComponent(valOld)}">
                             <div class="pw-diff-label">原版本</div>
@@ -987,13 +992,7 @@ function bindEvents() {
                             <div class="pw-diff-label">新版本</div>
                             <textarea class="pw-diff-textarea">${valNew || "(删除)"}</textarea>
                         </div>
-                    </div>`;
-                }
-                
-                const rowHtml = `
-                <div class="pw-diff-row" data-key="${key}">
-                    <div class="pw-diff-attr-name">${key}</div>
-                    ${optionsHtml}
+                    </div>
                 </div>`;
                 $list.append(rowHtml);
             });
@@ -1025,6 +1024,7 @@ function bindEvents() {
         if (isNew) $(this).find('.pw-diff-textarea').prop('readonly', false).focus();
     });
 
+    // 【重要修复】重组 Key 和 Value时加上冒号
     $(document).on('click.pw', '#pw-diff-confirm', function () {
         const activeTab = $('.pw-diff-tab.active').data('view');
         if (activeTab === 'raw') {
@@ -1034,79 +1034,15 @@ function bindEvents() {
             let finalLines = [];
             $('.pw-diff-row').each(function () {
                 const key = $(this).data('key');
-                // 如果是“无变更”行，直接取原值（由于没有 card 结构，需要特殊处理，但这里我们假设只要有 row 就有 key，如果无变更我们通常不展示或者不需要选）
-                // 修正：对于无变更行，我们通常不需要做选择，保持原样即可？
-                // 这里的逻辑是：遍历所有 row。如果是无变更 row，我们实际上应该拿到旧值。
-                // 但上面的 HTML 结构里，无变更行没有 textarea。
-                // 简单起见，我们重新解析 oldText 获取无变更的值？
-                // 或者更简单：在无变更的 HTML 里也藏一个 data-val。
-                
-                // 【V3.9 修复】无变更行需要保留原值
-                const $noChange = $(this).find('.pw-diff-no-change');
-                let val = "";
-                
-                if ($noChange.length > 0) {
-                    // 重新从 oldText 解析（或者在生成 HTML 时存下来）
-                    // 为了简化，我们在生成 HTML 时把旧值存在 row 的 data 上
-                    // 这里我们采用最稳妥的方式：如果 UI 上没有 card，我们就认为这个 Key 的值没有变，
-                    // 但是因为我们没有地方存这个值，所以最好的办法是：
-                    // 在生成“无变更”HTML时，也生成一个隐藏的 textarea 存值。
-                    // 实际上，parseYamlToBlocks 的逻辑决定了我们是在重组。
-                    // 如果我们无法获取值，这个 Key 就会丢失。
-                    
-                    // 紧急修正：无变更时，我们应该默认保留 Old 值。
-                    // 但由于 V3.9 的 parseYamlToBlocks 是局部的，我们无法直接获取。
-                    // 方案：让无变更行也显示一个不可选的 Card，或者隐藏的 Card。
-                    // 回滚方案：无变更行依然渲染 Card，但是样式上置灰且不可点击？
-                    // 不，用户说“变灰”。
-                    // 让我们修改上面的 render 逻辑：无变更也渲染 Cards，但是默认选中 Old，且 Old/New 内容一致。
-                    
-                    const $selectedCard = $(this).find('.pw-diff-card.selected');
-                    if ($selectedCard.length > 0) {
-                        val = $selectedCard.find('.pw-diff-textarea').val().trimEnd();
-                    } else {
-                        // Fallback for no-change UI if implemented differently
-                        // 这里我们依赖上面的代码：即使无变更，也渲染了 Cards (optionsHtml if !isChanged)
-                        // 刚才的代码是 if (!isChanged) { optionsHtml = ...no-change... }
-                        // 这会导致无法获取值。
-                        // 【修正】：无变更时，依然渲染 Cards，只是样式不同，或者让它们看起来一样。
-                        // 为了数据完整性，我们必须渲染 Cards。
-                        // 所以我将上面的 if (!isChanged) 逻辑回退为渲染 Cards，只是不标记高亮/差异。
-                    }
-                } else {
-                    const $selected = $(this).find('.pw-diff-card.selected');
-                    if ($selected.length) val = $selected.find('.pw-diff-textarea').val().trimEnd();
-                }
-
-                // 修正后的逻辑：无变更时，上面的 loop 会跳过 append，或者我们强制让它走 Card 渲染
-                // 在 V3.9 代码中，我把 !isChanged 改为了渲染“无变更”DIV。
-                // 这会导致数据丢失。我必须改回渲染 Card，但在 Card 上加标记。
-            });
-            
-            // 【V3.9.1 修正】重新实现 loop，确保无变更也能保存
-            finalLines = [];
-            const oldMap = parseYamlToBlocks($('#pw-result-text').val());
-            // 我们需要遍历所有 Keys (Diff 列表里的)
-            $('.pw-diff-row').each(function () {
-                const key = $(this).data('key');
-                let val = "";
-                
-                const $selected = $(this).find('.pw-diff-card.selected');
-                if ($selected.length > 0) {
-                    val = $selected.find('.pw-diff-textarea').val().trimEnd();
-                } else {
-                    // 如果是无变更行（没有 selected card），从 oldMap 取值
-                    // 但 oldMap 是基于 parseYamlToBlocks 的，可能不准。
-                    // 最好的办法：无变更行也渲染 Card，只是视觉上它是灰的/锁定的。
-                    // 所以我在下面的代码里，把 if(!isChanged) 的分支去掉了，统一渲染 Card。
-                }
+                const val = $(this).find('.pw-diff-card.selected .pw-diff-textarea').val().trimEnd();
                 
                 if (val && val !== "(删除)" && val !== "(无)") {
-                    if (val.includes('\n') || val.startsWith('  ')) {
-                        finalLines.push(`${key}:\n${val}`);
-                    } else {
-                        finalLines.push(`${key}: ${val.trim()}`);
-                    }
+                    // 【重组】如果 Value 是块级，则 Key:\n Value；否则 Key: Value
+                    const separator = (val.includes('\n') || val.startsWith('  ')) ? '\n' : ' ';
+                    
+                    // 确保 Key 本身不带冒号（解析时已去，但保险起见）
+                    let cleanKey = key.replace(/[:：]\s*$/, '');
+                    finalLines.push(`${cleanKey}:${separator}${val}`);
                 }
             });
             $('#pw-result-text').val(finalLines.join('\n\n'));
@@ -1287,6 +1223,144 @@ function bindEvents() {
     $(document).on('input.pw', '#pw-history-search', renderHistoryList);
     $(document).on('click.pw', '#pw-history-search-clear', function () { $('#pw-history-search').val('').trigger('input'); });
     $(document).on('click.pw', '#pw-history-clear-all', function () { if (confirm("清空?")) { historyCache = []; saveData(); renderHistoryList(); } });
+}
+
+// ... 辅助渲染函数 ...
+const renderTemplateChips = () => {
+    const $container = $('#pw-template-chips').empty();
+    const blocks = parseYamlToBlocks(currentTemplate);
+    blocks.forEach((content, key) => {
+        const $chip = $(`<div class="pw-tag-chip"><i class="fa-solid fa-cube" style="opacity:0.5; margin-right:4px;"></i><span>${key}</span></div>`);
+        $chip.on('click', () => {
+            const $text = $('#pw-request');
+            const cur = $text.val();
+            const prefix = (cur && !cur.endsWith('\n') && cur.length > 0) ? '\n\n' : '';
+            
+            // 修复点击模版块内容为空的问题：Key+冒号+内容
+            let insertText = key + ":";
+            if (content && content.trim()) {
+                if (content.includes('\n') || content.startsWith(' ')) {
+                    insertText += "\n" + content;
+                } else {
+                    insertText += " " + content;
+                }
+            } else {
+                insertText += " ";
+            }
+
+            $text.val(cur + prefix + insertText).focus();
+            $text.scrollTop($text[0].scrollHeight);
+        });
+        $container.append($chip);
+    });
+};
+
+const renderHistoryList = () => {
+    loadData();
+    const $list = $('#pw-history-list').empty();
+    const search = $('#pw-history-search').val().toLowerCase();
+    const filtered = historyCache.filter(item => {
+        if (!search) return true;
+        const content = (item.data.resultText || "").toLowerCase();
+        const title = (item.title || "").toLowerCase();
+        return title.includes(search) || content.includes(search);
+    });
+    if (filtered.length === 0) { $list.html('<div style="text-align:center; opacity:0.6; padding:20px;">暂无草稿</div>'); return; }
+
+    filtered.forEach((item, index) => {
+        const previewText = item.data.resultText || '无内容';
+        const displayTitle = item.title || "未命名";
+
+        const $el = $(`
+        <div class="pw-history-item">
+            <div class="pw-hist-main">
+                <div class="pw-hist-header">
+                    <span class="pw-hist-title-display">${displayTitle}</span>
+                    <input type="text" class="pw-hist-title-input" value="${displayTitle}" style="display:none;">
+                    <div style="display:flex; gap:5px;">
+                        <i class="fa-solid fa-pen pw-hist-action-btn edit" title="编辑标题"></i>
+                        <i class="fa-solid fa-trash pw-hist-action-btn del" data-index="${index}" title="删除"></i>
+                    </div>
+                </div>
+                <div class="pw-hist-meta"><span>${item.timestamp || ''}</span></div>
+                <div class="pw-hist-desc">${previewText}</div>
+            </div>
+        </div>
+    `);
+        $el.on('click', function (e) {
+            if ($(e.target).closest('.pw-hist-action-btn, .pw-hist-title-input').length) return;
+            $('#pw-request').val(item.request); $('#pw-result-text').val(previewText); $('#pw-result-area').show();
+            $('#pw-request').addClass('minimized');
+            $('.pw-tab[data-tab="editor"]').click();
+        });
+        $el.find('.pw-hist-action-btn.del').on('click', function (e) {
+            e.stopPropagation();
+            if (confirm("删除?")) {
+                historyCache.splice(historyCache.indexOf(item), 1);
+                saveData(); renderHistoryList();
+            }
+        });
+        $list.append($el);
+    });
+};
+
+window.pwExtraBooks = [];
+const renderWiBooks = async () => {
+    const container = $('#pw-wi-container').empty();
+    const baseBooks = await getContextWorldBooks();
+    const allBooks = [...new Set([...baseBooks, ...(window.pwExtraBooks || [])])];
+    if (allBooks.length === 0) { container.html('<div style="opacity:0.6; padding:10px; text-align:center;">此角色未绑定世界书，请在“世界书”标签页手动添加或在酒馆主界面绑定。</div>'); return; }
+    for (const book of allBooks) {
+        const isBound = baseBooks.includes(book);
+        const $el = $(`<div class="pw-wi-book"><div class="pw-wi-header"><span><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span style="color:#9ece6a;font-size:0.8em;margin-left:5px;">(已绑定)</span>' : ''}</span><div>${!isBound ? '<i class="fa-solid fa-times remove-book" style="color:#ff6b6b;margin-right:10px;" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div></div><div class="pw-wi-list" data-book="${book}"></div></div>`);
+        $el.find('.remove-book').on('click', (e) => { e.stopPropagation(); window.pwExtraBooks = window.pwExtraBooks.filter(b => b !== book); renderWiBooks(); });
+        $el.find('.pw-wi-header').on('click', async function () {
+            const $list = $el.find('.pw-wi-list');
+            const $arrow = $(this).find('.arrow');
+            if ($list.is(':visible')) { $list.slideUp(); $arrow.removeClass('fa-flip-vertical'); }
+            else {
+                $list.slideDown(); $arrow.addClass('fa-flip-vertical');
+                if (!$list.data('loaded')) {
+                    $list.html('<div style="padding:10px;text-align:center;"><i class="fas fa-spinner fa-spin"></i></div>');
+                    const entries = await getWorldBookEntries(book);
+                    $list.empty();
+                    if (entries.length === 0) $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
+                    entries.forEach(entry => {
+                        const isChecked = entry.enabled ? 'checked' : '';
+                        const $item = $(`<div class="pw-wi-item"><div class="pw-wi-item-row"><input type="checkbox" class="pw-wi-check" ${isChecked} data-content="${encodeURIComponent(entry.content)}"><div style="font-weight:bold; font-size:0.9em; flex:1;">${entry.displayName}</div><i class="fa-solid fa-eye pw-wi-toggle-icon"></i></div><div class="pw-wi-desc">${entry.content}<div class="pw-wi-close-bar"><i class="fa-solid fa-angle-up"></i> 收起</div></div></div>`);
+                        $item.find('.pw-wi-toggle-icon').on('click', function (e) {
+                            e.stopPropagation();
+                            const $desc = $(this).closest('.pw-wi-item').find('.pw-wi-desc');
+                            if ($desc.is(':visible')) { $desc.slideUp(); $(this).css('color', ''); } else { $desc.slideDown(); $(this).css('color', '#5b8db8'); }
+                        });
+                        $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').css('color', ''); });
+                        $list.append($item);
+                    });
+                    $list.data('loaded', true);
+                }
+            }
+        });
+        container.append($el);
+    }
+};
+
+function addPersonaButton() {
+    const container = $('.persona_controls_buttons_block');
+    if (container.length === 0 || $(`#${BUTTON_ID}`).length > 0) return;
+    const newButton = $(`<div id="${BUTTON_ID}" class="menu_button fa-solid fa-wand-magic-sparkles interactable" title="${TEXT.BTN_TITLE}" tabindex="0" role="button"></div>`);
+    newButton.on('click', openCreatorPopup);
+    container.prepend(newButton);
+}
+
+function startPolling() {
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(() => {
+        const container = $('.persona_controls_buttons_block');
+        const btn = $(`#${BUTTON_ID}`);
+        if (container.length > 0 && btn.length === 0) {
+            addPersonaButton();
+        }
+    }, 2000);
 }
 
 jQuery(async () => {
