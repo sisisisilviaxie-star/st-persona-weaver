@@ -1,5 +1,5 @@
-import { extension_settings, getContext } from "../../../extensions.js";
-import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../../script.js";
+import { extension_settings, getContext } from "../../extensions.js";
+import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../script.js";
 
 const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v20';
@@ -201,7 +201,6 @@ function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_
 function injectStyles() {
     const styleId = 'persona-weaver-css-v23';
     if ($(`#${styleId}`).length) return;
-    // 这里假设样式通过 link 标签引入，或者在 html 中，如果需要动态注入 CSS 可以在这里补充
 }
 
 async function forceSavePersona(name, description) {
@@ -316,6 +315,7 @@ async function getWorldBookEntries(bookName) {
 }
 
 async function runGeneration(data, apiConfig) {
+    console.log("[PW] runGeneration started", data);
     const context = getContext();
     const charId = context.characterId;
     const charName = (charId !== undefined) ? context.characters[charId].name : "None";
@@ -345,9 +345,12 @@ async function runGeneration(data, apiConfig) {
         const json = await res.json();
         responseContent = json.choices[0].message.content;
     } else {
-        responseContent = await context.generateQuietPrompt(systemPrompt, false, false, "System");
+        // 修复：补全 generateQuietPrompt 的参数，确保图片参数为 null
+        // 参数顺序: prompt, quiet_to_loud, skip_wian, quiet_image, quiet_name
+        responseContent = await context.generateQuietPrompt(systemPrompt, false, false, null, "System");
     }
     lastRawResponse = responseContent;
+    console.log("[PW] Generation finished");
     return responseContent.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
 }
 
@@ -398,12 +401,9 @@ async function openCreatorPopup() {
                         <span class="pw-tags-edit-toggle" id="pw-toggle-edit-template">编辑模版</span>
                     </div>
                 </div>
-                <!-- 模版芯片区域 -->
                 <div class="pw-tags-container" id="pw-template-chips"></div>
-                <!-- 模版编辑器 & 快捷键 -->
                 <div class="pw-template-editor-area" id="pw-template-editor">
                     <textarea id="pw-template-text" class="pw-template-textarea">${currentTemplate}</textarea>
-                    <!-- 快捷键栏底部 -->
                     <div class="pw-template-footer">
                         <div class="pw-shortcut-bar">
                             <div class="pw-shortcut-btn" data-key="  ">下一层</div>
@@ -510,9 +510,9 @@ async function openCreatorPopup() {
 `;
 
     callPopup(html, 'text', '', { wide: true, large: true, okButton: "关闭" });
-    
-    // 【关键修改】这里不再调用 bindEvents()，因为它已经在文件底部初始化时全局调用过了。
-    
+
+    // 注意：bindEvents() 已经移至文件底部初始化时调用，此处不再重复调用，以防止事件冲突。
+
     renderTemplateChips();
     renderWiBooks();
 
@@ -1052,6 +1052,5 @@ jQuery(async () => {
     injectStyles();
     addPersonaButton();
     startPolling();
-    // 【关键修改】在插件初始化时统一绑定事件，且永不解绑。
     bindEvents();
 });
