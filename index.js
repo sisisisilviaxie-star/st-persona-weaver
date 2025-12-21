@@ -4,11 +4,10 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v20';
 const STORAGE_KEY_STATE = 'pw_state_v20';
-const STORAGE_KEY_TEMPLATE = 'pw_template_v2'; // 更新版本号以应用新模版
-const STORAGE_KEY_PROMPTS = 'pw_prompts_v3';   // 更新版本号以应用新Prompt
+const STORAGE_KEY_TEMPLATE = 'pw_template_v2'; 
+const STORAGE_KEY_PROMPTS = 'pw_prompts_v4';   // 版本号升级，强制应用新的Prompt格式
 const BUTTON_ID = 'pw_persona_tool_btn';
 
-// [修改点 4] 更新默认模版
 const defaultYamlTemplate =
 `基本信息: 
   姓名: {{user}}
@@ -73,14 +72,52 @@ NSFW:
   性癖好:
   禁忌底线:`;
 
-// [修改点 3] Prompt 添加禁止输出状态栏和思维链的要求
 const antiCoT = "Do NOT output status bars, progress bars, thinking processes, or Chain of Thought traces.";
 
+// [修改点 3] Prompt 增加换行，使其更易读
 const defaultSystemPromptInitial =
-`Creating User Persona for {{user}} (Target: {{char}}). {{wi}} Traits / Template:  {{tags}} Instruction: {{input}} Task: Generate character details strictly in structured YAML format. IMPORTANT: Do NOT wrap the output in a root key like "{{user}}:". Start directly with the first key from the template. Maintain indentation. ${antiCoT} Response: ONLY the YAML content.`;
+`Creating User Persona for {{user}} (Target: {{char}}). 
+
+[World Info Context]:
+{{wi}}
+
+[Traits / Template]:
+{{tags}}
+
+[Instruction]:
+{{input}}
+
+[Task]:
+Generate character details strictly in structured YAML format. 
+IMPORTANT: Do NOT wrap the output in a root key like "{{user}}:". Start directly with the first key from the template. 
+Maintain indentation. 
+${antiCoT}
+
+[Response]:
+ONLY the YAML content.`;
 
 const defaultSystemPromptRefine =
-`Optimizing User Persona for {{char}}. {{wi}} [Current Data (YAML)]: """{{current}}""" [Instruction]: "{{input}}" Task: Modify the data based on instruction. Maintain strict YAML hierarchy. Do NOT add a root key wrapper. If text is quoted, focus on that part. ${antiCoT} Response: ONLY the modified full YAML content.`;
+`Optimizing User Persona for {{char}}. 
+
+{{wi}}
+
+[Current Data (YAML)]: 
+"""
+{{current}}
+"""
+
+[Instruction]: 
+"{{input}}" 
+
+[Task]:
+Modify the data based on instruction. 
+Maintain strict YAML hierarchy. 
+Do NOT add a root key wrapper. 
+If text is quoted, focus on that part. 
+${antiCoT}
+
+[Response]:
+ONLY the modified full YAML content.`;
 
 const defaultSettings = {
     autoSwitchPersona: true, syncToWorldInfo: false,
@@ -89,8 +126,8 @@ const defaultSettings = {
 };
 
 const TEXT = {
-    // [修改点 1] 名字前面的魔法棒变成 magic svg 样式（用金色）
-    PANEL_TITLE: `<span style="display:flex;align-items:center;gap:8px;"><i class="fa-solid fa-wand-magic-sparkles" style="color: #ffd700;"></i>User人设生成器</span>`,
+    // [修改点 2] 魔法棒颜色改为 #e0af68
+    PANEL_TITLE: `<span style="display:flex;align-items:center;gap:8px;"><i class="fa-solid fa-wand-magic-sparkles" style="color: #e0af68;"></i>User人设生成器</span>`,
     BTN_TITLE: "打开设定生成器",
     TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已保存并覆盖！`,
     TOAST_WI_SUCCESS: (book) => `已写入世界书: ${book}`,
@@ -112,23 +149,16 @@ let lastRawResponse = "";
 // 1. 核心数据解析逻辑 (Key-Value 分离)
 // ============================================================================
 
-// [修改点 4 & 5] 优化单主键解析逻辑，防止错误展开
 function parseYamlToBlocks(text) {
     const map = new Map();
     if (!text) return map;
 
-    // 清理 markdown 代码块标记
     const cleanText = text.replace(/^```[a-z]*\n?/im, '').replace(/```$/im, '').trim();
     let lines = cleanText.split('\n');
 
     const topLevelKeyRegex = /^\s*([^:\s\-]+?)[ \t]*[:：]/;
     
-    // --- 智能解包逻辑优化 Start ---
-    // 检查是否所有内容被包裹在一个根键下 (例如 "User:")
-    let firstLineKey = null;
     let isSingleWrapper = false;
-    
-    // 找到第一个非空行
     const firstContentIndex = lines.findIndex(l => l.trim().length > 0);
     
     if (firstContentIndex !== -1) {
@@ -136,16 +166,12 @@ function parseYamlToBlocks(text) {
         const match = firstLine.match(topLevelKeyRegex);
         
         if (match && !firstLine.trim().startsWith('-')) {
-            firstLineKey = match[1];
-            // 检查剩余行是否都比第一行缩进更深
             const baseIndent = firstLine.search(/\S|$/);
-            
-            // 假设是包裹的，验证后续行
             let allIndented = true;
             let hasContentAfter = false;
             
             for (let i = firstContentIndex + 1; i < lines.length; i++) {
-                if (lines[i].trim().length === 0) continue; // 跳过空行
+                if (lines[i].trim().length === 0) continue; 
                 hasContentAfter = true;
                 const currentIndent = lines[i].search(/\S|$/);
                 if (currentIndent <= baseIndent) {
@@ -153,8 +179,6 @@ function parseYamlToBlocks(text) {
                     break;
                 }
             }
-            
-            // 如果只有一行，或者后续所有行都缩进了，则视为单主键包裹
             if (allIndented && hasContentAfter) {
                 isSingleWrapper = true;
             }
@@ -162,14 +186,11 @@ function parseYamlToBlocks(text) {
     }
 
     if (isSingleWrapper) {
-        // 解包：去掉第一行，并对后续行去除缩进
         const remaining = lines.slice(firstContentIndex + 1);
-        // 计算第二行的缩进量作为基准
         const secondLineIndex = remaining.findIndex(l => l.trim().length > 0);
         if (secondLineIndex !== -1) {
             const indentToRemove = remaining[secondLineIndex].search(/\S|$/);
             lines = remaining.map(l => {
-                // 只去除开头的 indentToRemove 个空白字符
                 if (l.length >= indentToRemove && /^\s*$/.test(l.substring(0, indentToRemove))) {
                     return l.substring(indentToRemove);
                 }
@@ -177,7 +198,6 @@ function parseYamlToBlocks(text) {
             });
         }
     }
-    // --- 智能解包逻辑优化 End ---
 
     let currentKey = null;
     let currentBuffer = [];
@@ -189,7 +209,6 @@ function parseYamlToBlocks(text) {
             const match = firstLine.match(topLevelKeyRegex);
             
             if (match) {
-                // 提取 Value，去除 Key
                 let inlineContent = firstLine.substring(match[0].length).trim();
                 let blockContent = currentBuffer.slice(1).join('\n');
                 
@@ -211,7 +230,6 @@ function parseYamlToBlocks(text) {
         const isTopLevel = topLevelKeyRegex.test(line) && !line.trim().startsWith('-');
         const indentLevel = line.search(/\S|$/);
 
-        // 顶层 Key 的缩进通常为 0，允许少量容错
         if (isTopLevel && indentLevel <= 1) {
             flushBuffer();
             const match = line.match(topLevelKeyRegex);
@@ -264,7 +282,6 @@ function loadData() {
     try { historyCache = JSON.parse(localStorage.getItem(STORAGE_KEY_HISTORY)) || []; } catch { historyCache = []; }
     try {
         const t = localStorage.getItem(STORAGE_KEY_TEMPLATE);
-        // 简单判断旧模版特征以重置
         if (!t || t.startsWith("年龄:\n性别:")) { 
              currentTemplate = defaultYamlTemplate;
         } else {
@@ -294,14 +311,8 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v40'; // Updated version ID
+    const styleId = 'persona-weaver-css-v41'; 
     if ($(`#${styleId}`).length) return;
-    
-    // CSS 已移动到 style.css 文件中，此处只需确保该文件被加载。
-    // 如果插件架构要求动态插入 CSS，请将 style.css 的内容更新到这里。
-    // 为保持 index.js 简洁，假设 style.css 由 loader 加载。
-    // 如果没有 loader，请将本文最后的 style.css 内容复制到下方的 css 变量中。
-    // 此处仅保留关键的覆盖或补丁。
 }
 
 function getActivePersonaDescription() {
@@ -548,7 +559,6 @@ async function openCreatorPopup() {
         return `<option disabled>未找到世界书</option>`;
     };
 
-    // [修改点 5] UI 调整：Shortcut bar 移动到 TextArea 上方，调整了 pw-template-editor-area 的结构
     const html = `
 <div class="pw-wrapper">
     <div class="pw-header">
@@ -578,7 +588,6 @@ async function openCreatorPopup() {
                 <div class="pw-tags-container" id="pw-template-chips"></div>
                 
                 <div class="pw-template-editor-area" id="pw-template-editor">
-                    <!-- Shortcut bar moved to top -->
                     <div class="pw-template-footer" style="border-top:none; border-bottom:1px solid var(--SmartThemeBorderColor);">
                         <div class="pw-shortcut-bar">
                             <div class="pw-shortcut-btn" data-key="  "><span>缩进</span><span class="code">Tab</span></div>
@@ -616,7 +625,6 @@ async function openCreatorPopup() {
                 <div class="pw-compact-btn" id="pw-snapshot" title="存入草稿 (Drafts)"><i class="fa-solid fa-save"></i></div>
             </div>
             <div class="pw-footer-group" style="flex:1; justify-content:flex-end; gap: 8px;">
-                <!-- [修改点 7] 按钮样式修改 class="pw-btn secondary" -->
                 <button class="pw-btn secondary" id="pw-btn-save-wi">保存至世界书</button>
                 <button class="pw-btn save" id="pw-btn-apply">覆盖当前人设</button>
             </div>
@@ -869,16 +877,28 @@ function bindEvents() {
         }
     });
 
-    // [修改点 2] 智能对比逻辑：未变动时显示绿框，任意选中的框均可编辑
+    // [修改点 1] 修复润色按钮卡死问题
     $(document).on('click.pw', '#pw-btn-refine', async function (e) {
         e.preventDefault();
+        e.stopPropagation(); // 防止冒泡
+        
         const refineReq = $('#pw-refine-input').val();
         if (!refineReq) return toastr.warning("请输入润色意见");
         
-        if(!promptsCache.initial) loadData();
+        const $btn = $(this);
+        // 如果正在加载，禁止重复点击
+        if ($btn.attr('data-processing') === 'true') return;
 
+        if(!promptsCache.initial) loadData();
         const oldText = $('#pw-result-text').val();
-        const $btn = $(this).find('i').removeClass('fa-magic').addClass('fa-spinner fa-spin');
+        
+        // 1. 立即更新 UI 状态
+        $btn.attr('data-processing', 'true');
+        const $icon = $btn.find('i');
+        $icon.removeClass('fa-magic').addClass('fa-spinner fa-spin');
+        
+        // 2. [关键] 强制让出主线程，等待 UI 渲染（转圈图标显示）
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         try {
             const wiContent = await collectActiveWorldInfoContent();
@@ -909,9 +929,8 @@ function bindEvents() {
                 
                 let rowHtml = '';
 
-                // 逻辑分支：如果内容一致，输出单个绿框；否则输出新旧对比
                 if (!isChanged) {
-                    if (!valNew) return; // 都为空则跳过
+                    if (!valNew) return; 
                     rowHtml = `
                     <div class="pw-diff-row" data-key="${key}">
                         <div class="pw-diff-attr-name">${key}</div>
@@ -955,19 +974,16 @@ function bindEvents() {
             console.error(e);
             toastr.error("润色失败: " + e.message); 
         } finally { 
-            $btn.removeClass('fa-spinner fa-spin').addClass('fa-magic'); 
+            // 恢复按钮状态
+            $icon.removeClass('fa-spinner fa-spin').addClass('fa-magic'); 
+            $btn.removeAttr('data-processing');
         }
     });
 
-    // [修改点 2] 无论是新旧卡片，只要选中都允许编辑（逻辑：移除 readonly）
-    // 注意：CSS中 .pw-diff-card:not(.selected) .pw-diff-textarea { pointer-events: none; } 控制了非选中不可编辑
     $(document).on('click.pw', '.pw-diff-card', function () {
         const $row = $(this).closest('.pw-diff-row');
-        // 取消同行的其他选中状态
         $row.find('.pw-diff-card').removeClass('selected');
-        // 选中当前
         $(this).addClass('selected');
-        // 聚焦输入框
         $(this).find('.pw-diff-textarea').focus();
     });
 
@@ -1181,7 +1197,6 @@ const renderTemplateChips = () => {
             const cur = $text.val();
             const prefix = (cur && !cur.endsWith('\n') && cur.length > 0) ? '\n\n' : '';
             
-            // 点击模版块时，重新拼合 Key 和 Value
             let insertText = key + ":";
             if (content && content.trim()) {
                 if (content.includes('\n') || content.startsWith(' ')) {
