@@ -82,7 +82,8 @@ const defaultSettings = {
 };
 
 const TEXT = {
-    PANEL_TITLE: "🪄User人设生成器",
+    // 【UI修复】回归带颜色的魔法棒图标
+    PANEL_TITLE_HTML: `<i class="fa-solid fa-wand-magic-sparkles" style="color:#e0af68; margin-right: 8px;"></i>User人设生成器`,
     BTN_TITLE: "打开设定生成器",
     TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已保存并覆盖！`,
     TOAST_WI_SUCCESS: (book) => `已写入世界书: ${book}`,
@@ -101,127 +102,88 @@ let pollInterval = null;
 let lastRawResponse = "";
 
 // ============================================================================
-// 1. 核心数据解析逻辑 (【重要修复】递归解包 + KV分离)
+// 1. 核心数据解析逻辑 (【递归解包修复】)
 // ============================================================================
 
 function parseYamlToBlocks(text) {
-    if (!text) return new Map();
+    const map = new Map();
+    if (!text) return map;
 
-    // 1. 基础清洗
     const cleanText = text.replace(/^```[a-z]*\n?/im, '').replace(/```$/im, '').trim();
+    let lines = cleanText.split('\n');
 
-    // 2. 定义单次解析函数
-    const performParse = (str) => {
-        const map = new Map();
-        const lines = str.split('\n');
-        const topLevelKeyRegex = /^\s*([^:\s\-]+?)[ \t]*[:：]/; // 允许前面有空格，兼容缩进
+    const topLevelKeyRegex = /^\s*([^:\s\-]+?)[ \t]*[:：]/;
+    
+    // 1. 扫描顶层 Key
+    let topKeys = [];
+    lines.forEach(line => {
+        // 必须是顶格 (indent=0) 且符合 Key 格式
+        if (topLevelKeyRegex.test(line) && !line.trim().startsWith('-') && line.search(/\S|$/) === 0) {
+            topKeys.push(line);
+        }
+    });
+
+    // 【核心修复逻辑】
+    // 如果发现全文被包裹在一个且仅有一个顶层 Key 中（例如 "Persona:"），
+    // 且总行数较多，说明这是一个 Wrapper。
+    if (topKeys.length === 1 && lines.length > 2) {
+        const remaining = lines.slice(1);
+        // 检查剩余内容是否有缩进
+        const secondLineIndent = remaining.find(l => l.trim().length > 0)?.search(/\S|$/) || 0;
         
-        let currentKey = null;
-        let currentBuffer = [];
-
-        const flushBuffer = () => {
-            if (currentKey && currentBuffer.length > 0) {
-                let valuePart = "";
-                const firstLine = currentBuffer[0];
-                const match = firstLine.match(topLevelKeyRegex);
-                
-                if (match) {
-                    // 剥离 Key，只保留 Value
-                    let inlineContent = firstLine.substring(match[0].length).trim();
-                    let blockContent = currentBuffer.slice(1).join('\n');
-                    
-                    // 智能去除 Block 的公共缩进（如果存在）
-                    if (blockContent) {
-                        const blockLines = blockContent.split('\n').filter(l => l.trim());
-                        if (blockLines.length > 0) {
-                            // 简单的缩进检测
-                            const minIndent = Math.min(...blockLines.map(l => l.search(/\S|$/)));
-                            if (minIndent > 0) {
-                                // 如果所有行都有缩进，尝试去除
-                                // 但这里要小心，如果第一行 inlineContent 为空，通常 blockContent 就是直接下级
-                                // 我们保持原样，让下次 parse 去处理缩进
-                            }
-                        }
-                    }
-
-                    if (inlineContent && blockContent) {
-                        valuePart = inlineContent + '\n' + blockContent;
-                    } else if (inlineContent) {
-                        valuePart = inlineContent;
-                    } else {
-                        valuePart = blockContent; // Value 全在下面
-                    }
-                } else {
-                    valuePart = currentBuffer.join('\n');
-                }
-                map.set(currentKey, valuePart);
-            }
-        };
-
-        lines.forEach((line) => {
-            // 关键：检测是否是这一层级的 Key。
-            // 只要匹配到了 "Key:" 格式，且不是列表项 "-" 开头，就认为是 Key
-            // 注意：这里我们依靠缩进变化来区分层级，但在这种简单分割中，
-            // 我们主要抓取"看起来像Key"的行。
-            // 为了应对缩进问题，我们假设第一行抓到的 Key 的缩进量是基准。
-            const match = line.match(topLevelKeyRegex);
-            const isPotentialKey = match && !line.trim().startsWith('-');
-            
-            if (isPotentialKey) {
-                // 简单的逻辑：如果遇到了新Key，且缩进与之前差不多（或者这是第一个），则切分
-                // 这里为了鲁棒性，只要看起来像 Key，就切分。
-                // 复杂的嵌套结构在 Value 里保留原样，依靠递归解包处理。
-                
-                // 但为了避免把子 Key 切出来，我们需要一个基准缩进。
-                // 简化策略：只切分顶层（缩进最小的）
-                const indent = line.search(/\S|$/);
-                
-                if (currentKey === null) {
-                    // 第一个 Key，确立基准
-                    currentKey = match[1].trim();
-                    currentBuffer = [line];
-                } else {
-                    // 比较缩进。如果当前行的缩进 <= 之前的基准，认为是同级新Key
-                    // 必须获取上一个 Key 所在行的缩进。
-                    // 简化：我们假设 parseYamlToBlocks 主要处理扁平或已被解包的结构。
-                    // 如果遇到包裹，整个是一个 Key。
-                    
-                    const firstLineIndent = currentBuffer[0].search(/\S|$/);
-                    if (indent <= firstLineIndent) {
-                        flushBuffer();
-                        currentKey = match[1].trim();
-                        currentBuffer = [line];
-                    } else {
-                        currentBuffer.push(line);
-                    }
-                }
-            } else {
-                if (currentKey) {
-                    currentBuffer.push(line);
-                }
-            }
-        });
-        flushBuffer();
-        return map;
-    };
-
-    // 3. 执行初次解析
-    let map = performParse(cleanText);
-
-    // 4. 【递归解包逻辑】检测是否只解析出了一个巨大的 Key
-    if (map.size === 1) {
-        const rootKey = map.keys().next().value;
-        const rootValue = map.get(rootKey);
-        
-        // 启发式检查：如果 Value 里面包含了模版里的常见 Key，说明被包裹了
-        // 比如包含了 "年龄:" 或 "Age:" 或 "性别:"
-        if (rootValue && (rootValue.includes('年龄:') || rootValue.includes('Age:') || rootValue.includes('性别:') || rootValue.includes('身份:'))) {
-            console.log(`[PW] 侦测到外层包裹 Key: '${rootKey}'，正在执行递归解包...`);
-            // 对 Value 进行二次解析，这次解析出来的就是扁平的结构了
-            return performParse(rootValue);
+        if (secondLineIndent > 0) {
+            // 去除第一行，去除后续行的缩进
+            const unwrappedText = remaining.map(l => l.substring(secondLineIndent)).join('\n');
+            // 【递归调用】把剥了皮的内容重新解析一遍
+            return parseYamlToBlocks(unwrappedText);
         }
     }
 
+    // 正常的解析逻辑
+    let currentKey = null;
+    let currentBuffer = [];
+
+    const flushBuffer = () => {
+        if (currentKey && currentBuffer.length > 0) {
+            let valuePart = "";
+            const firstLine = currentBuffer[0];
+            const match = firstLine.match(topLevelKeyRegex);
+            
+            if (match) {
+                let inlineContent = firstLine.substring(match[0].length).trim();
+                let blockContent = currentBuffer.slice(1).join('\n');
+                
+                if (inlineContent && blockContent) {
+                    valuePart = inlineContent + '\n' + blockContent;
+                } else if (inlineContent) {
+                    valuePart = inlineContent;
+                } else {
+                    valuePart = blockContent;
+                }
+            } else {
+                valuePart = currentBuffer.join('\n');
+            }
+            map.set(currentKey, valuePart);
+        }
+    };
+
+    lines.forEach((line) => {
+        const isTopLevel = topLevelKeyRegex.test(line) && !line.trim().startsWith('-');
+        const indentLevel = line.search(/\S|$/);
+
+        if (isTopLevel && indentLevel <= 1) {
+            flushBuffer();
+            const match = line.match(topLevelKeyRegex);
+            currentKey = match[1].trim();
+            currentBuffer = [line];
+        } else {
+            if (currentKey) {
+                currentBuffer.push(line);
+            }
+        }
+    });
+
+    flushBuffer();
     return map;
 }
 
@@ -644,7 +606,7 @@ async function openCreatorPopup() {
     const html = `
 <div class="pw-wrapper">
     <div class="pw-header">
-        <div class="pw-top-bar"><div class="pw-title">${TEXT.PANEL_TITLE}</div></div>
+        <div class="pw-top-bar"><div class="pw-title">${TEXT.PANEL_TITLE_HTML}</div></div>
         <div class="pw-tabs">
             <div class="pw-tab active" data-tab="editor">编辑</div>
             <div class="pw-tab" data-tab="context">世界书</div>
@@ -1042,7 +1004,6 @@ function bindEvents() {
         if (isNew) $(this).find('.pw-diff-textarea').prop('readonly', false).focus();
     });
 
-    // 【重要修复】重组 Key 和 Value。处理 KV 分离后的重组。
     $(document).on('click.pw', '#pw-diff-confirm', function () {
         const activeTab = $('.pw-diff-tab.active').data('view');
         if (activeTab === 'raw') {
@@ -1055,9 +1016,7 @@ function bindEvents() {
                 const val = $(this).find('.pw-diff-card.selected .pw-diff-textarea').val().trimEnd();
                 
                 if (val && val !== "(删除)" && val !== "(无)") {
-                    // 智能组合 Key 和 Value
-                    // 如果 Value 包含换行，或者 Value 开头有缩进，那么 Key 后面跟换行
-                    // 否则 Key 后面跟空格和 Value
+                    // 【重组 Key 和 Value】
                     if (val.includes('\n') || val.startsWith('  ')) {
                         finalLines.push(`${key}:\n${val}`);
                     } else {
@@ -1254,7 +1213,7 @@ const renderTemplateChips = () => {
         $chip.on('click', () => {
             const $text = $('#pw-request');
             const cur = $text.val();
-            const prefix = (cur && !cur.endsWith('\n') && cur.length > 0) ? '\n\n' : '';
+            const prefix = (cur && !cur.endsWith('\n')) ? '\n\n' : '';
             
             // 【重要修复】点击模版块时，也需要重新拼合 Key 和 Value
             let insertText = key + ":";
