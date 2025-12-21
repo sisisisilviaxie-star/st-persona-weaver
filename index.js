@@ -8,7 +8,6 @@ const STORAGE_KEY_TEMPLATE = 'pw_template_v1';
 const STORAGE_KEY_PROMPTS = 'pw_prompts_v2';
 const BUTTON_ID = 'pw_persona_tool_btn';
 
-// 【修改】更新了默认模版，严格保留缩进
 const defaultYamlTemplate =
 `年龄: 
 性别: 
@@ -116,7 +115,6 @@ function parseYamlToBlocks(text) {
     const topLevelKeyRegex = /^\s*([^:\s\-]+?)[ \t]*[:：]/;
 
     lines.forEach((line) => {
-        // 简单放宽缩进检查，以支持更灵活的 YAML 结构
         const isTopLevel = topLevelKeyRegex.test(line) && !line.trim().startsWith('-');
         const indentLevel = line.search(/\S|$/);
 
@@ -176,7 +174,6 @@ function loadData() {
     try { historyCache = JSON.parse(localStorage.getItem(STORAGE_KEY_HISTORY)) || []; } catch { historyCache = []; }
     try {
         const t = localStorage.getItem(STORAGE_KEY_TEMPLATE);
-        // 如果本地没有存模版，或者存的是旧的默认模版，强制更新为新的默认模版
         if (!t || t.startsWith("年龄:\n性别:\n身高:\n身份:\n背景故事:")) { 
              currentTemplate = defaultYamlTemplate;
         } else {
@@ -326,9 +323,8 @@ async function runGeneration(data, apiConfig) {
     const charName = (charId !== undefined) ? context.characters[charId].name : "None";
     const currentName = $('.persona_name').first().text().trim() || $('h5#your_name').text().trim() || "User";
 
-    // 安全检查
     if (!promptsCache || !promptsCache.initial) {
-        loadData(); // 重新加载以防丢失
+        loadData(); 
     }
 
     let wiText = "";
@@ -347,19 +343,59 @@ async function runGeneration(data, apiConfig) {
         .replace(/{{current}}/g, data.currentText || "");
 
     let responseContent = "";
+    
     if (apiConfig.apiSource === 'independent') {
-        const res = await fetch(`${apiConfig.indepApiUrl.replace(/\/$/, '')}/chat/completions`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.indepApiKey}` },
-            body: JSON.stringify({ model: apiConfig.indepApiModel, messages: [{ role: 'system', content: systemPrompt }], temperature: 0.7 })
+        let baseUrl = apiConfig.indepApiUrl.replace(/\/$/, '');
+        if (baseUrl.endsWith('/chat/completions')) {
+            baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
+        }
+        const url = `${baseUrl}/chat/completions`;
+        
+        // 【关键修改】将 role: 'system' 改为 role: 'user'
+        // 这能解决 Google Gemini API (通过中转) 报错 "contents is not specified" 的问题
+        const messages = [{ role: 'user', content: systemPrompt }];
+
+        const res = await fetch(url, {
+            method: 'POST', 
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${apiConfig.indepApiKey}` 
+            },
+            body: JSON.stringify({ 
+                model: apiConfig.indepApiModel, 
+                messages: messages, 
+                temperature: 0.7 
+            })
         });
-        const json = await res.json();
+
+        const text = await res.text();
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch (e) {
+            throw new Error(`API 返回了非 JSON 数据 (状态码 ${res.status}): ${text.slice(0, 100)}...`);
+        }
+
+        if (!res.ok) {
+            const errorMsg = json.error?.message || json.message || JSON.stringify(json);
+            // 增加对 Google 特有错误的友好提示
+            if (errorMsg.includes('contents is not specified')) {
+                throw new Error(`API 格式错误: 目标模型不支持 System 角色，或者中转站未正确转换。已尝试自动修复，请重试。原始错误: ${errorMsg}`);
+            }
+            throw new Error(`API 请求失败 [${res.status}]: ${errorMsg}`);
+        }
+
+        if (!json.choices || !json.choices.length) {
+            console.error("API Response:", json);
+            throw new Error("API 返回格式错误: 找不到 'choices' 字段。");
+        }
+
         responseContent = json.choices[0].message.content;
+
     } else {
-        // 【重要修复】修正了 generateQuietPrompt 的参数顺序
-        // 签名通常是: (prompt, quiet_to_loud, skip_wian, quiet_image, quiet_name, ...)
-        // 我们传入 null 作为 quiet_image (第4个参数)，"System" 作为 quiet_name (第5个参数)
         responseContent = await context.generateQuietPrompt(systemPrompt, false, false, null, "System");
     }
+    
     lastRawResponse = responseContent;
     return responseContent.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
 }
@@ -772,9 +808,8 @@ function bindEvents() {
 
     $(document).on('click.pw', '#pw-diff-cancel', () => $('#pw-diff-overlay').fadeOut());
 
-    // 【重要修改】生成按钮逻辑增强
     $(document).on('click.pw', '#pw-btn-gen', async function (e) {
-        e.preventDefault(); // 防止可能的默认行为
+        e.preventDefault();
         
         const req = $('#pw-request').val();
         if (!req) return toastr.warning("请输入要求");
@@ -1063,6 +1098,5 @@ jQuery(async () => {
     injectStyles();
     addPersonaButton();
     startPolling();
-    // 全局绑定事件，防止重复绑定和丢失
     bindEvents();
 });
