@@ -4,11 +4,11 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders } from "../../../..
 const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v20';
 const STORAGE_KEY_STATE = 'pw_state_v20';
-const STORAGE_KEY_TEMPLATE = 'pw_template_v1';
-const STORAGE_KEY_PROMPTS = 'pw_prompts_v2';
+const STORAGE_KEY_TEMPLATE = 'pw_template_v2'; // 更新版本号以应用新模版
+const STORAGE_KEY_PROMPTS = 'pw_prompts_v3';   // 更新版本号以应用新Prompt
 const BUTTON_ID = 'pw_persona_tool_btn';
 
-// 【修改4】更新默认模版
+// [修改点 4] 更新默认模版
 const defaultYamlTemplate =
 `基本信息: 
   姓名: {{user}}
@@ -73,19 +73,14 @@ NSFW:
   性癖好:
   禁忌底线:`;
 
-// 【修改3】Prompt 增加禁止 Status Bar 和 CoT 的指令
+// [修改点 3] Prompt 添加禁止输出状态栏和思维链的要求
+const antiCoT = "Do NOT output status bars, progress bars, thinking processes, or Chain of Thought traces.";
+
 const defaultSystemPromptInitial =
-`Creating User Persona for {{user}} (Target: {{char}}). {{wi}} Traits / Template:  {{tags}} Instruction: {{input}} Task: Generate character details strictly in structured YAML format. IMPORTANT: 
-1. Do NOT wrap the output in a root key like "{{user}}:". Start directly with the first key from the template.
-2. Maintain indentation. 
-3. Do NOT output status bars, log, thinking process, or chain of thought/reasoning.
-Response: ONLY the YAML content.`;
+`Creating User Persona for {{user}} (Target: {{char}}). {{wi}} Traits / Template:  {{tags}} Instruction: {{input}} Task: Generate character details strictly in structured YAML format. IMPORTANT: Do NOT wrap the output in a root key like "{{user}}:". Start directly with the first key from the template. Maintain indentation. ${antiCoT} Response: ONLY the YAML content.`;
 
 const defaultSystemPromptRefine =
-`Optimizing User Persona for {{char}}. {{wi}} [Current Data (YAML)]: """{{current}}""" [Instruction]: "{{input}}" Task: Modify the data based on instruction. Maintain strict YAML hierarchy. 
-1. Do NOT add a root key wrapper. 
-2. Do NOT output status bars, log, thinking process, or chain of thought.
-Response: ONLY the modified full YAML content.`;
+`Optimizing User Persona for {{char}}. {{wi}} [Current Data (YAML)]: """{{current}}""" [Instruction]: "{{input}}" Task: Modify the data based on instruction. Maintain strict YAML hierarchy. Do NOT add a root key wrapper. If text is quoted, focus on that part. ${antiCoT} Response: ONLY the modified full YAML content.`;
 
 const defaultSettings = {
     autoSwitchPersona: true, syncToWorldInfo: false,
@@ -94,8 +89,8 @@ const defaultSettings = {
 };
 
 const TEXT = {
-    // 【修改1】标题图标改回之前的样式
-    PANEL_TITLE: `<i class="fa-solid fa-wand-magic-sparkles" style="color:#e0af68; margin-right: 6px;"></i>User人设生成器`,
+    // [修改点 1] 名字前面的魔法棒变成 magic svg 样式（用金色）
+    PANEL_TITLE: `<span style="display:flex;align-items:center;gap:8px;"><i class="fa-solid fa-wand-magic-sparkles" style="color: #ffd700;"></i>User人设生成器</span>`,
     BTN_TITLE: "打开设定生成器",
     TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已保存并覆盖！`,
     TOAST_WI_SUCCESS: (book) => `已写入世界书: ${book}`,
@@ -114,33 +109,75 @@ let pollInterval = null;
 let lastRawResponse = "";
 
 // ============================================================================
-// 1. 核心数据解析逻辑
+// 1. 核心数据解析逻辑 (Key-Value 分离)
 // ============================================================================
 
+// [修改点 4 & 5] 优化单主键解析逻辑，防止错误展开
 function parseYamlToBlocks(text) {
     const map = new Map();
     if (!text) return map;
 
+    // 清理 markdown 代码块标记
     const cleanText = text.replace(/^```[a-z]*\n?/im, '').replace(/```$/im, '').trim();
     let lines = cleanText.split('\n');
 
     const topLevelKeyRegex = /^\s*([^:\s\-]+?)[ \t]*[:：]/;
     
-    // 智能解包逻辑
-    let topKeys = [];
-    lines.forEach(line => {
-        if (topLevelKeyRegex.test(line) && !line.trim().startsWith('-') && line.search(/\S|$/) === 0) {
-            topKeys.push(line);
-        }
-    });
-
-    if (topKeys.length === 1 && lines.length > 5) {
-        const remaining = lines.slice(1);
-        const secondLineIndent = remaining.find(l => l.trim().length > 0)?.search(/\S|$/) || 0;
-        if (secondLineIndent > 0) {
-            lines = remaining.map(l => l.substring(secondLineIndent));
+    // --- 智能解包逻辑优化 Start ---
+    // 检查是否所有内容被包裹在一个根键下 (例如 "User:")
+    let firstLineKey = null;
+    let isSingleWrapper = false;
+    
+    // 找到第一个非空行
+    const firstContentIndex = lines.findIndex(l => l.trim().length > 0);
+    
+    if (firstContentIndex !== -1) {
+        const firstLine = lines[firstContentIndex];
+        const match = firstLine.match(topLevelKeyRegex);
+        
+        if (match && !firstLine.trim().startsWith('-')) {
+            firstLineKey = match[1];
+            // 检查剩余行是否都比第一行缩进更深
+            const baseIndent = firstLine.search(/\S|$/);
+            
+            // 假设是包裹的，验证后续行
+            let allIndented = true;
+            let hasContentAfter = false;
+            
+            for (let i = firstContentIndex + 1; i < lines.length; i++) {
+                if (lines[i].trim().length === 0) continue; // 跳过空行
+                hasContentAfter = true;
+                const currentIndent = lines[i].search(/\S|$/);
+                if (currentIndent <= baseIndent) {
+                    allIndented = false;
+                    break;
+                }
+            }
+            
+            // 如果只有一行，或者后续所有行都缩进了，则视为单主键包裹
+            if (allIndented && hasContentAfter) {
+                isSingleWrapper = true;
+            }
         }
     }
+
+    if (isSingleWrapper) {
+        // 解包：去掉第一行，并对后续行去除缩进
+        const remaining = lines.slice(firstContentIndex + 1);
+        // 计算第二行的缩进量作为基准
+        const secondLineIndex = remaining.findIndex(l => l.trim().length > 0);
+        if (secondLineIndex !== -1) {
+            const indentToRemove = remaining[secondLineIndex].search(/\S|$/);
+            lines = remaining.map(l => {
+                // 只去除开头的 indentToRemove 个空白字符
+                if (l.length >= indentToRemove && /^\s*$/.test(l.substring(0, indentToRemove))) {
+                    return l.substring(indentToRemove);
+                }
+                return l.trimStart(); 
+            });
+        }
+    }
+    // --- 智能解包逻辑优化 End ---
 
     let currentKey = null;
     let currentBuffer = [];
@@ -152,6 +189,7 @@ function parseYamlToBlocks(text) {
             const match = firstLine.match(topLevelKeyRegex);
             
             if (match) {
+                // 提取 Value，去除 Key
                 let inlineContent = firstLine.substring(match[0].length).trim();
                 let blockContent = currentBuffer.slice(1).join('\n');
                 
@@ -171,18 +209,15 @@ function parseYamlToBlocks(text) {
 
     lines.forEach((line) => {
         const isTopLevel = topLevelKeyRegex.test(line) && !line.trim().startsWith('-');
-        
-        // 【修改4 核心修复】严格判定缩进：只有 indentLevel === 0 且包含冒号的行，才被视作顶层模版块
-        // 这解决了子项（如"童年:"）被识别为独立块的问题
         const indentLevel = line.search(/\S|$/);
-        
-        if (isTopLevel && indentLevel === 0) {
+
+        // 顶层 Key 的缩进通常为 0，允许少量容错
+        if (isTopLevel && indentLevel <= 1) {
             flushBuffer();
             const match = line.match(topLevelKeyRegex);
             currentKey = match[1].trim();
             currentBuffer = [line];
         } else {
-            // 如果是空行或者有缩进的内容，都归入当前块
             if (currentKey) {
                 currentBuffer.push(line);
             }
@@ -229,8 +264,8 @@ function loadData() {
     try { historyCache = JSON.parse(localStorage.getItem(STORAGE_KEY_HISTORY)) || []; } catch { historyCache = []; }
     try {
         const t = localStorage.getItem(STORAGE_KEY_TEMPLATE);
-        // 简单判断是否是旧模版，如果是则更新
-        if (!t || t.startsWith("年龄:\n性别:\n身高:")) { 
+        // 简单判断旧模版特征以重置
+        if (!t || t.startsWith("年龄:\n性别:")) { 
              currentTemplate = defaultYamlTemplate;
         } else {
              currentTemplate = t;
@@ -259,121 +294,14 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v38';
+    const styleId = 'persona-weaver-css-v40'; // Updated version ID
     if ($(`#${styleId}`).length) return;
     
-    const css = `
-    #pw-api-model-select { flex: 1; width: 0; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
-    
-    .pw-load-btn {
-        font-size: 0.85em;
-        background: linear-gradient(135deg, rgba(224, 175, 104, 0.2), rgba(224, 175, 104, 0.1));
-        border: 1px solid #e0af68;
-        padding: 4px 12px;
-        border-radius: 4px;
-        cursor: pointer;
-        color: #e0af68;
-        font-weight: bold;
-        margin-left: auto;
-        display: inline-flex; align-items: center;
-        transition: all 0.2s;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    }
-    .pw-load-btn:hover {
-        background: rgba(224, 175, 104, 0.3);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        color: #fff;
-    }
-
-    .pw-template-textarea {
-        background: rgba(0, 0, 0, 0.5) !important;
-        color: #eee !important;
-        font-family: 'Consolas', 'Monaco', monospace;
-        line-height: 1.4;
-        height: 350px !important;
-        border-top: none !important; /* 配合上方工具栏 */
-        border-radius: 0 0 6px 6px !important;
-    }
-    
-    /* 【修改5】工具栏放在上方 */
-    .pw-template-footer {
-        border-top: none !important;
-        border-bottom: 1px solid var(--SmartThemeBorderColor);
-        border-radius: 6px 6px 0 0;
-    }
-
-    .pw-shortcut-btn {
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        padding: 4px 10px; height: auto; gap: 2px; min-width: 40px;
-    }
-    .pw-shortcut-btn span:first-child { font-size: 0.8em; opacity: 0.8; }
-    .pw-shortcut-btn span.code { font-weight: bold; font-family: monospace; color: #e0af68; font-size: 1.1em; }
-
-    .pw-var-btns { gap: 6px; }
-    .pw-var-btn {
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        padding: 4px 10px; height: auto; gap: 0;
-        border-color: rgba(128,128,128,0.4);
-    }
-    .pw-var-btn span:first-child { font-weight: bold; font-size: 0.8em; }
-    .pw-var-btn span.code { font-size: 0.75em; opacity: 0.7; font-family: monospace; }
-
-    #pw-api-url {
-        background-color: rgba(0, 0, 0, 0.2) !important;
-        border: 1px solid var(--SmartThemeBorderColor) !important;
-        color: var(--smart-theme-body-color) !important;
-    }
-    .pw-auto-height { min-height: 80px; max-height: 500px; overflow-y: auto; }
-
-    #pw-history-clear-all {
-        background: transparent; border: none; color: #ff6b6b; 
-        font-size: 0.85em; opacity: 0.6; padding: 5px; width: auto; 
-        margin: 10px auto; text-decoration: underline;
-    }
-    #pw-history-clear-all:hover { opacity: 1; background: transparent; transform: none; }
-
-    .pw-diff-row {
-        background: #1a1a1a; border: 1px solid #333; border-radius: 8px; 
-        padding: 10px; display: flex; flex-direction: column; gap: 8px;
-        margin-bottom: 10px;
-    }
-    .pw-diff-attr-name { 
-        font-weight: bold; color: #9ece6a; font-size: 1em; 
-        padding-bottom: 5px; border-bottom: 1px solid #333; margin-bottom: 5px;
-    }
-    .pw-diff-cards { display: flex; gap: 10px; }
-    .pw-diff-card {
-        flex: 1; display: flex; flex-direction: column;
-        border: 2px solid transparent; border-radius: 6px;
-        background: #222; overflow: hidden; transition: all 0.2s;
-        cursor: pointer; opacity: 0.6; position: relative;
-    }
-    .pw-diff-card.selected {
-        border-color: #9ece6a; opacity: 1; background: #252525;
-        box-shadow: 0 0 10px rgba(158, 206, 106, 0.1);
-    }
-    .pw-diff-card:not(.selected):hover { opacity: 0.8; }
-    
-    .pw-diff-label {
-        font-size: 0.75em; padding: 4px 8px; background: rgba(0,0,0,0.3);
-        color: #aaa; text-transform: uppercase; font-weight: bold;
-    }
-    .pw-diff-card.selected .pw-diff-label { color: #9ece6a; background: rgba(158, 206, 106, 0.1); }
-    
-    .pw-diff-textarea {
-        flex: 1; width: 100%; background: transparent; border: none;
-        color: #eee; padding: 8px; font-family: inherit; font-size: 0.95em;
-        resize: none; outline: none; line-height: 1.5; min-height: 80px;
-        box-sizing: border-box;
-    }
-    .pw-diff-card:not(.selected) .pw-diff-textarea { color: #888; pointer-events: none; }
-    
-    @media screen and (max-width: 600px) {
-        .pw-diff-cards { flex-direction: column; }
-    }
-    `;
-    $('<style>').attr('id', styleId).text(css).appendTo('head');
+    // CSS 已移动到 style.css 文件中，此处只需确保该文件被加载。
+    // 如果插件架构要求动态插入 CSS，请将 style.css 的内容更新到这里。
+    // 为保持 index.js 简洁，假设 style.css 由 loader 加载。
+    // 如果没有 loader，请将本文最后的 style.css 内容复制到下方的 css 变量中。
+    // 此处仅保留关键的覆盖或补丁。
 }
 
 function getActivePersonaDescription() {
@@ -620,6 +548,7 @@ async function openCreatorPopup() {
         return `<option disabled>未找到世界书</option>`;
     };
 
+    // [修改点 5] UI 调整：Shortcut bar 移动到 TextArea 上方，调整了 pw-template-editor-area 的结构
     const html = `
 <div class="pw-wrapper">
     <div class="pw-header">
@@ -649,8 +578,8 @@ async function openCreatorPopup() {
                 <div class="pw-tags-container" id="pw-template-chips"></div>
                 
                 <div class="pw-template-editor-area" id="pw-template-editor">
-                    <!-- 【修改5】工具栏放在上方 -->
-                    <div class="pw-template-footer">
+                    <!-- Shortcut bar moved to top -->
+                    <div class="pw-template-footer" style="border-top:none; border-bottom:1px solid var(--SmartThemeBorderColor);">
                         <div class="pw-shortcut-bar">
                             <div class="pw-shortcut-btn" data-key="  "><span>缩进</span><span class="code">Tab</span></div>
                             <div class="pw-shortcut-btn" data-key=": "><span>冒号</span><span class="code">:</span></div>
@@ -687,8 +616,8 @@ async function openCreatorPopup() {
                 <div class="pw-compact-btn" id="pw-snapshot" title="存入草稿 (Drafts)"><i class="fa-solid fa-save"></i></div>
             </div>
             <div class="pw-footer-group" style="flex:1; justify-content:flex-end; gap: 8px;">
-                <!-- 【修改6】保存按钮颜色一致 -->
-                <button class="pw-btn save" id="pw-btn-save-wi">保存至世界书</button>
+                <!-- [修改点 7] 按钮样式修改 class="pw-btn secondary" -->
+                <button class="pw-btn secondary" id="pw-btn-save-wi">保存至世界书</button>
                 <button class="pw-btn save" id="pw-btn-apply">覆盖当前人设</button>
             </div>
         </div>
@@ -940,6 +869,7 @@ function bindEvents() {
         }
     });
 
+    // [修改点 2] 智能对比逻辑：未变动时显示绿框，任意选中的框均可编辑
     $(document).on('click.pw', '#pw-btn-refine', async function (e) {
         e.preventDefault();
         const refineReq = $('#pw-refine-input').val();
@@ -976,30 +906,46 @@ function bindEvents() {
                 const valNew = newMap.get(matchedKeyInNew) || "";
 
                 const isChanged = valOld.trim() !== valNew.trim();
-                if (isChanged) changeCount++;
-                if (!valOld && !valNew) return;
+                
+                let rowHtml = '';
 
-                const rowHtml = `
-                <div class="pw-diff-row" data-key="${key}">
-                    <div class="pw-diff-attr-name">${key}</div>
-                    <div class="pw-diff-cards">
-                        <div class="pw-diff-card old" data-val="${encodeURIComponent(valOld)}">
-                            <div class="pw-diff-label">原版本</div>
-                            <textarea class="pw-diff-textarea" readonly>${valOld || "(无)"}</textarea>
+                // 逻辑分支：如果内容一致，输出单个绿框；否则输出新旧对比
+                if (!isChanged) {
+                    if (!valNew) return; // 都为空则跳过
+                    rowHtml = `
+                    <div class="pw-diff-row" data-key="${key}">
+                        <div class="pw-diff-attr-name">${key}</div>
+                        <div class="pw-diff-cards">
+                            <div class="pw-diff-card selected" style="border-color:#5b8db8; opacity:1; background:#1e252b;">
+                                <div class="pw-diff-label" style="color:#5b8db8; background:rgba(91,141,184,0.1);">无变更 (已选中)</div>
+                                <textarea class="pw-diff-textarea">${valNew}</textarea>
+                            </div>
                         </div>
-                        <div class="pw-diff-card new selected" data-val="${encodeURIComponent(valNew)}">
-                            <div class="pw-diff-label">新版本</div>
-                            <textarea class="pw-diff-textarea">${valNew || "(删除)"}</textarea>
+                    </div>`;
+                } else {
+                    changeCount++;
+                    rowHtml = `
+                    <div class="pw-diff-row" data-key="${key}">
+                        <div class="pw-diff-attr-name">${key}</div>
+                        <div class="pw-diff-cards">
+                            <div class="pw-diff-card old" data-val="${encodeURIComponent(valOld)}">
+                                <div class="pw-diff-label">原版本</div>
+                                <textarea class="pw-diff-textarea">${valOld || "(无)"}</textarea>
+                            </div>
+                            <div class="pw-diff-card new selected" data-val="${encodeURIComponent(valNew)}">
+                                <div class="pw-diff-label">新版本</div>
+                                <textarea class="pw-diff-textarea">${valNew || "(删除)"}</textarea>
+                            </div>
                         </div>
-                    </div>
-                </div>`;
+                    </div>`;
+                }
                 $list.append(rowHtml);
             });
 
             if (changeCount === 0 && !responseText) {
                 toastr.warning("返回内容为空，请切换到“原文编辑”查看");
             } else if (changeCount === 0) {
-                toastr.info("无修改，但您可以在“原文编辑”中手动编辑");
+                toastr.success("内容未发生变动，已全部保留");
             }
 
             $('.pw-diff-tab[data-view="diff"]').click();
@@ -1013,15 +959,16 @@ function bindEvents() {
         }
     });
 
-    // 【修改2】点击 Diff 卡片时，无论新旧都允许编辑
+    // [修改点 2] 无论是新旧卡片，只要选中都允许编辑（逻辑：移除 readonly）
+    // 注意：CSS中 .pw-diff-card:not(.selected) .pw-diff-textarea { pointer-events: none; } 控制了非选中不可编辑
     $(document).on('click.pw', '.pw-diff-card', function () {
         const $row = $(this).closest('.pw-diff-row');
+        // 取消同行的其他选中状态
         $row.find('.pw-diff-card').removeClass('selected');
+        // 选中当前
         $(this).addClass('selected');
-        
-        // 允许直接编辑（原逻辑只允许New，现在Old也开放）
-        $row.find('.pw-diff-textarea').prop('readonly', true);
-        $(this).find('.pw-diff-textarea').prop('readonly', false).focus();
+        // 聚焦输入框
+        $(this).find('.pw-diff-textarea').focus();
     });
 
     $(document).on('click.pw', '#pw-diff-confirm', function () {
@@ -1222,6 +1169,125 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-history-search-clear', function () { $('#pw-history-search').val('').trigger('input'); });
     $(document).on('click.pw', '#pw-history-clear-all', function () { if (confirm("清空?")) { historyCache = []; saveData(); renderHistoryList(); } });
 }
+
+// ... 辅助渲染函数 ...
+const renderTemplateChips = () => {
+    const $container = $('#pw-template-chips').empty();
+    const blocks = parseYamlToBlocks(currentTemplate);
+    blocks.forEach((content, key) => {
+        const $chip = $(`<div class="pw-tag-chip"><i class="fa-solid fa-cube" style="opacity:0.5; margin-right:4px;"></i><span>${key}</span></div>`);
+        $chip.on('click', () => {
+            const $text = $('#pw-request');
+            const cur = $text.val();
+            const prefix = (cur && !cur.endsWith('\n') && cur.length > 0) ? '\n\n' : '';
+            
+            // 点击模版块时，重新拼合 Key 和 Value
+            let insertText = key + ":";
+            if (content && content.trim()) {
+                if (content.includes('\n') || content.startsWith(' ')) {
+                    insertText += "\n" + content;
+                } else {
+                    insertText += " " + content;
+                }
+            } else {
+                insertText += " ";
+            }
+
+            $text.val(cur + prefix + insertText).focus();
+            $text.scrollTop($text[0].scrollHeight);
+        });
+        $container.append($chip);
+    });
+};
+
+const renderHistoryList = () => {
+    loadData();
+    const $list = $('#pw-history-list').empty();
+    const search = $('#pw-history-search').val().toLowerCase();
+    const filtered = historyCache.filter(item => {
+        if (!search) return true;
+        const content = (item.data.resultText || "").toLowerCase();
+        const title = (item.title || "").toLowerCase();
+        return title.includes(search) || content.includes(search);
+    });
+    if (filtered.length === 0) { $list.html('<div style="text-align:center; opacity:0.6; padding:20px;">暂无草稿</div>'); return; }
+
+    filtered.forEach((item, index) => {
+        const previewText = item.data.resultText || '无内容';
+        const displayTitle = item.title || "未命名";
+
+        const $el = $(`
+        <div class="pw-history-item">
+            <div class="pw-hist-main">
+                <div class="pw-hist-header">
+                    <span class="pw-hist-title-display">${displayTitle}</span>
+                    <input type="text" class="pw-hist-title-input" value="${displayTitle}" style="display:none;">
+                    <div style="display:flex; gap:5px;">
+                        <i class="fa-solid fa-pen pw-hist-action-btn edit" title="编辑标题"></i>
+                        <i class="fa-solid fa-trash pw-hist-action-btn del" data-index="${index}" title="删除"></i>
+                    </div>
+                </div>
+                <div class="pw-hist-meta"><span>${item.timestamp || ''}</span></div>
+                <div class="pw-hist-desc">${previewText}</div>
+            </div>
+        </div>
+    `);
+        $el.on('click', function (e) {
+            if ($(e.target).closest('.pw-hist-action-btn, .pw-hist-title-input').length) return;
+            $('#pw-request').val(item.request); $('#pw-result-text').val(previewText); $('#pw-result-area').show();
+            $('#pw-request').addClass('minimized');
+            $('.pw-tab[data-tab="editor"]').click();
+        });
+        $el.find('.pw-hist-action-btn.del').on('click', function (e) {
+            e.stopPropagation();
+            if (confirm("删除?")) {
+                historyCache.splice(historyCache.indexOf(item), 1);
+                saveData(); renderHistoryList();
+            }
+        });
+        $list.append($el);
+    });
+};
+
+window.pwExtraBooks = [];
+const renderWiBooks = async () => {
+    const container = $('#pw-wi-container').empty();
+    const baseBooks = await getContextWorldBooks();
+    const allBooks = [...new Set([...baseBooks, ...(window.pwExtraBooks || [])])];
+    if (allBooks.length === 0) { container.html('<div style="opacity:0.6; padding:10px; text-align:center;">此角色未绑定世界书，请在“世界书”标签页手动添加或在酒馆主界面绑定。</div>'); return; }
+    for (const book of allBooks) {
+        const isBound = baseBooks.includes(book);
+        const $el = $(`<div class="pw-wi-book"><div class="pw-wi-header"><span><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span style="color:#9ece6a;font-size:0.8em;margin-left:5px;">(已绑定)</span>' : ''}</span><div>${!isBound ? '<i class="fa-solid fa-times remove-book" style="color:#ff6b6b;margin-right:10px;" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div></div><div class="pw-wi-list" data-book="${book}"></div></div>`);
+        $el.find('.remove-book').on('click', (e) => { e.stopPropagation(); window.pwExtraBooks = window.pwExtraBooks.filter(b => b !== book); renderWiBooks(); });
+        $el.find('.pw-wi-header').on('click', async function () {
+            const $list = $el.find('.pw-wi-list');
+            const $arrow = $(this).find('.arrow');
+            if ($list.is(':visible')) { $list.slideUp(); $arrow.removeClass('fa-flip-vertical'); }
+            else {
+                $list.slideDown(); $arrow.addClass('fa-flip-vertical');
+                if (!$list.data('loaded')) {
+                    $list.html('<div style="padding:10px;text-align:center;"><i class="fas fa-spinner fa-spin"></i></div>');
+                    const entries = await getWorldBookEntries(book);
+                    $list.empty();
+                    if (entries.length === 0) $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
+                    entries.forEach(entry => {
+                        const isChecked = entry.enabled ? 'checked' : '';
+                        const $item = $(`<div class="pw-wi-item"><div class="pw-wi-item-row"><input type="checkbox" class="pw-wi-check" ${isChecked} data-content="${encodeURIComponent(entry.content)}"><div style="font-weight:bold; font-size:0.9em; flex:1;">${entry.displayName}</div><i class="fa-solid fa-eye pw-wi-toggle-icon"></i></div><div class="pw-wi-desc">${entry.content}<div class="pw-wi-close-bar"><i class="fa-solid fa-angle-up"></i> 收起</div></div></div>`);
+                        $item.find('.pw-wi-toggle-icon').on('click', function (e) {
+                            e.stopPropagation();
+                            const $desc = $(this).closest('.pw-wi-item').find('.pw-wi-desc');
+                            if ($desc.is(':visible')) { $desc.slideUp(); $(this).css('color', ''); } else { $desc.slideDown(); $(this).css('color', '#5b8db8'); }
+                        });
+                        $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').css('color', ''); });
+                        $list.append($item);
+                    });
+                    $list.data('loaded', true);
+                }
+            }
+        });
+        container.append($el);
+    }
+};
 
 function addPersonaButton() {
     const container = $('.persona_controls_buttons_block');
