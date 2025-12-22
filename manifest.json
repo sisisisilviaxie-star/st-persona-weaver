@@ -1,7 +1,7 @@
 {
     "display_name": "Persona Weaver (User人设生成器)",
-    "name": "st-persona-weaver-lite",
-    "version": "2.0.0",
+    "name": "st-persona-weaver",
+    "version": "1.0.0",
     "author": "Yellows & AI",
     "description": "AI辅助生成与润色用户设定",
     "js": "index.js",
