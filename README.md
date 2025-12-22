@@ -1,4 +1,4 @@
-# 🧙‍♂️ Persona Weaver (用户设定编织者)
+# 🧙‍♂️ Persona Weaver (User人设生成器)
 
 [中文] | [English](#english)
 
