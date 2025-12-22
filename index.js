@@ -142,7 +142,7 @@ let isEditingTemplate = false;
 let pollInterval = null;
 let lastRawResponse = "";
 
-// [Fix] 全局处理锁
+// 全局处理锁
 let isProcessing = false;
 
 // ============================================================================
@@ -330,7 +330,7 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v49-lite'; // Version bumped
+    const styleId = 'persona-weaver-css-v50-lite'; // Version bumped
     if ($(`#${styleId}`).length) return;
     
     const css = `
@@ -437,12 +437,16 @@ async function syncToWorldInfoViaHelper(userName, content) {
 
 async function loadAvailableWorldBooks() {
     availableWorldBooks = [];
-    if (window.TavernHelper && typeof window.TavernHelper.getWorldbookNames === 'function') {
-        try { availableWorldBooks = window.TavernHelper.getWorldbookNames(); } catch { }
-    }
-    if (availableWorldBooks.length === 0 && window.world_names && Array.isArray(window.world_names)) {
+    
+    // [Fix] Reverted to most basic load logic to ensure compatibility
+    if (window.world_names && Array.isArray(window.world_names)) {
         availableWorldBooks = window.world_names;
     }
+    
+    if (availableWorldBooks.length === 0 && window.TavernHelper && typeof window.TavernHelper.getWorldbookNames === 'function') {
+        try { availableWorldBooks = window.TavernHelper.getWorldbookNames(); } catch { }
+    }
+
     if (availableWorldBooks.length === 0) {
         try {
             const r = await fetch('/api/worldinfo/get', { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify({}) });
@@ -760,18 +764,18 @@ async function openCreatorPopup() {
     }
 }
 
-// [New] Render Greetings List Logic
+// [New] Render Greetings List Logic (Referenced from your script)
 function renderGreetingsList() {
     const $container = $('#pw-greetings-list').empty();
-    const context = getContext();
-    const charId = context.characterId;
     
-    if (charId === undefined || charId === null || !context.characters[charId]) {
+    // [Fix] Using window.TavernHelper for data access as requested
+    const char = window.TavernHelper.getCharData('current');
+    
+    if (!char) {
         $container.html('<div style="padding:10px;opacity:0.5;">未加载角色卡</div>');
         return;
     }
 
-    const char = context.characters[charId];
     const greetings = [];
 
     // Main Greeting
@@ -821,9 +825,9 @@ function renderGreetingsList() {
 // ============================================================================
 
 function bindEvents() {
-    // [Fix] 防止重复绑定
-    if (window.stPersonaWeaverBound) return;
-    window.stPersonaWeaverBound = true;
+    // [Fix] 移除重复绑定的锁逻辑，确保每次打开都能重新绑定事件委托
+    // 因为是 $(document).on，我们只需要解绑一次即可
+    $(document).off('.pw');
 
     console.log("[PW] Binding Events (Lite)...");
 
