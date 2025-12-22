@@ -1,5 +1,5 @@
 import { extension_settings, getContext } from "../../../extensions.js";
-// [Fix Req 5] 直接引入 saveCharacterDebounced，解决找不到接口的问题
+// [Fix] 引入 saveCharacterDebounced 以解决保存时的黄色警告
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
@@ -113,9 +113,13 @@ let pollInterval = null;
 let lastRawResponse = "";
 let currentRefiningCard = null; 
 
+// 轮播图状态
 let currentSlideIndex = 0;
 let totalSlides = 0;
 
+// ============================================================================
+// 工具函数
+// ============================================================================
 const yieldToBrowser = () => new Promise(resolve => setTimeout(resolve, 0));
 const forcePaint = () => new Promise(resolve => setTimeout(resolve, 50));
 
@@ -255,6 +259,7 @@ function loadData() {
             ...{ initial: defaultSystemPromptInitial, refine: defaultSystemPromptRefine, opening: defaultSystemPromptOpening, openingRefine: defaultSystemPromptOpeningRefine }, 
             ...p 
         };
+        // Ensure defaults if missing in older cache
         if (!promptsCache.opening) promptsCache.opening = defaultSystemPromptOpening;
         if (!promptsCache.openingRefine) promptsCache.openingRefine = defaultSystemPromptOpeningRefine;
     } catch { 
@@ -285,20 +290,6 @@ function saveHistory(item) {
 
 function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(data)); }
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
-
-function injectStyles() {
-    const styleId = 'persona-weaver-css-v46'; // Version bumped
-    if ($(`#${styleId}`).length) return;
-    
-    // 基础样式在 style.css 中，这里仅保留必要的动态覆盖或关键修复
-    // [Fix Req 4] 确保 textarea 和相关容器撑满
-    const css = `
-    .pw-diff-content-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; height: 100%; }
-    .pw-diff-raw-view { flex: 1; display: flex; flex-direction: column; height: 100%; min-height: 0; }
-    .pw-diff-raw-textarea { flex: 1; height: 100%; min-height: 300px; width: 100%; box-sizing: border-box; }
-    `;
-    $('<style>').attr('id', styleId).text(css).appendTo('head');
-}
 
 function getActivePersonaDescription() {
     const domVal = $('#persona_description').val();
@@ -505,7 +496,7 @@ function renderOpeningResults(rawText) {
                 <div class="pw-opening-actions">
                     <button class="pw-mini-btn toggle-refine-btn"><i class="fa-solid fa-pen-fancy"></i> 润色</button>
                     <button class="pw-mini-btn pw-save-draft-btn"><i class="fa-solid fa-save"></i> 存入草稿</button>
-                    <!-- [Fix Req 2] 按钮文案修改 -->
+                    <!-- [Req 2] Button Text Update -->
                     <button class="pw-btn save apply-btn"><i class="fa-solid fa-plus-circle"></i> 添加至开场白</button>
                 </div>
             </div>
@@ -632,19 +623,18 @@ async function openCreatorPopup() {
         </div>
     </div>
 
-    <!-- 开场白页面 -->
+    <!-- [Req 1] 开场白页面重构 -->
     <div id="pw-view-opening" class="pw-view">
         <div class="pw-scroll-area">
-            <!-- [Fix Req 1] 标题 & User/Char 信息并排 -->
             <div class="pw-info-display">
-                <div class="pw-info-item"><i class="fa-solid fa-comment-dots"></i><span>开场白</span></div>
-                <div style="font-family: 'Georgia', serif; font-style: italic; font-size: 0.9em; color: #888; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">
-                    ${currentName} & ${charName}
+                <div class="pw-info-item">
+                    <i class="fa-solid fa-comment-dots"></i>
+                    <span>开场白</span>
+                    <span class="pw-opening-sub-inline">User: ${currentName} & Char: ${charName}</span>
                 </div>
             </div>
-            
-            <!-- [Fix Req 1] 副标题: 灰色，无冒号，小号字体 -->
-            <div style="font-size: 0.85em; font-weight: normal; opacity: 0.6; margin-bottom: 5px; color: #aaa;">附加要求</div>
+            <!-- [Req 1] 副标题 -->
+            <div class="pw-opening-req-label">附加要求</div>
             
             <textarea id="pw-opening-req" class="pw-textarea pw-auto-height" placeholder="在此输入场景、时间、地点等要求..."></textarea>
             <button id="pw-btn-gen-opening" class="pw-btn gen" style="margin-top:10px;">生成开场白</button>
@@ -759,6 +749,7 @@ async function openCreatorPopup() {
 // ============================================================================
 
 function bindEvents() {
+    // [Fix 1] 移除 visibilitychange 监听，避免重复绑定和事件丢失
     $(document).off('.pw');
 
     // --- 轮播图控制事件 ---
@@ -779,7 +770,7 @@ function bindEvents() {
         toastr.success(TEXT.TOAST_SNAPSHOT);
     });
 
-    // Apply Opening to Character Card (Add New)
+    // [Req 2, 3] Add to Character Opening
     $(document).on('click.pw', '.apply-btn', async function(e) {
         e.stopPropagation();
         const finalContent = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
@@ -792,7 +783,7 @@ function bindEvents() {
             return toastr.warning("当前未加载任何角色卡，无法保存。");
         }
 
-        if(confirm("确定将此内容添加为当前角色卡的新开场白 (Alternate Greeting) 吗？\n\n注意：这将修改并保存角色卡文件。")) {
+        if(confirm("确定将此内容添加为当前角色卡的新开场白 (Alternate Greeting) 吗？")) {
             try {
                 let charObj = context.characters[chId];
                 
@@ -801,16 +792,8 @@ function bindEvents() {
                 
                 charObj.data.alternate_greetings.push(finalContent);
 
-                // [Fix Req 5] 优先使用 import 的函数，其次尝试 window 全局
-                if (typeof saveCharacterDebounced === 'function') {
-                    await saveCharacterDebounced(chId);
-                } else if (typeof window.saveCharacterDebounced === 'function') {
-                    await window.saveCharacterDebounced(chId);
-                } else if (typeof window.SillyTavern !== 'undefined' && typeof window.SillyTavern.saveCharacterDebounced === 'function') {
-                    await window.SillyTavern.saveCharacterDebounced(chId);
-                } else {
-                    toastr.warning("未找到保存接口，仅在内存中更新。请手动点击酒馆的保存按钮。");
-                }
+                // [Fix 3] Use imported save function directly
+                await saveCharacterDebounced(chId);
                 
                 if (window.TavernHelper && window.TavernHelper.eventEmit && window.TavernHelper.events) {
                      window.TavernHelper.eventEmit(window.TavernHelper.events.CHARACTER_EDITED, { detail: { id: chId, character: charObj } });
@@ -860,11 +843,10 @@ function bindEvents() {
             $('#pw-diff-raw-textarea').val(lastRawResponse);
             $('#pw-diff-list').empty();
 
-            // [Fix Req 3] 去掉 readonly，完全可编辑
-            const oldTabHtml = `<textarea class="pw-diff-raw-textarea">${oldContent}</textarea>`; 
+            // [Req 3] HTML clean up
+            const oldTabHtml = `<textarea class="pw-diff-raw-textarea">${oldContent}</textarea>`;
             const newTabHtml = `<textarea class="pw-diff-raw-textarea" id="pw-opening-new-textarea">${refinedText}</textarea>`;
             
-            // [Fix Req 3] 移除 (只读) 提示
             $('.pw-diff-tab[data-view="diff"] div:first-child').text('原版本');
             $('.pw-diff-tab[data-view="diff"] .pw-tab-sub').text('选择编辑');
             $('.pw-diff-tab[data-view="raw"] div:first-child').text('新版本');
@@ -955,6 +937,7 @@ function bindEvents() {
         }
     });
 
+    // --- Float Button Selection Check [Fix 1: Safe Check] ---
     let selectionTimeout;
     const checkSelection = () => {
         clearTimeout(selectionTimeout);
@@ -971,7 +954,7 @@ function bindEvents() {
                     if ($btn.is(':visible')) $btn.stop(true, true).fadeOut(200);
                 }
             } catch(e) { console.error("Selection check error", e); }
-        }, 200); 
+        }, 200);
     };
     $(document).on('touchend mouseup keyup', '.pw-opening-textarea, #pw-result-text', checkSelection);
 
@@ -1106,7 +1089,7 @@ function bindEvents() {
                 if (isChanged) changeCount++;
                 if (!valOld && !valNew) return;
 
-                // [Fix Req 3] 原版本也可编辑，移除 (可编辑) 提示
+                // [Req 3] Remove text labels
                 let cardsHtml = '';
                 if (!isChanged) {
                     cardsHtml = `
@@ -1138,6 +1121,7 @@ function bindEvents() {
 
             $('#pw-diff-overlay').data('source', 'persona');
             
+            // [Req 3] Clean tabs
             $('.pw-diff-tab[data-view="diff"] div:first-child').text('智能对比');
             $('.pw-diff-tab[data-view="diff"] .pw-tab-sub').text('选择编辑');
             $('.pw-diff-tab[data-view="raw"] div:first-child').text('新版原文');
@@ -1165,7 +1149,6 @@ function bindEvents() {
         const $row = $(this).closest('.pw-diff-row');
         if ($(this).hasClass('single-view')) return;
 
-        // [Fix Req 3] 切换选中状态，保持所有卡片可点击
         $row.find('.pw-diff-card').removeClass('selected');
         $(this).addClass('selected');
     });
@@ -1328,7 +1311,6 @@ function bindEvents() {
         }
     });
 
-    // Save Draft (Persona)
     $(document).on('click.pw', '#pw-snapshot', function (e) {
         e.stopPropagation();
         const text = $('#pw-result-text').val();
@@ -1464,7 +1446,7 @@ function startPolling() {
 }
 
 jQuery(async () => {
-    injectStyles();
+    // 移除了 injectStyles() 调用，请务必使用同级目录下的 style.css 文件
     addPersonaButton();
     startPolling();
     bindEvents();
