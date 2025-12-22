@@ -194,7 +194,8 @@ const TEXT = {
     TOAST_WI_FAIL: "当前角色未绑定世界书，无法写入",
     TOAST_WI_ERROR: "TavernHelper API 未加载，无法操作世界书",
     TOAST_SNAPSHOT: "已保存至草稿",
-    TOAST_LOAD_CURRENT: "已读取当前酒馆人设内容"
+    TOAST_LOAD_CURRENT: "已读取当前酒馆人设内容",
+    TOAST_COPY: "已复制到剪贴板"
 };
 
 let historyCache = [];
@@ -389,7 +390,7 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v44'; // Version bumped
+    const styleId = 'persona-weaver-css-v45'; // Version bumped
     if ($(`#${styleId}`).length) return;
     
     const css = `
@@ -461,11 +462,10 @@ function injectStyles() {
 
     .pw-header-subtitle { font-size: 0.65em; opacity: 0.6; font-weight: normal; margin-left: 10px; color: #ccc; }
     
-    /* [Req 2] Updated Input Label style: Visible & Left Aligned */
     .pw-input-label { 
         font-size: 1.0em; 
         font-weight: bold; 
-        color: #e0af68; /* Theme gold color */
+        color: #e0af68; 
         margin-bottom: 5px; 
         margin-top: 5px;
         text-align: left; 
@@ -656,29 +656,21 @@ function updateCarousel() {
     $('#pw-next-slide').prop('disabled', currentSlideIndex === totalSlides - 1);
 }
 
-function renderOpeningResults(rawText) {
+// [Req 2] Split render logic: 
+// 1. From Raw Text (AI Output)
+// 2. From Data Array (Saved State)
+function renderOpeningFromData(dataArray) {
     const $container = $('#pw-opening-results').empty();
-    
-    let matches = [...rawText.matchAll(/```[\s\S]*?```/g)].map(m => m[0].replace(/```[a-z]*\n?/g, '').replace(/```$/, ''));
-    if (!matches || matches.length === 0) {
-        if (rawText.includes('---')) {
-            matches = rawText.split(/---+[^\n]*---+/g).map(s => s.trim()).filter(s => s.length > 10);
-        }
-    }
-    if (!matches || matches.length === 0) {
-        matches = [rawText.trim()];
-    }
-    
     let slidesHtml = '';
-    totalSlides = matches.length;
+    totalSlides = dataArray.length;
     
-    matches.forEach((content, i) => {
+    dataArray.forEach((content, i) => {
         slidesHtml += `
             <div class="pw-opening-card" data-index="${i}">
                 <div class="pw-opening-header">
                     <span>开场白选项 ${i + 1}</span>
                 </div>
-                <textarea class="pw-opening-textarea">${content.trim()}</textarea>
+                <textarea class="pw-opening-textarea">${content}</textarea>
                 
                 <div class="pw-card-refine-box">
                     <textarea class="pw-card-refine-input" placeholder="对此开场白提出修改意见..."></textarea>
@@ -689,7 +681,8 @@ function renderOpeningResults(rawText) {
 
                 <div class="pw-opening-actions">
                     <button class="pw-mini-btn toggle-refine-btn"><i class="fa-solid fa-pen-fancy"></i> 润色</button>
-                    <!-- [Req 1] Text changed to 保存 -->
+                    <!-- [Req 1] Added Copy Button -->
+                    <button class="pw-mini-btn pw-copy-opening-btn"><i class="fa-solid fa-copy"></i> 复制</button>
                     <button class="pw-mini-btn pw-save-draft-btn"><i class="fa-solid fa-save"></i> 保存</button>
                     <button class="pw-btn save apply-btn"><i class="fa-solid fa-plus-circle"></i> 加入开场白列表</button>
                 </div>
@@ -713,6 +706,21 @@ function renderOpeningResults(rawText) {
     $container.html(carouselHtml);
     currentSlideIndex = 0;
     updateCarousel();
+}
+
+function renderOpeningResults(rawText) {
+    let matches = [...rawText.matchAll(/```[\s\S]*?```/g)].map(m => m[0].replace(/```[a-z]*\n?/g, '').replace(/```$/, ''));
+    if (!matches || matches.length === 0) {
+        if (rawText.includes('---')) {
+            matches = rawText.split(/---+[^\n]*---+/g).map(s => s.trim()).filter(s => s.length > 10);
+        }
+    }
+    if (!matches || matches.length === 0) {
+        matches = [rawText.trim()];
+    }
+    // Trim each entry
+    matches = matches.map(m => m.trim());
+    renderOpeningFromData(matches);
 }
 
 async function openCreatorPopup() {
@@ -810,6 +818,8 @@ async function openCreatorPopup() {
         <div class="pw-footer">
             <div class="pw-footer-group">
                 <div class="pw-compact-btn danger" id="pw-clear" title="清空"><i class="fa-solid fa-eraser"></i></div>
+                <!-- [Req 1] Persona Copy Button -->
+                <div class="pw-compact-btn" id="pw-copy-persona" title="复制内容"><i class="fa-solid fa-copy"></i></div>
                 <div class="pw-compact-btn" id="pw-snapshot" title="存入草稿 (Drafts)"><i class="fa-solid fa-save"></i></div>
             </div>
             <div class="pw-footer-group" style="flex:1; justify-content:flex-end; gap: 8px;">
@@ -822,11 +832,8 @@ async function openCreatorPopup() {
     <!-- 开场白页面 -->
     <div id="pw-view-opening" class="pw-view">
         <div class="pw-scroll-area">
-            <!-- [Req 2] Removed the "Opening" title block -->
-            
-            <!-- [Req 2] High visible label -->
             <div class="pw-input-label">附加要求</div>
-            <textarea id="pw-opening-req" class="pw-textarea pw-auto-height" placeholder="在此输入场景、时间、地点等要求..."></textarea>
+            <textarea id="pw-opening-req" class="pw-textarea pw-auto-height" placeholder="在此输入场景、时间、地点等要求...">${savedState.openingRequest || ''}</textarea>
             <button id="pw-btn-gen-opening" class="pw-btn gen" style="margin-top:10px;">生成开场白</button>
             <div id="pw-opening-results" class="pw-opening-result-container"></div>
         </div>
@@ -920,6 +927,11 @@ async function openCreatorPopup() {
     renderTemplateChips();
     renderWiBooks();
 
+    // [Req 2] Load saved opening data
+    if (savedState.openingData && Array.isArray(savedState.openingData) && savedState.openingData.length > 0) {
+        renderOpeningFromData(savedState.openingData);
+    }
+
     $('.pw-auto-height').each(function() {
         this.style.height = 'auto';
         this.style.height = (this.scrollHeight) + 'px';
@@ -939,21 +951,35 @@ async function openCreatorPopup() {
 // ============================================================================
 
 function bindEvents() {
-    // [Fix] 防止重复绑定。如果已经绑定过，直接返回。
     if (window.stPersonaWeaverBound) return;
     window.stPersonaWeaverBound = true;
 
     console.log("[PW] Binding Events...");
 
-    // [Fix] 移除 visibilitychange 监听器。这通常是事件丢失的元凶。
-    // $(document).off('.pw'); // 也不要轻易off，除非确定是重载
-
     // --- 轮播图控制事件 ---
     $(document).on('click.pw', '#pw-prev-slide', () => { if (currentSlideIndex > 0) { currentSlideIndex--; updateCarousel(); } });
     $(document).on('click.pw', '#pw-next-slide', () => { if (currentSlideIndex < totalSlides - 1) { currentSlideIndex++; updateCarousel(); } });
 
+    // --- 复制按钮 (人设) [Req 1] ---
+    $(document).on('click.pw', '#pw-copy-persona', function() {
+        const text = $('#pw-result-text').val();
+        if(text) {
+            navigator.clipboard.writeText(text);
+            toastr.success(TEXT.TOAST_COPY);
+        }
+    });
+
+    // --- 复制按钮 (开场白) [Req 1] ---
+    $(document).on('click.pw', '.pw-copy-opening-btn', function() {
+        const content = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
+        if(content) {
+            navigator.clipboard.writeText(content);
+            toastr.success(TEXT.TOAST_COPY);
+        }
+    });
+
     // --- 开场白卡片内部按钮事件 ---
-    // [Req 1] Save Draft (Label changed in render)
+    // Save Draft
     $(document).on('click.pw', '.pw-save-draft-btn', function() {
         const content = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
         const req = $('#pw-opening-req').val();
@@ -1168,14 +1194,23 @@ function bindEvents() {
     };
     $(document).on('input.pw', '.pw-auto-height, #pw-refine-input, .pw-card-refine-input', function () { adjustHeight(this); });
 
+    // [Req 2] Enhanced Save Logic to capture Opening Data
     let saveTimeout;
     const saveCurrentState = () => {
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
+            // Capture all current opening texts
+            const currentOpeningData = [];
+            $('.pw-opening-textarea').each(function() {
+                currentOpeningData.push($(this).val());
+            });
+
             saveState({
                 request: $('#pw-request').val(),
                 resultText: $('#pw-result-text').val(),
                 hasResult: $('#pw-result-area').is(':visible'),
+                openingRequest: $('#pw-opening-req').val(),
+                openingData: currentOpeningData, // Save the array
                 localConfig: {
                     apiSource: $('#pw-api-source').val(),
                     indepApiUrl: $('#pw-api-url').val(),
@@ -1186,7 +1221,8 @@ function bindEvents() {
             });
         }, 500);
     };
-    $(document).on('input.pw change.pw', '#pw-request, #pw-result-text, #pw-wi-toggle, .pw-input, .pw-select', saveCurrentState);
+    // Listen to changes in opening textarea
+    $(document).on('input.pw change.pw', '#pw-request, #pw-result-text, #pw-wi-toggle, .pw-input, .pw-select, .pw-opening-textarea, #pw-opening-req', saveCurrentState);
 
     // --- Diff View Logic ---
     $(document).on('click.pw', '.pw-diff-tab', function () {
@@ -1341,6 +1377,8 @@ function bindEvents() {
             
             if (currentRefiningCard) {
                 currentRefiningCard.find('.pw-opening-textarea').val(finalContent);
+                // Trigger save so new content is persisted
+                saveCurrentState();
                 currentRefiningCard.find('.pw-card-refine-box').slideUp();
             }
         } else {
@@ -1490,7 +1528,7 @@ function bindEvents() {
         saveHistory({ 
             request: req || "无", 
             timestamp: new Date().toLocaleString(), 
-            title: "", 
+            title: "", // Let default logic handle it
             data: { name: "Persona", resultText: text || "(无)", type: 'persona' } 
         });
         toastr.success(TEXT.TOAST_SNAPSHOT);
