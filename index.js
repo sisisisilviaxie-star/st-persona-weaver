@@ -1,5 +1,5 @@
 import { extension_settings, getContext } from "../../../extensions.js";
-// [Fix] 关键修改：添加 saveCharacterDebounced 的引入
+// [Fix Req 5] 直接引入 saveCharacterDebounced，解决找不到接口的问题
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
@@ -119,12 +119,18 @@ let totalSlides = 0;
 const yieldToBrowser = () => new Promise(resolve => setTimeout(resolve, 0));
 const forcePaint = () => new Promise(resolve => setTimeout(resolve, 50));
 
+// ============================================================================
+// 1. 核心数据解析逻辑
+// ============================================================================
+
 function parseYamlToBlocks(text) {
     const map = new Map();
     if (!text || typeof text !== 'string') return map;
+
     try {
         const cleanText = text.replace(/^```[a-z]*\n?/im, '').replace(/```$/im, '').trim();
         let lines = cleanText.split('\n');
+
         const topLevelKeyRegex = /^\s*([^:\s\-]+?)\s*[:：]/;
         let topKeysIndices = [];
         for (let i = 0; i < lines.length; i++) {
@@ -133,6 +139,7 @@ function parseYamlToBlocks(text) {
                 topKeysIndices.push(i);
             }
         }
+
         if (topKeysIndices.length === 1 && lines.length > 2) {
             const firstLineIndex = topKeysIndices[0];
             const remainingLines = lines.slice(firstLineIndex + 1);
@@ -149,8 +156,10 @@ function parseYamlToBlocks(text) {
                 lines = remainingLines.map(l => l.length >= minIndent ? l.substring(minIndent) : l);
             }
         }
+
         let currentKey = null;
         let currentBuffer = [];
+
         const flushBuffer = () => {
             if (currentKey && currentBuffer.length > 0) {
                 let valuePart = "";
@@ -168,6 +177,7 @@ function parseYamlToBlocks(text) {
                 map.set(currentKey, valuePart);
             }
         };
+
         lines.forEach((line) => {
             const isTopLevel = (line.length < 200) && topLevelKeyRegex.test(line) && !line.trim().startsWith('-');
             const indentLevel = line.search(/\S|$/);
@@ -200,6 +210,7 @@ async function collectActiveWorldInfoContent() {
         const manualBooks = window.pwExtraBooks || [];
         const allBooks = [...new Set([...boundBooks, ...manualBooks])];
         if (allBooks.length > 20) allBooks.length = 20;
+
         for (const bookName of allBooks) {
             await yieldToBrowser();
             try {
@@ -226,6 +237,10 @@ function getCharacterPersonaString() {
     if (char.scenario) parts.push(`Scenario:\n${char.scenario}`);
     return parts.join('\n\n');
 }
+
+// ============================================================================
+// 2. 存储与系统函数
+// ============================================================================
 
 function loadData() {
     try { historyCache = JSON.parse(localStorage.getItem(STORAGE_KEY_HISTORY)) || []; } catch { historyCache = []; }
@@ -255,12 +270,14 @@ function saveData() {
 
 function saveHistory(item) {
     const limit = extension_settings[extensionName]?.historyLimit || 50;
+    
     if (!item.title || item.title === "未命名") {
         const context = getContext();
         const userName = $('.persona_name').first().text().trim() || "User";
         const charName = context.characters[context.characterId]?.name || "Char";
         item.title = `${userName} & ${charName}`;
     }
+
     historyCache.unshift(item);
     if (historyCache.length > limit) historyCache = historyCache.slice(0, limit);
     saveData();
@@ -270,72 +287,15 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v46';
+    const styleId = 'persona-weaver-css-v46'; // Version bumped
     if ($(`#${styleId}`).length) return;
     
-    // [Fix Req 4] CSS 隔离优化，避免污染全局
+    // 基础样式在 style.css 中，这里仅保留必要的动态覆盖或关键修复
+    // [Fix Req 4] 确保 textarea 和相关容器撑满
     const css = `
-    #pw-api-model-select { flex: 1; width: 0; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
-    .pw-load-btn { font-size: 0.85em; background: linear-gradient(135deg, rgba(224, 175, 104, 0.2), rgba(224, 175, 104, 0.1)); border: 1px solid #e0af68; padding: 4px 12px; border-radius: 4px; cursor: pointer; color: #e0af68; font-weight: bold; margin-left: auto; display: inline-flex; align-items: center; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-    .pw-load-btn:hover { background: rgba(224, 175, 104, 0.3); transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.3); color: #fff; }
-    .pw-template-textarea { background: rgba(0, 0, 0, 0.5) !important; color: #eee !important; font-family: 'Consolas', 'Monaco', monospace; line-height: 1.4; height: 350px !important; border-radius: 0 0 6px 6px !important; border-top: none !important; }
-    .pw-shortcut-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 10px; height: auto; gap: 2px; min-width: 40px; }
-    .pw-shortcut-btn span:first-child { font-size: 0.8em; opacity: 0.8; }
-    .pw-shortcut-btn span.code { font-weight: bold; font-family: monospace; color: #e0af68; font-size: 1.1em; }
-    .pw-var-btns { gap: 6px; }
-    .pw-var-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 10px; height: auto; gap: 0; border-color: rgba(128,128,128,0.4); }
-    .pw-var-btn span:first-child { font-weight: bold; font-size: 0.8em; }
-    .pw-var-btn span.code { font-size: 0.75em; opacity: 0.7; font-family: monospace; }
-    #pw-api-url { background-color: rgba(0, 0, 0, 0.2) !important; border: 1px solid var(--SmartThemeBorderColor) !important; color: var(--smart-theme-body-color) !important; }
-    .pw-auto-height { min-height: 80px; max-height: 500px; overflow-y: auto; }
-    #pw-request { transition: none !important; } 
-    #pw-history-clear-all { background: transparent; border: none; color: #ff6b6b; font-size: 0.85em; opacity: 0.6; padding: 5px; width: auto; margin: 10px auto; text-decoration: underline; }
-    #pw-history-clear-all:hover { opacity: 1; background: transparent; transform: none; }
-    
-    .pw-diff-row { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-    .pw-diff-attr-name { font-weight: bold; color: #9ece6a; font-size: 1em; padding-bottom: 5px; border-bottom: 1px solid #333; margin-bottom: 5px; }
-    
-    .pw-diff-cards { display: flex; gap: 10px; }
-    .pw-diff-card { flex: 1; display: flex; flex-direction: column; border: 2px solid transparent; border-radius: 6px; background: #222; overflow: hidden; transition: all 0.2s; cursor: pointer; opacity: 0.6; position: relative; }
-    .pw-diff-card.selected { border-color: #9ece6a; opacity: 1; background: #252525; box-shadow: 0 0 10px rgba(158, 206, 106, 0.1); }
-    .pw-diff-card:not(.selected):hover { opacity: 0.8; }
-    
-    .pw-diff-label { font-size: 0.75em; padding: 4px 8px; background: rgba(0,0,0,0.3); color: #aaa; text-transform: uppercase; font-weight: bold; }
-    .pw-diff-card.selected .pw-diff-label { color: #9ece6a; background: rgba(158, 206, 106, 0.1); }
-    
-    /* [Fix Req 3] 允许所有卡片编辑 */
-    .pw-diff-textarea { flex: 1; width: 100%; background: transparent; border: none; color: #eee; padding: 8px; font-family: inherit; font-size: 0.95em; resize: none; outline: none; line-height: 1.5; min-height: 80px; box-sizing: border-box; }
-    .pw-diff-card:not(.selected) .pw-diff-textarea { color: #888; pointer-events: auto !important; } 
-    
-    @media screen and (max-width: 600px) { .pw-diff-cards { flex-direction: column; } }
-    
-    .pw-btn.wi { background: linear-gradient(135deg, rgba(122, 162, 247, 0.2), rgba(0, 0, 0, 0)); border-color: #7aa2f7; color: #7aa2f7; }
-
-    .pw-carousel-container { position: relative; width: 100%; overflow: hidden; margin-top: 10px; padding-bottom: 5px; }
-    .pw-carousel-track { display: flex; transition: transform 0.3s ease-in-out; }
-    .pw-opening-card { flex: 0 0 100%; width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.2); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
-    .pw-opening-header { font-weight: bold; color: #e0af68; font-size: 1.1em; display: flex; justify-content: space-between; align-items: center; }
-    .pw-opening-textarea { width: 100%; min-height: 350px; background: rgba(0, 0, 0, 0.15); border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; color: #eee; padding: 10px; font-family: inherit; font-size: 1.0em; line-height: 1.6; resize: vertical; outline: none; box-sizing: border-box; white-space: pre-wrap; }
-    .pw-opening-textarea:focus { background: rgba(0,0,0,0.25); border-color: #e0af68; }
-    .pw-opening-actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 5px; }
-    .pw-carousel-nav { display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 15px; padding-top: 10px; border-top: 1px dashed var(--SmartThemeBorderColor); }
-    .pw-nav-btn { background: rgba(0,0,0,0.3); border: 1px solid var(--SmartThemeBorderColor); color: #ccc; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
-    .pw-nav-btn:hover { background: rgba(255,255,255,0.1); color: #fff; border-color: #e0af68; }
-    .pw-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-    .pw-slide-indicator { font-weight: bold; font-family: monospace; color: #e0af68; }
-
-    .pw-card-refine-box { display: none; flex-direction: column; gap: 8px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; border: 1px dashed var(--SmartThemeBorderColor); margin-top: 5px; }
-    .pw-card-refine-input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--SmartThemeBorderColor); color: #ddd; padding: 8px; border-radius: 4px; resize: vertical; min-height: 60px; }
-    
-    .pw-tab-sub { display: block; font-size: 0.75em; opacity: 0.6; font-weight: normal; margin-top: 2px; text-align: center; }
-    .pw-diff-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
-
-    .pw-float-quote-btn { position: fixed; top: calc(20% + 60px); right: 0; background: linear-gradient(135deg, #e0af68, #d08f40); color: #1a1a1a; padding: 8px 12px; border-radius: 20px 0 0 20px; font-weight: bold; font-size: 0.85em; box-shadow: -2px 2px 8px rgba(0,0,0,0.4); cursor: pointer; z-index: 9999; display: none; align-items: center; gap: 4px; border: 1px solid rgba(255,255,255,0.3); border-right: none; backdrop-filter: blur(5px); }
-    .pw-float-quote-btn:hover { padding-right: 18px; transform: translateX(-2px); }
-    
-    /* [Fix Req 1] 新的标题样式 */
-    .pw-opening-subtitle { font-family: 'Georgia', serif; font-style: italic; font-size: 0.9em; color: #888; margin-left: 10px; opacity: 0.8; margin-top: 2px; }
-    .pw-extra-req-label { font-size: 0.85em; opacity: 0.6; color: #e0af68; margin-bottom: 5px; font-weight: bold; }
+    .pw-diff-content-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; height: 100%; }
+    .pw-diff-raw-view { flex: 1; display: flex; flex-direction: column; height: 100%; min-height: 0; }
+    .pw-diff-raw-textarea { flex: 1; height: 100%; min-height: 300px; width: 100%; box-sizing: border-box; }
     `;
     $('<style>').attr('id', styleId).text(css).appendTo('head');
 }
@@ -502,6 +462,10 @@ async function runGeneration(data, apiConfig) {
     return responseContent.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
 }
 
+// ============================================================================
+// 3. UI 渲染 logic
+// ============================================================================
+
 function updateCarousel() {
     if (totalSlides === 0) return;
     const offset = -currentSlideIndex * 100;
@@ -541,7 +505,7 @@ function renderOpeningResults(rawText) {
                 <div class="pw-opening-actions">
                     <button class="pw-mini-btn toggle-refine-btn"><i class="fa-solid fa-pen-fancy"></i> 润色</button>
                     <button class="pw-mini-btn pw-save-draft-btn"><i class="fa-solid fa-save"></i> 存入草稿</button>
-                    <!-- [Fix Req 2] 修改按钮文案 -->
+                    <!-- [Fix Req 2] 按钮文案修改 -->
                     <button class="pw-btn save apply-btn"><i class="fa-solid fa-plus-circle"></i> 添加至开场白</button>
                 </div>
             </div>
@@ -671,16 +635,17 @@ async function openCreatorPopup() {
     <!-- 开场白页面 -->
     <div id="pw-view-opening" class="pw-view">
         <div class="pw-scroll-area">
-            <!-- [Fix Req 1] 标题与 User/Char 整合 -->
+            <!-- [Fix Req 1] 标题 & User/Char 信息并排 -->
             <div class="pw-info-display">
                 <div class="pw-info-item"><i class="fa-solid fa-comment-dots"></i><span>开场白</span></div>
-                <div class="pw-opening-subtitle">
-                    User: ${currentName} <span style="opacity:0.5">&</span> Char: ${charName}
+                <div style="font-family: 'Georgia', serif; font-style: italic; font-size: 0.9em; color: #888; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">
+                    ${currentName} & ${charName}
                 </div>
             </div>
             
-            <!-- [Fix Req 1] 副标题修改 -->
-            <div class="pw-extra-req-label">附加要求</div>
+            <!-- [Fix Req 1] 副标题: 灰色，无冒号，小号字体 -->
+            <div style="font-size: 0.85em; font-weight: normal; opacity: 0.6; margin-bottom: 5px; color: #aaa;">附加要求</div>
+            
             <textarea id="pw-opening-req" class="pw-textarea pw-auto-height" placeholder="在此输入场景、时间、地点等要求..."></textarea>
             <button id="pw-btn-gen-opening" class="pw-btn gen" style="margin-top:10px;">生成开场白</button>
             <div id="pw-opening-results" class="pw-opening-result-container"></div>
@@ -789,12 +754,18 @@ async function openCreatorPopup() {
     }
 }
 
+// ============================================================================
+// 4. 事件绑定
+// ============================================================================
+
 function bindEvents() {
     $(document).off('.pw');
 
+    // --- 轮播图控制事件 ---
     $(document).on('click.pw', '#pw-prev-slide', (e) => { e.stopPropagation(); if (currentSlideIndex > 0) { currentSlideIndex--; updateCarousel(); } });
     $(document).on('click.pw', '#pw-next-slide', (e) => { e.stopPropagation(); if (currentSlideIndex < totalSlides - 1) { currentSlideIndex++; updateCarousel(); } });
 
+    // --- 开场白卡片内部按钮事件 ---
     $(document).on('click.pw', '.pw-save-draft-btn', function(e) {
         e.stopPropagation();
         const content = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
@@ -808,6 +779,7 @@ function bindEvents() {
         toastr.success(TEXT.TOAST_SNAPSHOT);
     });
 
+    // Apply Opening to Character Card (Add New)
     $(document).on('click.pw', '.apply-btn', async function(e) {
         e.stopPropagation();
         const finalContent = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
@@ -829,13 +801,13 @@ function bindEvents() {
                 
                 charObj.data.alternate_greetings.push(finalContent);
 
-                // [Fix Req 5] 使用正确引入的 saveCharacterDebounced
+                // [Fix Req 5] 优先使用 import 的函数，其次尝试 window 全局
                 if (typeof saveCharacterDebounced === 'function') {
                     await saveCharacterDebounced(chId);
-                    toastr.success("已添加新开场白并保存");
+                } else if (typeof window.saveCharacterDebounced === 'function') {
+                    await window.saveCharacterDebounced(chId);
                 } else if (typeof window.SillyTavern !== 'undefined' && typeof window.SillyTavern.saveCharacterDebounced === 'function') {
                     await window.SillyTavern.saveCharacterDebounced(chId);
-                    toastr.success("已添加新开场白并保存");
                 } else {
                     toastr.warning("未找到保存接口，仅在内存中更新。请手动点击酒馆的保存按钮。");
                 }
@@ -844,6 +816,7 @@ function bindEvents() {
                      window.TavernHelper.eventEmit(window.TavernHelper.events.CHARACTER_EDITED, { detail: { id: chId, character: charObj } });
                 }
 
+                toastr.success("已添加新开场白并保存");
             } catch (e) {
                 console.error(e);
                 toastr.error("保存失败: " + e.message);
@@ -856,6 +829,7 @@ function bindEvents() {
         $(this).closest('.pw-opening-card').find('.pw-card-refine-box').slideToggle();
     });
 
+    // Confirm Refine (Opening)
     $(document).on('click.pw', '.refine-confirm-btn', async function(e) {
         e.stopPropagation();
         const $card = $(this).closest('.pw-opening-card');
@@ -886,11 +860,13 @@ function bindEvents() {
             $('#pw-diff-raw-textarea').val(lastRawResponse);
             $('#pw-diff-list').empty();
 
-            const oldTabHtml = `<textarea class="pw-diff-raw-textarea" readonly>${oldContent}</textarea>`; 
+            // [Fix Req 3] 去掉 readonly，完全可编辑
+            const oldTabHtml = `<textarea class="pw-diff-raw-textarea">${oldContent}</textarea>`; 
             const newTabHtml = `<textarea class="pw-diff-raw-textarea" id="pw-opening-new-textarea">${refinedText}</textarea>`;
             
+            // [Fix Req 3] 移除 (只读) 提示
             $('.pw-diff-tab[data-view="diff"] div:first-child').text('原版本');
-            $('.pw-diff-tab[data-view="diff"] .pw-tab-sub').text('只读');
+            $('.pw-diff-tab[data-view="diff"] .pw-tab-sub').text('选择编辑');
             $('.pw-diff-tab[data-view="raw"] div:first-child').text('新版本');
             $('.pw-diff-tab[data-view="raw"] .pw-tab-sub').text('直接编辑');
             
@@ -911,6 +887,7 @@ function bindEvents() {
         }
     });
 
+    // --- Tabs ---
     $(document).on('click.pw', '.pw-tab', function (e) {
         e.stopPropagation();
         $('.pw-tab').removeClass('active'); $(this).addClass('active');
@@ -919,6 +896,7 @@ function bindEvents() {
         if ($(this).data('tab') === 'history') renderHistoryList();
     });
 
+    // --- Template Editing ---
     $(document).on('click.pw', '#pw-toggle-edit-template', (e) => {
         e.stopPropagation();
         isEditingTemplate = !isEditingTemplate;
@@ -947,6 +925,7 @@ function bindEvents() {
         toastr.success("模版已更新");
     });
 
+    // --- Shortcuts ---
     $(document).on('click.pw', '.pw-shortcut-btn', function (e) {
         e.stopPropagation();
         const key = $(this).data('key');
@@ -992,7 +971,7 @@ function bindEvents() {
                     if ($btn.is(':visible')) $btn.stop(true, true).fadeOut(200);
                 }
             } catch(e) { console.error("Selection check error", e); }
-        }, 200);
+        }, 200); 
     };
     $(document).on('touchend mouseup keyup', '.pw-opening-textarea, #pw-result-text', checkSelection);
 
@@ -1054,6 +1033,7 @@ function bindEvents() {
     };
     $(document).on('input.pw change.pw', '#pw-request, #pw-result-text, #pw-wi-toggle, .pw-input, .pw-select', saveCurrentState);
 
+    // --- Diff View Logic ---
     $(document).on('click.pw', '.pw-diff-tab', function (e) {
         e.stopPropagation();
         $('.pw-diff-tab').removeClass('active');
@@ -1084,6 +1064,7 @@ function bindEvents() {
         }
     });
 
+    // Refine (Persona)
     $(document).on('click.pw', '#pw-btn-refine', async function (e) {
         e.preventDefault(); e.stopPropagation();
         const refineReq = $('#pw-refine-input').val();
@@ -1125,8 +1106,8 @@ function bindEvents() {
                 if (isChanged) changeCount++;
                 if (!valOld && !valNew) return;
 
+                // [Fix Req 3] 原版本也可编辑，移除 (可编辑) 提示
                 let cardsHtml = '';
-                // [Fix Req 3] 移除只读限制，移除提示词
                 if (!isChanged) {
                     cardsHtml = `
                     <div class="pw-diff-card new selected single-view" data-val="${encodeURIComponent(valNew)}">
@@ -1184,6 +1165,7 @@ function bindEvents() {
         const $row = $(this).closest('.pw-diff-row');
         if ($(this).hasClass('single-view')) return;
 
+        // [Fix Req 3] 切换选中状态，保持所有卡片可点击
         $row.find('.pw-diff-card').removeClass('selected');
         $(this).addClass('selected');
     });
@@ -1231,6 +1213,7 @@ function bindEvents() {
 
     $(document).on('click.pw', '#pw-diff-cancel', (e) => { e.stopPropagation(); $('#pw-diff-overlay').fadeOut(); });
 
+    // Generate Persona
     $(document).on('click.pw', '#pw-btn-gen', async function (e) {
         e.preventDefault(); e.stopPropagation();
         const req = $('#pw-request').val();
@@ -1265,6 +1248,7 @@ function bindEvents() {
         }
     });
 
+    // Generate Opening
     $(document).on('click.pw', '#pw-btn-gen-opening', async function(e) {
         e.preventDefault(); e.stopPropagation();
         const req = $('#pw-opening-req').val();
@@ -1344,6 +1328,7 @@ function bindEvents() {
         }
     });
 
+    // Save Draft (Persona)
     $(document).on('click.pw', '#pw-snapshot', function (e) {
         e.stopPropagation();
         const text = $('#pw-result-text').val();
