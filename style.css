@@ -45,6 +45,11 @@
 }
 .pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: #e0af68; font-size: 1.05em; }
 
+/* 新增的 User/Char 副标题样式 */
+.pw-opening-subtitle { font-family: 'Georgia', serif; font-style: italic; font-size: 0.9em; color: #888; margin-left: 10px; opacity: 0.8; margin-top: 2px; }
+/* 新增的附加要求样式 */
+.pw-extra-req-label { font-size: 0.85em; opacity: 0.6; color: #e0af68; margin-bottom: 5px; font-weight: bold; }
+
 .pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .pw-tags-label { font-weight: bold; opacity: 0.8; font-size: 0.85em; }
 .pw-tags-actions { display: flex; gap: 10px; align-items: center; }
@@ -249,7 +254,7 @@
     flex: 1; width: 100%; background: transparent; border: none; color: #eee; padding: 8px; 
     font-family: inherit; font-size: 0.95em; resize: none; outline: none; line-height: 1.5; min-height: 80px; box-sizing: border-box; 
 }
-/* [Fix Req 5] 允许未选中的卡片也能被编辑 */
+/* [Fix Req 3] 允许未选中的卡片也能被编辑 */
 .pw-diff-card:not(.selected) .pw-diff-textarea { 
     color: #888; 
     pointer-events: auto; 
