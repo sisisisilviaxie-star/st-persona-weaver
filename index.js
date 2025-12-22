@@ -210,7 +210,6 @@ let pollInterval = null;
 let lastRawResponse = "";
 let currentRefiningCard = null; 
 
-// 轮播图状态
 let currentSlideIndex = 0;
 let totalSlides = 0;
 
@@ -380,7 +379,7 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v41';
+    const styleId = 'persona-weaver-css-v42';
     if ($(`#${styleId}`).length) return;
     
     const css = `
@@ -435,7 +434,7 @@ function injectStyles() {
     .pw-opening-textarea:focus { background: rgba(0,0,0,0.25); border-color: #e0af68; }
     .pw-opening-actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 5px; }
     
-    .pw-carousel-nav { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 10px; }
+    .pw-carousel-nav { display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 15px; }
     .pw-nav-btn { background: rgba(0,0,0,0.3); border: 1px solid var(--SmartThemeBorderColor); color: #ccc; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
     .pw-nav-btn:hover { background: rgba(255,255,255,0.1); color: #fff; border-color: #e0af68; }
     .pw-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -656,7 +655,7 @@ function renderOpeningResults(rawText) {
 
                     <div class="pw-opening-actions">
                         <button class="pw-mini-btn toggle-refine-btn"><i class="fa-solid fa-pen-fancy"></i> 润色</button>
-                        <button class="pw-mini-btn copy-btn"><i class="fa-solid fa-copy"></i> 复制</button>
+                        <button class="pw-mini-btn draft-btn"><i class="fa-solid fa-save"></i> 保存到草稿</button>
                         <button class="pw-btn save apply-btn"><i class="fa-solid fa-check"></i> 应用</button>
                     </div>
                 </div>
@@ -665,15 +664,15 @@ function renderOpeningResults(rawText) {
     }
 
     const carouselHtml = `
-        <div class="pw-carousel-nav">
-            <button id="pw-prev-slide" class="pw-nav-btn"><i class="fa-solid fa-chevron-left"></i></button>
-            <span id="pw-slide-indicator" class="pw-slide-indicator">1 / ${totalSlides}</span>
-            <button id="pw-next-slide" class="pw-nav-btn"><i class="fa-solid fa-chevron-right"></i></button>
-        </div>
         <div class="pw-carousel-container">
             <div id="pw-carousel-track" class="pw-carousel-track">
                 ${slidesHtml}
             </div>
+        </div>
+        <div class="pw-carousel-nav">
+            <button id="pw-prev-slide" class="pw-nav-btn"><i class="fa-solid fa-chevron-left"></i></button>
+            <span id="pw-slide-indicator" class="pw-slide-indicator">1 / ${totalSlides}</span>
+            <button id="pw-next-slide" class="pw-nav-btn"><i class="fa-solid fa-chevron-right"></i></button>
         </div>
     `;
     
@@ -685,13 +684,27 @@ function renderOpeningResults(rawText) {
     $('#pw-prev-slide').click(() => { if (currentSlideIndex > 0) { currentSlideIndex--; updateCarousel(); } });
     $('#pw-next-slide').click(() => { if (currentSlideIndex < totalSlides - 1) { currentSlideIndex++; updateCarousel(); } });
 
-    // 绑定卡片内部事件
-    $container.find('.copy-btn').click(function() {
-        navigator.clipboard.writeText($(this).closest('.pw-opening-card').find('.pw-opening-textarea').val());
-        toastr.success("已复制");
+    // 保存到草稿
+    $container.find('.draft-btn').click(async function() {
+        await forcePaint();
+        const content = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
+        const context = getContext();
+        const userName = $('.persona_name').first().text().trim() || "User";
+        const charName = context.characters[context.characterId]?.name || "Char";
+        // 开场白草稿使用固定格式标题
+        const defaultTitle = `${userName} & ${charName} (${new Date().toLocaleDateString()})`;
+        
+        saveHistory({ 
+            request: $('#pw-opening-req').val() || "开场白生成", 
+            timestamp: new Date().toLocaleString(), 
+            title: defaultTitle, 
+            data: { name: "Opening", resultText: content, type: 'opening' } 
+        });
+        toastr.success("已保存到草稿");
     });
 
     $container.find('.apply-btn').click(async function() {
+        await forcePaint();
         const finalContent = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
         if(confirm("确定将此内容替换为当前对话的开场白（第0层消息）吗？")) {
             const context = getContext();
@@ -719,6 +732,8 @@ function renderOpeningResults(rawText) {
         const btn = $(this);
         btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 处理中');
         
+        await forcePaint();
+
         try {
             // 准备上下文
             const wiContent = await collectActiveWorldInfoContent();
@@ -1373,8 +1388,6 @@ function bindEvents() {
             };
             
             const rawText = await runGeneration(config, config);
-            saveHistory({ request: req || "开场白生成", timestamp: new Date().toLocaleString(), title: "开场白草稿", data: { name: "Opening", resultText: rawText, type: 'opening' } });
-
             renderOpeningResults(rawText);
             
         } catch (e) {
@@ -1569,13 +1582,19 @@ const renderHistoryList = () => {
     filtered.forEach((item, index) => {
         const previewText = item.data.resultText || '无内容';
         const displayTitle = item.title || "未命名";
-        const typeLabel = item.data.type === 'opening' ? '<span style="color:#e0af68; font-size:0.8em; border:1px solid #e0af68; border-radius:3px; padding:0 3px; margin-right:5px;">开场白</span>' : '';
+        
+        let typeTag = '';
+        if (item.data.type === 'opening') {
+            typeTag = '<span style="color:#e0af68; font-size:0.8em; border:1px solid #e0af68; border-radius:3px; padding:0 4px; margin-right:5px;">[开场白]</span>';
+        } else {
+            typeTag = '<span style="color:#9ece6a; font-size:0.8em; border:1px solid #9ece6a; border-radius:3px; padding:0 4px; margin-right:5px;">[人设]</span>';
+        }
 
         const $el = $(`
         <div class="pw-history-item">
             <div class="pw-hist-main">
                 <div class="pw-hist-header">
-                    <span class="pw-hist-title-display">${typeLabel}${displayTitle}</span>
+                    <span class="pw-hist-title-display">${typeTag}${displayTitle}</span>
                     <input type="text" class="pw-hist-title-input" value="${displayTitle}" style="display:none;">
                     <div style="display:flex; gap:5px;">
                         <i class="fa-solid fa-pen pw-hist-action-btn edit" title="编辑标题"></i>
