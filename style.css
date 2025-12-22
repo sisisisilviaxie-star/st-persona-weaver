@@ -1,11 +1,12 @@
 /* =========================================
-   1. 容器与基础布局
+   1. 容器与基础布局 (增加隔离防止污染全局)
 ========================================= */
 .pw-wrapper {
     display: flex; flex-direction: column; height: 100%; max-height: 90vh;
     font-size: 14px; color: var(--smart-theme-body-color); position: relative;
     box-sizing: border-box;
     overflow: hidden; 
+    isolation: isolate; /* [Fix Req 4] 防止 CSS 泄漏影响外部 Header */
 }
 
 .pw-scroll-area {
@@ -44,11 +45,6 @@
     padding: 8px; border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor); margin-bottom: 5px;
 }
 .pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: #e0af68; font-size: 1.05em; }
-
-/* 新增的 User/Char 副标题样式 */
-.pw-opening-subtitle { font-family: 'Georgia', serif; font-style: italic; font-size: 0.9em; color: #888; margin-left: 10px; opacity: 0.8; margin-top: 2px; }
-/* 新增的附加要求样式 */
-.pw-extra-req-label { font-size: 0.85em; opacity: 0.6; color: #e0af68; margin-bottom: 5px; font-weight: bold; }
 
 .pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .pw-tags-label { font-weight: bold; opacity: 0.8; font-size: 0.85em; }
@@ -254,10 +250,11 @@
     flex: 1; width: 100%; background: transparent; border: none; color: #eee; padding: 8px; 
     font-family: inherit; font-size: 0.95em; resize: none; outline: none; line-height: 1.5; min-height: 80px; box-sizing: border-box; 
 }
-/* [Fix Req 3] 允许未选中的卡片也能被编辑 */
+/* [Fix Req 3] 确保所有卡片文本区域可点击编辑 */
 .pw-diff-card:not(.selected) .pw-diff-textarea { 
     color: #888; 
-    pointer-events: auto; 
+    pointer-events: auto !important; 
+    cursor: text;
 }
 
 .pw-diff-actions { 
@@ -325,18 +322,15 @@
 }
 #pw_persona_tool_btn:hover { opacity: 1; color: #e0af68; }
 
-/* 开场白轮播相关 */
+/* 开场白轮播 */
 .pw-carousel-container { position: relative; width: 100%; overflow: hidden; margin-top: 10px; padding-bottom: 5px; }
 .pw-carousel-track { display: flex; transition: transform 0.3s ease-in-out; }
 .pw-opening-card { flex: 0 0 100%; width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.2); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
-
 .pw-opening-header { font-weight: bold; color: #e0af68; font-size: 1.1em; display: flex; justify-content: space-between; align-items: center; }
 .pw-opening-textarea { width: 100%; min-height: 350px; background: rgba(0, 0, 0, 0.15); border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; color: #eee; padding: 10px; font-family: inherit; font-size: 1.0em; line-height: 1.6; resize: vertical; outline: none; box-sizing: border-box; white-space: pre-wrap; }
 .pw-opening-textarea:focus { background: rgba(0,0,0,0.25); border-color: #e0af68; }
-
 .pw-opening-actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 5px; }
 .pw-carousel-nav { display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 15px; padding-top: 10px; border-top: 1px dashed var(--SmartThemeBorderColor); }
-
 .pw-nav-btn { background: rgba(0,0,0,0.3); border: 1px solid var(--SmartThemeBorderColor); color: #ccc; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
 .pw-nav-btn:hover { background: rgba(255,255,255,0.1); color: #fff; border-color: #e0af68; }
 .pw-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
