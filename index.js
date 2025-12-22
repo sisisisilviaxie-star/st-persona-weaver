@@ -142,14 +142,14 @@ let isEditingTemplate = false;
 let pollInterval = null;
 let lastRawResponse = "";
 
-// [Fix] 全局处理锁，防止连点
+// [Fix] 全局处理锁
 let isProcessing = false;
 
 // ============================================================================
 // 工具函数
 // ============================================================================
-// [Fix] 优化 yield
-const yieldToBrowser = () => new Promise(resolve => requestAnimationFrame(resolve));
+// [Fix] 关键修复：切回 setTimeout。requestAnimationFrame 在切屏后会暂停，导致代码死锁。
+const yieldToBrowser = () => new Promise(resolve => setTimeout(resolve, 0));
 const forcePaint = () => new Promise(resolve => setTimeout(resolve, 50));
 
 // ============================================================================
@@ -320,7 +320,7 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v46-lite'; 
+    const styleId = 'persona-weaver-css-v47-lite'; 
     if ($(`#${styleId}`).length) return;
     
     const css = `
@@ -728,6 +728,7 @@ async function openCreatorPopup() {
 // ============================================================================
 
 function bindEvents() {
+    // [Fix] 防止重复绑定
     if (window.stPersonaWeaverBound) return;
     window.stPersonaWeaverBound = true;
 
@@ -1220,127 +1221,15 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-history-clear-all', function () { if (confirm("清空?")) { historyCache = []; saveData(); renderHistoryList(); } });
 }
 
-// ... 辅助渲染函数 ...
-const renderTemplateChips = () => {
-    const $container = $('#pw-template-chips').empty();
-    const blocks = parseYamlToBlocks(currentTemplate);
-    blocks.forEach((content, key) => {
-        const $chip = $(`<div class="pw-tag-chip"><i class="fa-solid fa-cube" style="opacity:0.5; margin-right:4px;"></i><span>${key}</span></div>`);
-        $chip.on('click', () => {
-            const $text = $('#pw-request');
-            const cur = $text.val();
-            const prefix = (cur && !cur.endsWith('\n') && cur.length > 0) ? '\n\n' : '';
-            let insertText = key + ":";
-            if (content && content.trim()) {
-                if (content.includes('\n') || content.startsWith(' ')) insertText += "\n" + content;
-                else insertText += " " + content;
-            } else insertText += " ";
-            $text.val(cur + prefix + insertText).focus();
-            $text.scrollTop($text[0].scrollHeight);
-        });
-        $container.append($chip);
-    });
-};
-
-const renderHistoryList = () => {
-    loadData();
-    const $list = $('#pw-history-list').empty();
-    const search = $('#pw-history-search').val().toLowerCase();
-    
-    // [Lite Fix] Filter out opening types
-    const filtered = historyCache.filter(item => {
-        if (item.data && item.data.type === 'opening') return false; 
-        
-        if (!search) return true;
-        const content = (item.data.resultText || "").toLowerCase();
-        const title = (item.title || "").toLowerCase();
-        return title.includes(search) || content.includes(search);
-    });
-    
-    if (filtered.length === 0) { $list.html('<div style="text-align:center; opacity:0.6; padding:20px;">暂无草稿</div>'); return; }
-
-    filtered.forEach((item, index) => {
-        const previewText = item.data.resultText || '无内容';
-        const displayTitle = item.title || "User & Char";
-
-        const $el = $(`
-        <div class="pw-history-item">
-            <div class="pw-hist-main">
-                <div class="pw-hist-header">
-                    <span class="pw-hist-title-display">${displayTitle}</span>
-                    <input type="text" class="pw-hist-title-input" value="${displayTitle}" style="display:none;">
-                    <div style="display:flex; gap:5px;">
-                        <i class="fa-solid fa-pen pw-hist-action-btn edit" title="编辑标题"></i>
-                        <i class="fa-solid fa-trash pw-hist-action-btn del" data-index="${index}" title="删除"></i>
-                    </div>
-                </div>
-                <div class="pw-hist-meta"><span>${item.timestamp || ''}</span></div>
-                <div class="pw-hist-desc">${previewText}</div>
-            </div>
-        </div>
-    `);
-        $el.on('click', function (e) {
-            if ($(e.target).closest('.pw-hist-action-btn, .pw-hist-title-input').length) return;
-            $('#pw-request').val(item.request); $('#pw-result-text').val(previewText); $('#pw-result-area').show();
-            $('#pw-request').addClass('minimized');
-            $('.pw-tab[data-tab="editor"]').click();
-        });
-        $el.find('.pw-hist-action-btn.del').on('click', function (e) {
-            e.stopPropagation();
-            if (confirm("删除?")) {
-                historyCache.splice(historyCache.indexOf(item), 1);
-                saveData(); renderHistoryList();
-            }
-        });
-        $list.append($el);
-    });
-};
-
-window.pwExtraBooks = [];
-const renderWiBooks = async () => {
-    const container = $('#pw-wi-container').empty();
-    const baseBooks = await getContextWorldBooks();
-    const allBooks = [...new Set([...baseBooks, ...(window.pwExtraBooks || [])])];
-    if (allBooks.length === 0) { container.html('<div style="opacity:0.6; padding:10px; text-align:center;">此角色未绑定世界书，请在“世界书”标签页手动添加或在酒馆主界面绑定。</div>'); return; }
-    for (const book of allBooks) {
-        const isBound = baseBooks.includes(book);
-        const $el = $(`<div class="pw-wi-book"><div class="pw-wi-header"><span><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span style="color:#9ece6a;font-size:0.8em;margin-left:5px;">(已绑定)</span>' : ''}</span><div>${!isBound ? '<i class="fa-solid fa-times remove-book" style="color:#ff6b6b;margin-right:10px;" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div></div><div class="pw-wi-list" data-book="${book}"></div></div>`);
-        $el.find('.remove-book').on('click', (e) => { e.stopPropagation(); window.pwExtraBooks = window.pwExtraBooks.filter(b => b !== book); renderWiBooks(); });
-        $el.find('.pw-wi-header').on('click', async function () {
-            const $list = $el.find('.pw-wi-list');
-            const $arrow = $(this).find('.arrow');
-            if ($list.is(':visible')) { $list.slideUp(); $arrow.removeClass('fa-flip-vertical'); }
-            else {
-                $list.slideDown(); $arrow.addClass('fa-flip-vertical');
-                if (!$list.data('loaded')) {
-                    $list.html('<div style="padding:10px;text-align:center;"><i class="fas fa-spinner fa-spin"></i></div>');
-                    const entries = await getWorldBookEntries(book);
-                    $list.empty();
-                    if (entries.length === 0) $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
-                    entries.forEach(entry => {
-                        const isChecked = entry.enabled ? 'checked' : '';
-                        const $item = $(`<div class="pw-wi-item"><div class="pw-wi-item-row"><input type="checkbox" class="pw-wi-check" ${isChecked} data-content="${encodeURIComponent(entry.content)}"><div style="font-weight:bold; font-size:0.9em; flex:1;">${entry.displayName}</div><i class="fa-solid fa-eye pw-wi-toggle-icon"></i></div><div class="pw-wi-desc">${entry.content}<div class="pw-wi-close-bar"><i class="fa-solid fa-angle-up"></i> 收起</div></div></div>`);
-                        $item.find('.pw-wi-toggle-icon').on('click', function (e) {
-                            e.stopPropagation();
-                            const $desc = $(this).closest('.pw-wi-item').find('.pw-wi-desc');
-                            if ($desc.is(':visible')) { $desc.slideUp(); $(this).css('color', ''); } else { $desc.slideDown(); $(this).css('color', '#5b8db8'); }
-                        });
-                        $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').css('color', ''); });
-                        $list.append($item);
-                    });
-                    $list.data('loaded', true);
-                }
-            }
-        });
-        container.append($el);
-    }
-};
-
 function addPersonaButton() {
     const container = $('.persona_controls_buttons_block');
     if (container.length === 0 || $(`#${BUTTON_ID}`).length > 0) return;
     const newButton = $(`<div id="${BUTTON_ID}" class="menu_button fa-solid fa-wand-magic-sparkles interactable" title="${TEXT.BTN_TITLE}" tabindex="0" role="button"></div>`);
-    newButton.on('click', openCreatorPopup);
+    newButton.on('click', () => {
+        // [Fix] Reset lock on open
+        isProcessing = false;
+        openCreatorPopup();
+    });
     container.prepend(newButton);
 }
 
