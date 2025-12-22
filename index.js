@@ -8,10 +8,6 @@ const STORAGE_KEY_TEMPLATE = 'pw_template_v2';
 const STORAGE_KEY_PROMPTS = 'pw_prompts_v5'; // 版本号升级
 const BUTTON_ID = 'pw_persona_tool_btn';
 
-// ============================================================================
-// 0. 默认模版与 Prompt 定义
-// ============================================================================
-
 const defaultYamlTemplate =
 `基本信息: 
   姓名: {{user}}
@@ -76,6 +72,7 @@ NSFW:
   性癖好:
   禁忌底线:`;
 
+// --- 人设相关 Prompt ---
 const defaultSystemPromptInitial =
 `Creating User Persona for {{user}} (Target: {{char}}).
 {{wi}}
@@ -117,6 +114,7 @@ Optimizing User Persona for {{char}}.
 5. Do NOT output status bars, progress bars, or Chain of Thought.
 6. Response: ONLY the final YAML content.`;
 
+// --- 开场白相关 Prompt ---
 const defaultSystemPromptOpening =
 `Generate distinct opening scenes (First Messages) based on the following personas and context.
 
@@ -133,7 +131,7 @@ const defaultSystemPromptOpening =
 
 [Guidelines]:
 1. Language: Simplified Chinese.
-2. Length: Approx 600-800 characters per option.
+2. Length: Approx 700 characters per option.
 3. Content: detailed scene setting, environment description, specific date/time/location.
 4. Character: Reflect {{char}}'s personality and traits vividly.
 5. Interaction: End with a natural hook for {{user}} to respond. Do NOT summarize or use "elevated" philosophical endings (禁止升华).
@@ -142,7 +140,7 @@ const defaultSystemPromptOpening =
 8. Do NOT output status bars, progress bars, or Chain of Thought.
 
 [Output Format]:
-Strictly follow this format for EACH option:
+Strictly follow this format for each option (generate as many as reasonable, usually 4):
 
 ---【开场白选项1】---
 \`\`\`
@@ -152,28 +150,37 @@ Strictly follow this format for EACH option:
 \`\`\`
 [Content of Option 2]
 \`\`\`
-(Continue for as many options as requested)`;
+...
+`;
 
-// 【新增】开场白专用润色 Prompt
-const defaultSystemPromptOpeningRefine = 
-`You are an expert Creative Writer and Editor.
-Refining an opening scene for {{char}}.
+// 【新增】开场白润色 Prompt
+const defaultSystemPromptOpeningRefine =
+`Refine the following Opening Scene (First Message).
+
+[User Persona]:
+{{userPersona}}
+
+[Character Persona ({{char}})]:
+{{charPersona}}
+
+{{wi}}
 
 [Current Opening Scene]:
 """
 {{current}}
 """
 
-[Instruction]:
+[Refinement Instruction]:
 "{{input}}"
 
-[Task]:
-1. Rewrite the opening scene based on the instruction.
-2. Keep the language Simplified Chinese.
-3. Maintain the personality of {{char}}.
+[Guidelines]:
+1. Keep the language Simplified Chinese.
+2. Maintain the roleplay style and character voice.
+3. Apply the instruction to modify the scene, tone, or details.
 4. Do NOT speak for {{user}}.
 5. Do NOT output status bars or Chain of Thought.
-6. Response: ONLY the new opening text (no markdown code blocks needed, just the text).`;
+6. Response: ONLY the refined opening text (do not use markdown code blocks or titles).`;
+
 
 const defaultSettings = {
     autoSwitchPersona: true, syncToWorldInfo: false,
@@ -194,11 +201,19 @@ const TEXT = {
 
 let historyCache = [];
 let currentTemplate = defaultYamlTemplate;
-let promptsCache = { initial: defaultSystemPromptInitial, refine: defaultSystemPromptRefine, opening: defaultSystemPromptOpening, openingRefine: defaultSystemPromptOpeningRefine };
+// Prompt 缓存结构更新
+let promptsCache = { 
+    initial: defaultSystemPromptInitial, 
+    refine: defaultSystemPromptRefine, 
+    opening: defaultSystemPromptOpening,
+    openingRefine: defaultSystemPromptOpeningRefine 
+};
 let availableWorldBooks = [];
 let isEditingTemplate = false;
 let pollInterval = null;
 let lastRawResponse = "";
+// 用于存储当前正在润色的开场白卡片引用
+let currentRefiningCard = null; 
 
 // ============================================================================
 // 工具函数
@@ -344,7 +359,6 @@ function getCharacterPersonaString() {
     const context = getContext();
     if (!context.characterId && context.characterId !== 0) return "No Character Selected";
     const char = context.characters[context.characterId];
-    
     let parts = [];
     if (char.name) parts.push(`Name: ${char.name}`);
     if (char.description) parts.push(`Description:\n${char.description}`);
@@ -370,7 +384,6 @@ function loadData() {
             ...{ initial: defaultSystemPromptInitial, refine: defaultSystemPromptRefine, opening: defaultSystemPromptOpening, openingRefine: defaultSystemPromptOpeningRefine }, 
             ...p 
         };
-        // 补全可能缺失的 key
         if (!promptsCache.opening) promptsCache.opening = defaultSystemPromptOpening;
         if (!promptsCache.openingRefine) promptsCache.openingRefine = defaultSystemPromptOpeningRefine;
     } catch { 
@@ -399,16 +412,6 @@ function injectStyles() {
     if ($(`#${styleId}`).length) return;
     
     const css = `
-    /* 【修改点 0】父容器全屏覆盖 */
-    .pw-popup-dialog {
-        width: 95vw !important;
-        max-width: 95vw !important;
-        height: 95vh !important;
-        max-height: 95vh !important;
-        display: flex;
-        flex-direction: column;
-    }
-    
     #pw-api-model-select { flex: 1; width: 0; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
     
     .pw-load-btn {
@@ -524,33 +527,41 @@ function injectStyles() {
     .pw-opening-card {
         background: rgba(0,0,0,0.2); border: 1px solid var(--SmartThemeBorderColor);
         border-radius: 8px; padding: 15px; position: relative;
-        transition: all 0.2s;
+        transition: all 0.2s; display: flex; flex-direction: column; gap: 10px;
     }
     .pw-opening-card:hover { background: rgba(0,0,0,0.25); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    
     .pw-opening-header {
-        font-weight: bold; color: #e0af68; margin-bottom: 10px; 
-        font-size: 1.1em; display: flex; justify-content: space-between; align-items: center;
+        font-weight: bold; color: #e0af68; font-size: 1.1em; display: flex; justify-content: space-between; align-items: center;
     }
-    .pw-opening-content {
-        white-space: pre-wrap; color: #eee; font-size: 0.95em; line-height: 1.6;
-        background: rgba(0,0,0,0.1); padding: 10px; border-radius: 4px;
-        margin-bottom: 10px; max-height: 300px; overflow-y: auto;
+    
+    /* 开场白内容改为 Textarea */
+    .pw-opening-textarea {
+        width: 100%; min-height: 150px; background: rgba(0, 0, 0, 0.15);
+        border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; 
+        color: #eee; padding: 10px; font-family: inherit; font-size: 0.95em; 
+        line-height: 1.6; resize: vertical; outline: none; box-sizing: border-box;
     }
+    .pw-opening-textarea:focus { background: rgba(0,0,0,0.25); border-color: #e0af68; }
+
     .pw-opening-actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; }
     
-    .pw-opening-refine-box {
-        margin-top: 10px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;
-        border: 1px dashed var(--SmartThemeBorderColor); display: none;
+    /* 润色工具栏（在卡片内部） */
+    .pw-card-refine-box {
+        display: none; flex-direction: column; gap: 8px;
+        background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;
+        border: 1px dashed var(--SmartThemeBorderColor); margin-top: 5px;
     }
-    .pw-opening-refine-input {
-        width: 100%; min-height: 60px; background: rgba(255,255,255,0.05); border: none;
-        color: #eee; padding: 5px; margin-bottom: 5px; resize: vertical;
+    .pw-card-refine-input {
+        width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--SmartThemeBorderColor);
+        color: #ddd; padding: 8px; border-radius: 4px; resize: vertical; min-height: 60px;
     }
-
-    /* 【修改点 3】悬浮按钮下移 50px */
+    
+    /* 悬浮修改按钮位置调整 */
     .pw-float-quote-btn {
         position: fixed; 
-        top: calc(20% + 50px); right: 0;
+        top: calc(20% + 60px); /* 往下挪 60px */
+        right: 0;
         background: linear-gradient(135deg, #e0af68, #d08f40);
         color: #1a1a1a;
         padding: 8px 12px; 
@@ -713,7 +724,6 @@ async function runGeneration(data, apiConfig) {
     if (data.mode === 'opening') systemTemplate = promptsCache.opening;
     if (data.mode === 'opening_refine') systemTemplate = promptsCache.openingRefine;
 
-    // 变量注入
     let systemPrompt = systemTemplate
         .replace(/{{user}}/g, currentName)
         .replace(/{{char}}/g, charName)
@@ -786,11 +796,8 @@ async function runGeneration(data, apiConfig) {
     }
     
     lastRawResponse = responseContent;
-    // 如果是开场白生成模式，保留```标记以便后续解析，其他模式去除
+    // 如果是开场白生成模式（且不是润色），保留```标记以便解析
     if (data.mode === 'opening') return responseContent;
-    // 开场白润色模式也直接返回（通常是纯文本）
-    if (data.mode === 'opening_refine') return responseContent.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
-    
     return responseContent.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
 }
 
@@ -831,7 +838,6 @@ async function openCreatorPopup() {
     <div class="pw-header">
         <div class="pw-top-bar"><div class="pw-title">${TEXT.PANEL_TITLE}</div></div>
         <div class="pw-tabs">
-            <!-- 【修改点 1】 Tab名变更 -->
             <div class="pw-tab active" data-tab="editor">人设</div>
             <div class="pw-tab" data-tab="opening">开场白</div>
             <div class="pw-tab" data-tab="context">世界书</div>
@@ -908,7 +914,6 @@ async function openCreatorPopup() {
             </div>
             <div style="font-size:0.9em; opacity:0.8; margin-bottom:5px;">附加要求（如：发生在一个雨夜，地点在酒吧...）：</div>
             <textarea id="pw-opening-req" class="pw-textarea pw-auto-height" placeholder="在此输入场景、时间、地点等要求..."></textarea>
-            <!-- 【修改点 2.1】 按钮文案变更 -->
             <button id="pw-btn-gen-opening" class="pw-btn gen" style="margin-top:10px;">生成开场白</button>
             <div id="pw-opening-results" class="pw-opening-result-container"></div>
         </div>
@@ -957,7 +962,7 @@ async function openCreatorPopup() {
             </div>
 
             <div class="pw-card-section pw-prompt-editor-block">
-                <div style="display:flex; justify-content:space-between;"><span class="pw-prompt-label">初始生成指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-initial" style="font-size:0.7em;">恢复默认</button></div>
+                <div style="display:flex; justify-content:space-between;"><span class="pw-prompt-label">人设初始生成指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-initial" style="font-size:0.7em;">恢复默认</button></div>
                 <div class="pw-var-btns">
                     <div class="pw-var-btn" data-ins="{{user}}"><span>User名</span><span class="code">{{user}}</span></div>
                     <div class="pw-var-btn" data-ins="{{char}}"><span>Char名</span><span class="code">{{char}}</span></div>
@@ -967,7 +972,7 @@ async function openCreatorPopup() {
                 </div>
                 <textarea id="pw-prompt-initial" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;">${promptsCache.initial}</textarea>
                 
-                <div style="display:flex; justify-content:space-between; margin-top:15px;"><span class="pw-prompt-label">润色指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-refine" style="font-size:0.7em;">恢复默认</button></div>
+                <div style="display:flex; justify-content:space-between; margin-top:15px;"><span class="pw-prompt-label">人设润色指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-refine" style="font-size:0.7em;">恢复默认</button></div>
                 <div class="pw-var-btns">
                     <div class="pw-var-btn" data-ins="{{tags}}"><span>模版(必要)</span><span class="code">{{tags}}</span></div>
                     <div class="pw-var-btn" data-ins="{{current}}"><span>当前文本</span><span class="code">{{current}}</span></div>
@@ -976,15 +981,15 @@ async function openCreatorPopup() {
                 <textarea id="pw-prompt-refine" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;">${promptsCache.refine}</textarea>
 
                 <div style="display:flex; justify-content:space-between; margin-top:15px;"><span class="pw-prompt-label">开场白生成指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-opening" style="font-size:0.7em;">恢复默认</button></div>
-                <!-- 【修改点 2.2】 新增快捷插入格式按钮 -->
-                <div class="pw-var-btns" style="align-items:center;">
-                    <div class="pw-var-btn" data-ins="{{userPersona}}"><span>User人设</span><span class="code">{{userPersona}}</span></div>
-                    <div class="pw-var-btn" data-ins="{{charPersona}}"><span>Char设定</span><span class="code">{{charPersona}}</span></div>
-                    <div class="pw-var-btn" data-ins="{{wi}}"><span>世界书</span><span class="code">{{wi}}</span></div>
+                <textarea id="pw-prompt-opening" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;">${promptsCache.opening}</textarea>
+
+                <!-- 新增：开场白润色 -->
+                <div style="display:flex; justify-content:space-between; margin-top:15px;"><span class="pw-prompt-label">开场白润色指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-opening-refine" style="font-size:0.7em;">恢复默认</button></div>
+                <div class="pw-var-btns">
+                    <div class="pw-var-btn" data-ins="{{current}}"><span>原开场白</span><span class="code">{{current}}</span></div>
                     <div class="pw-var-btn" data-ins="{{input}}"><span>要求</span><span class="code">{{input}}</span></div>
-                    <button class="pw-mini-btn" id="pw-insert-opening-format" style="margin-left:auto; border-color:#9ece6a; color:#9ece6a;">插入“开场白选项”格式</button>
                 </div>
-                <textarea id="pw-prompt-opening" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;">${promptsCache.opening || defaultSystemPromptOpening}</textarea>
+                <textarea id="pw-prompt-opening-refine" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;">${promptsCache.openingRefine}</textarea>
             </div>
             <div style="text-align:right; margin-top:5px;"><button id="pw-api-save" class="pw-btn primary" style="width:100%;">保存 Prompts</button></div>
         </div>
@@ -994,10 +999,7 @@ async function openCreatorPopup() {
 </div>
 `;
 
-    // 【修改点 0】 为 callPopup 增加自定义 class 标记，以便 CSS 覆盖尺寸
-    const popupId = callPopup(html, 'text', '', { wide: true, large: true, okButton: "关闭" });
-    // 强制添加 class 保证样式生效 (SillyTavern 的 callPopup 返回值可能不同，这里尝试通过 jQuery 查找)
-    $('.pw-wrapper').closest('.popup-body').addClass('pw-popup-dialog');
+    callPopup(html, 'text', '', { wide: true, large: true, okButton: "关闭" });
 
     renderTemplateChips();
     renderWiBooks();
@@ -1090,37 +1092,15 @@ function bindEvents() {
         }
     });
 
-    // 【修改点 2.2】 插入开场白格式快捷键
-    $(document).on('click.pw', '#pw-insert-opening-format', function() {
-        const format = `\n---【开场白选项1】---\n\`\`\`\n[内容]\n\`\`\`\n`;
-        const $text = $('#pw-prompt-opening');
-        const el = $text[0];
-        const start = el.selectionStart;
-        const end = el.selectionEnd;
-        const val = el.value;
-        el.value = val.substring(0, start) + format + val.substring(end);
-        el.selectionStart = el.selectionEnd = start + format.length;
-        el.focus();
-    });
-
     let selectionTimeout;
     const checkSelection = () => {
         clearTimeout(selectionTimeout);
         selectionTimeout = setTimeout(() => {
-            // 支持两个主要的编辑区域：人设结果框 和 开场白编辑框（如果当前在开场白界面且有打开的编辑框）
-            let el = null;
-            if ($('#pw-view-editor').hasClass('active')) {
-                el = document.getElementById('pw-result-text');
-            } else if ($('#pw-view-opening').hasClass('active')) {
-                // 在开场白页面，找到当前获得焦点的 textarea
-                const activeEl = document.activeElement;
-                if (activeEl && $(activeEl).hasClass('pw-opening-content')) {
-                    el = activeEl;
-                }
-            }
-
-            if (!el) return;
-            const hasSelection = el.selectionStart !== el.selectionEnd;
+            // 兼容人设编辑框和开场白编辑框
+            const activeEl = document.activeElement;
+            if (!activeEl || (!activeEl.id.startsWith('pw-result-text') && !activeEl.classList.contains('pw-opening-textarea'))) return;
+            
+            const hasSelection = activeEl.selectionStart !== activeEl.selectionEnd;
             const $btn = $('#pw-float-quote-btn');
             if (hasSelection) {
                 if (!$btn.is(':visible')) $btn.stop(true, true).fadeIn(200).css('display', 'flex');
@@ -1129,45 +1109,38 @@ function bindEvents() {
             }
         }, 100);
     };
-    $(document).on('touchend mouseup keyup', '#pw-result-text, .pw-opening-content', checkSelection);
+    $(document).on('touchend mouseup keyup', '.pw-opening-textarea, #pw-result-text', checkSelection);
 
     $(document).on('mousedown.pw', '#pw-float-quote-btn', function (e) {
         e.preventDefault(); 
         e.stopPropagation();
         
-        let textarea = null;
-        let refineInput = null;
+        const activeEl = document.activeElement;
+        if (!activeEl) return;
 
-        if ($('#pw-view-editor').hasClass('active')) {
-            textarea = document.getElementById('pw-result-text');
-            refineInput = $('#pw-refine-input');
-        } else if ($('#pw-view-opening').hasClass('active')) {
-            textarea = document.activeElement;
-            // 找到当前卡片对应的润色输入框
-            if ($(textarea).hasClass('pw-opening-content')) {
-                refineInput = $(textarea).closest('.pw-opening-card').find('.pw-opening-refine-input');
-                // 如果输入框没显示，先显示出来
-                $(textarea).closest('.pw-opening-card').find('.pw-opening-refine-box').slideDown();
-            }
-        }
-
-        if (!textarea || !refineInput) return;
-
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const selectedText = textarea.value.substring(start, end).trim();
+        const start = activeEl.selectionStart;
+        const end = activeEl.selectionEnd;
+        const selectedText = activeEl.value.substring(start, end).trim();
         
         if (selectedText) {
-            const cur = refineInput.val();
-            const newText = `对 "${selectedText}" 的修改意见为：`;
-            refineInput.val(cur ? cur + '\n' + newText : newText).focus();
-            requestAnimationFrame(() => {
-                const el = refineInput[0];
-                el.style.height = 'auto';
-                el.style.height = (el.scrollHeight) + 'px';
-            });
-            textarea.setSelectionRange(end, end);
-            $('#pw-float-quote-btn').fadeOut(100);
+            // 判断当前是人设还是开场白
+            let $input;
+            if (activeEl.id === 'pw-result-text') {
+                $input = $('#pw-refine-input');
+            } else if (activeEl.classList.contains('pw-opening-textarea')) {
+                // 找到该开场白卡片内的输入框
+                $input = $(activeEl).closest('.pw-opening-card').find('.pw-card-refine-input');
+                // 如果未展开，先展开
+                $(activeEl).closest('.pw-opening-card').find('.pw-card-refine-box').slideDown();
+            }
+
+            if ($input && $input.length) {
+                const cur = $input.val();
+                const newText = `对 "${selectedText}" 的修改意见为：`;
+                $input.val(cur ? cur + '\n' + newText : newText).focus();
+                activeEl.setSelectionRange(end, end); // 取消选区
+                $('#pw-float-quote-btn').fadeOut(100);
+            }
         }
     });
 
@@ -1177,7 +1150,7 @@ function bindEvents() {
             el.style.height = (el.scrollHeight) + 'px';
         });
     };
-    $(document).on('input.pw', '.pw-auto-height, #pw-refine-input, .pw-opening-refine-input', function () { adjustHeight(this); });
+    $(document).on('input.pw', '.pw-auto-height, #pw-refine-input, .pw-card-refine-input', function () { adjustHeight(this); });
 
     let saveTimeout;
     const saveCurrentState = () => {
@@ -1215,6 +1188,7 @@ function bindEvents() {
         }
     });
 
+    // 人设润色
     $(document).on('click.pw', '#pw-btn-refine', async function (e) {
         e.preventDefault();
         const refineReq = $('#pw-refine-input').val();
@@ -1285,29 +1259,14 @@ function bindEvents() {
                 $list.append(rowHtml);
             });
 
-            // 绑定到当前人设页面的保存操作
-            $('#pw-diff-confirm').off('click').on('click', function() {
-                const activeTab = $('.pw-diff-tab.active').data('view');
-                if (activeTab === 'raw') {
-                    const rawContent = $('#pw-diff-raw-textarea').val();
-                    $('#pw-result-text').val(rawContent);
-                } else {
-                    let finalLines = [];
-                    $('.pw-diff-row').each(function () {
-                        const key = $(this).data('key');
-                        const val = $(this).find('.pw-diff-card.selected .pw-diff-textarea').val().trimEnd();
-                        if (val && val !== "(删除)" && val !== "(无)") {
-                            if (val.includes('\n') || val.startsWith('  ')) finalLines.push(`${key}:\n${val}`);
-                            else finalLines.push(`${key}: ${val.trim()}`);
-                        }
-                    });
-                    $('#pw-result-text').val(finalLines.join('\n\n'));
-                }
-                $('#pw-diff-overlay').fadeOut();
-                saveCurrentState();
-                toastr.success("修改已应用");
-                $('#pw-result-text').trigger('input');
-            });
+            // 标记当前Diff来源
+            $('#pw-diff-overlay').data('source', 'persona');
+
+            if (changeCount === 0 && !responseText) {
+                toastr.warning("返回内容为空，请切换到“原文编辑”查看");
+            } else if (changeCount === 0) {
+                toastr.info("没有检测到内容变化");
+            }
 
             $('.pw-diff-tab[data-view="diff"]').click();
             $('#pw-diff-overlay').fadeIn();
@@ -1329,6 +1288,53 @@ function bindEvents() {
         
         $row.find('.pw-diff-textarea').prop('readonly', true);
         $(this).find('.pw-diff-textarea').prop('readonly', false).focus();
+    });
+
+    // 确认应用Diff
+    $(document).on('click.pw', '#pw-diff-confirm', function () {
+        const source = $('#pw-diff-overlay').data('source');
+        const activeTab = $('.pw-diff-tab.active').data('view');
+        
+        let finalContent = "";
+
+        if (activeTab === 'raw') {
+            finalContent = $('#pw-diff-raw-textarea').val();
+        } else {
+            // 智能对比模式
+            if (source === 'opening') {
+                // 开场白只有一个大框
+                finalContent = $('.pw-diff-row').first().find('.pw-diff-card.selected .pw-diff-textarea').val();
+            } else {
+                // 人设YAML拼接
+                let finalLines = [];
+                $('.pw-diff-row').each(function () {
+                    const key = $(this).data('key');
+                    const val = $(this).find('.pw-diff-card.selected .pw-diff-textarea').val().trimEnd();
+                    
+                    if (val && val !== "(删除)" && val !== "(无)") {
+                        if (val.includes('\n') || val.startsWith('  ')) {
+                            finalLines.push(`${key}:\n${val}`);
+                        } else {
+                            finalLines.push(`${key}: ${val.trim()}`);
+                        }
+                    }
+                });
+                finalContent = finalLines.join('\n\n');
+            }
+        }
+
+        if (source === 'opening') {
+            if (currentRefiningCard) {
+                currentRefiningCard.find('.pw-opening-textarea').val(finalContent);
+                currentRefiningCard.find('.pw-card-refine-box').slideUp();
+            }
+        } else {
+            $('#pw-result-text').val(finalContent).trigger('input');
+        }
+
+        $('#pw-diff-overlay').fadeOut();
+        saveCurrentState();
+        toastr.success("修改已应用");
     });
 
     $(document).on('click.pw', '#pw-diff-cancel', () => $('#pw-diff-overlay').fadeOut());
@@ -1367,7 +1373,7 @@ function bindEvents() {
         }
     });
 
-    // 【新增】开场白生成逻辑
+    // 开场白生成逻辑
     $(document).on('click.pw', '#pw-btn-gen-opening', async function(e) {
         e.preventDefault();
         const req = $('#pw-opening-req').val();
@@ -1383,23 +1389,29 @@ function bindEvents() {
             const wiContent = await collectActiveWorldInfoContent();
             const charPersona = getCharacterPersonaString();
             const userPersona = $('#pw-result-text').val() || getActivePersonaDescription();
+            
             const modelVal = $('#pw-api-source').val() === 'independent' ? $('#pw-api-model-select').val() : null;
             
             const config = {
-                mode: 'opening', request: req, wiContext: wiContent,
-                charPersona: charPersona, userPersona: userPersona,
-                apiSource: $('#pw-api-source').val(), indepApiUrl: $('#pw-api-url').val(),
-                indepApiKey: $('#pw-api-key').val(), indepApiModel: modelVal
+                mode: 'opening', 
+                request: req, 
+                wiContext: wiContent,
+                charPersona: charPersona,
+                userPersona: userPersona,
+                apiSource: $('#pw-api-source').val(), 
+                indepApiUrl: $('#pw-api-url').val(),
+                indepApiKey: $('#pw-api-key').val(), 
+                indepApiModel: modelVal
             };
             
             const rawText = await runGeneration(config, config);
             
-            // 正则匹配所有选项，允许任意数量的选项
+            // 正则匹配生成的所有选项
             const matches = [...rawText.matchAll(/-+【开场白选项\d+】-+[\s\S]*?```([\s\S]*?)```/g)];
             
             if (!matches || matches.length === 0) {
                 // 容错显示
-                $results.html(`<div class="pw-opening-card"><div class="pw-opening-content">${rawText.replace(/\n/g, '<br>')}</div></div>`);
+                $results.html(`<div class="pw-opening-card"><textarea class="pw-opening-textarea">${rawText}</textarea></div>`);
             } else {
                 matches.forEach((m, i) => {
                     const content = m[1].trim();
@@ -1408,99 +1420,125 @@ function bindEvents() {
                             <div class="pw-opening-header">
                                 <span>选项 ${i + 1}</span>
                             </div>
-                            <textarea class="pw-opening-content" spellcheck="false">${content}</textarea>
-                            <div class="pw-opening-refine-box">
-                                <textarea class="pw-opening-refine-input" placeholder="输入润色意见（例如：增加一些环境描写...）"></textarea>
-                                <button class="pw-mini-btn confirm-refine-btn" style="width:100%; justify-content:center; border-color:#5b8db8; color:#5b8db8;">
-                                    <i class="fa-solid fa-magic"></i> 开始润色
-                                </button>
+                            <textarea class="pw-opening-textarea">${content}</textarea>
+                            
+                            <div class="pw-card-refine-box">
+                                <textarea class="pw-card-refine-input" placeholder="对此开场白提出修改意见..."></textarea>
+                                <div style="text-align:right;">
+                                    <button class="pw-btn save refine-confirm-btn"><i class="fa-solid fa-magic"></i> 确认润色</button>
+                                </div>
                             </div>
+
                             <div class="pw-opening-actions">
-                                <button class="pw-mini-btn toggle-refine-btn"><i class="fa-solid fa-pen-nib"></i> 润色</button>
+                                <button class="pw-mini-btn toggle-refine-btn"><i class="fa-solid fa-pen-fancy"></i> 润色</button>
                                 <button class="pw-mini-btn copy-btn"><i class="fa-solid fa-copy"></i> 复制</button>
-                                <button class="pw-btn save apply-btn"><i class="fa-solid fa-check"></i> 应用为开场白</button>
+                                <button class="pw-btn save apply-btn"><i class="fa-solid fa-check"></i> 应用</button>
                             </div>
                         </div>
                     `);
                     
                     // 复制
-                    $card.find('.copy-btn').click(() => { navigator.clipboard.writeText($card.find('.pw-opening-content').val()); toastr.success("已复制"); });
-                    
-                    // 切换润色框
-                    $card.find('.toggle-refine-btn').click(() => { $card.find('.pw-opening-refine-box').slideToggle(); });
-
-                    // 【修改点 2.3】执行开场白润色
-                    $card.find('.confirm-refine-btn').click(async function() {
-                        const refineInput = $card.find('.pw-opening-refine-input').val();
-                        if(!refineInput) return toastr.warning("请输入润色要求");
-                        const currentText = $card.find('.pw-opening-content').val();
-                        const $thisBtn = $(this);
-                        $thisBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 润色中...');
-
-                        try {
-                            const refineConfig = {
-                                mode: 'opening_refine', request: refineInput, currentText: currentText,
-                                apiSource: $('#pw-api-source').val(), indepApiUrl: $('#pw-api-url').val(),
-                                indepApiKey: $('#pw-api-key').val(), indepApiModel: modelVal
-                            };
-                            const newText = await runGeneration(refineConfig, refineConfig);
-
-                            // 【修改点 2.3】开场白智能对比（全文对比）
-                            $('#pw-diff-list').empty().append(`
-                                <div class="pw-diff-row">
-                                    <div class="pw-diff-attr-name">开场白全文对比</div>
-                                    <div class="pw-diff-cards" style="flex-direction:row;">
-                                        <div class="pw-diff-card old" data-val="${encodeURIComponent(currentText)}">
-                                            <div class="pw-diff-label">原版本</div>
-                                            <textarea class="pw-diff-textarea" style="height:300px;" readonly>${currentText}</textarea>
-                                        </div>
-                                        <div class="pw-diff-card new selected" data-val="${encodeURIComponent(newText)}">
-                                            <div class="pw-diff-label">新版本</div>
-                                            <textarea class="pw-diff-textarea" style="height:300px;">${newText}</textarea>
-                                        </div>
-                                    </div>
-                                </div>
-                            `);
-                            $('#pw-diff-raw-textarea').val(newText); // Raw view shows new text
-
-                            // 绑定开场白专用的保存逻辑
-                            $('#pw-diff-confirm').off('click').on('click', function() {
-                                const activeTab = $('.pw-diff-tab.active').data('view');
-                                let finalText = "";
-                                if (activeTab === 'raw') finalText = $('#pw-diff-raw-textarea').val();
-                                else finalText = $('.pw-diff-card.selected .pw-diff-textarea').val();
-                                
-                                $card.find('.pw-opening-content').val(finalText);
-                                $card.find('.pw-opening-refine-input').val('');
-                                $card.find('.pw-opening-refine-box').slideUp();
-                                $('#pw-diff-overlay').fadeOut();
-                                toastr.success("开场白已更新");
-                            });
-
-                            $('.pw-diff-tab[data-view="diff"]').click();
-                            $('#pw-diff-overlay').fadeIn();
-
-                        } catch(e) {
-                            console.error(e);
-                            toastr.error("润色失败: " + e.message);
-                        } finally {
-                            $thisBtn.prop('disabled', false).html('<i class="fa-solid fa-magic"></i> 开始润色');
-                        }
+                    $card.find('.copy-btn').click(() => {
+                        navigator.clipboard.writeText($card.find('.pw-opening-textarea').val());
+                        toastr.success("已复制");
                     });
                     
                     // 应用
                     $card.find('.apply-btn').click(async () => {
-                        const content = $card.find('.pw-opening-content').val();
-                        if(confirm("确定要将此内容替换为当前对话的开场白（第0层消息）吗？此操作不可撤销。")) {
+                        const finalContent = $card.find('.pw-opening-textarea').val();
+                        if(confirm("确定将此内容替换为当前对话的开场白（第0层消息）吗？")) {
                             const context = getContext();
                             if (context.chat && context.chat.length > 0) {
-                                context.chat[0].mes = content;
+                                context.chat[0].mes = finalContent;
                                 await saveChat();
                                 await reloadCurrentChat();
                                 toastr.success("开场白已更新");
                             } else {
                                 toastr.warning("当前没有对话可修改");
                             }
+                        }
+                    });
+
+                    // 展开/收起润色框
+                    $card.find('.toggle-refine-btn').click(() => {
+                        $card.find('.pw-card-refine-box').slideToggle();
+                    });
+
+                    // 执行开场白润色
+                    $card.find('.refine-confirm-btn').click(async function() {
+                        const refineInput = $card.find('.pw-card-refine-input').val();
+                        if(!refineInput) return toastr.warning("请输入要求");
+                        
+                        const oldContent = $card.find('.pw-opening-textarea').val();
+                        const btn = $(this);
+                        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 处理中');
+                        
+                        try {
+                            const config = {
+                                mode: 'opening_refine', 
+                                request: refineInput, 
+                                currentText: oldContent,
+                                wiContext: wiContent,
+                                charPersona: charPersona,
+                                userPersona: userPersona,
+                                apiSource: $('#pw-api-source').val(), 
+                                indepApiUrl: $('#pw-api-url').val(),
+                                indepApiKey: $('#pw-api-key').val(), 
+                                indepApiModel: modelVal
+                            };
+                            
+                            // 这里返回的是纯文本
+                            const refinedText = await runGeneration(config, config);
+                            
+                            // 记录当前正在编辑的卡片
+                            currentRefiningCard = $card;
+                            
+                            // 准备 Diff 数据
+                            $('#pw-diff-overlay').data('source', 'opening');
+                            $('#pw-diff-raw-textarea').val(lastRawResponse); // 存原始返回
+                            
+                            const $list = $('#pw-diff-list').empty();
+                            
+                            // 开场白因为没有结构，只做一个大的对比框
+                            const isChanged = oldContent.trim() !== refinedText.trim();
+                            let cardsHtml = '';
+                            
+                            if (!isChanged) {
+                                cardsHtml = `
+                                <div class="pw-diff-card new selected single-view" data-val="${encodeURIComponent(refinedText)}">
+                                    <div class="pw-diff-label">无变更</div>
+                                    <textarea class="pw-diff-textarea" style="min-height:300px;">${refinedText}</textarea>
+                                </div>`;
+                            } else {
+                                cardsHtml = `
+                                <div class="pw-diff-card old" data-val="${encodeURIComponent(oldContent)}">
+                                    <div class="pw-diff-label">原版本</div>
+                                    <textarea class="pw-diff-textarea" readonly style="min-height:300px;">${oldContent}</textarea>
+                                </div>
+                                <div class="pw-diff-card new selected" data-val="${encodeURIComponent(refinedText)}">
+                                    <div class="pw-diff-label">新版本</div>
+                                    <textarea class="pw-diff-textarea" style="min-height:300px;">${refinedText}</textarea>
+                                </div>`;
+                            }
+
+                            const rowHtml = `
+                            <div class="pw-diff-row">
+                                <div class="pw-diff-attr-name">开场白内容</div>
+                                <div class="pw-diff-cards">
+                                    ${cardsHtml}
+                                </div>
+                            </div>`;
+                            $list.append(rowHtml);
+
+                            $('.pw-diff-tab[data-view="diff"]').click();
+                            $('#pw-diff-overlay').fadeIn();
+                            $card.find('.pw-card-refine-input').val(''); // 清空输入
+
+                        } catch(e) {
+                            console.error(e);
+                            toastr.error("润色失败: " + e.message);
+                        } finally {
+                            btn.prop('disabled', false).html('<i class="fa-solid fa-magic"></i> 确认润色');
                         }
                     });
                     
@@ -1632,6 +1670,7 @@ function bindEvents() {
         promptsCache.initial = $('#pw-prompt-initial').val();
         promptsCache.refine = $('#pw-prompt-refine').val();
         promptsCache.opening = $('#pw-prompt-opening').val();
+        promptsCache.openingRefine = $('#pw-prompt-opening-refine').val();
         saveData();
         toastr.success("设置与Prompt已保存");
     });
@@ -1644,6 +1683,9 @@ function bindEvents() {
     });
     $(document).on('click.pw', '#pw-reset-opening', () => {
         if (confirm("恢复开场白Prompt？")) $('#pw-prompt-opening').val(defaultSystemPromptOpening);
+    });
+    $(document).on('click.pw', '#pw-reset-opening-refine', () => {
+        if (confirm("恢复开场白润色Prompt？")) $('#pw-prompt-opening-refine').val(defaultSystemPromptOpeningRefine);
     });
 
     $(document).on('click.pw', '#pw-wi-refresh', async function() {
