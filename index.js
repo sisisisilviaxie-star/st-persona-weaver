@@ -1,5 +1,6 @@
 import { extension_settings, getContext } from "../../../extensions.js";
-import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat } from "../../../../script.js";
+// [Fix] 关键修改：添加 saveCharacterDebounced 的引入
+import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v20';
@@ -72,7 +73,7 @@ NSFW:
   性癖好:
   禁忌底线:`;
 
-// --- Prompt 定义 (保持不变) ---
+// --- Prompt 定义 ---
 const defaultSystemPromptInitial = `Creating User Persona for {{user}} (Target: {{char}}).\n{{wi}}\n\n[Traits / Template]:\n{{tags}}\n\n[Instruction]:\n{{input}}\n\n[Task]:\nGenerate character details strictly in structured YAML format.\n1. Do NOT wrap the output in a root key like "{{user}}:". Start directly with the first key from the template.\n2. Maintain indentation strictly.\n3. Do NOT output status bars, progress bars, or Chain of Thought/Reasoning/Thinking process.\n4. Response: ONLY the YAML content.`;
 
 const defaultSystemPromptRefine = `You are an expert Data Converter and Persona Editor.\nOptimizing User Persona for {{char}}.\n{{wi}}\n\n[Target Schema / Template]:\n{{tags}}\n\n[Current Data]:\n"""\n{{current}}\n"""\n\n[Instruction]:\n"{{input}}"\n\n[Task]:\n1. Parse [Current Data]. If it is unstructured text or uses a different format, MIGRATE it to fit the [Target Schema].\n2. Apply the [Instruction] to modify or refine the content.\n3. STRICTLY output in valid YAML format following the [Target Schema] structure.\n4. Do NOT add a root key wrapper (like "User:").\n5. Do NOT output status bars, progress bars, or Chain of Thought.\n6. Response: ONLY the final YAML content.`;
@@ -112,28 +113,18 @@ let pollInterval = null;
 let lastRawResponse = "";
 let currentRefiningCard = null; 
 
-// 轮播图状态
 let currentSlideIndex = 0;
 let totalSlides = 0;
 
-// ============================================================================
-// 工具函数
-// ============================================================================
 const yieldToBrowser = () => new Promise(resolve => setTimeout(resolve, 0));
 const forcePaint = () => new Promise(resolve => setTimeout(resolve, 50));
-
-// ============================================================================
-// 1. 核心数据解析逻辑
-// ============================================================================
 
 function parseYamlToBlocks(text) {
     const map = new Map();
     if (!text || typeof text !== 'string') return map;
-
     try {
         const cleanText = text.replace(/^```[a-z]*\n?/im, '').replace(/```$/im, '').trim();
         let lines = cleanText.split('\n');
-
         const topLevelKeyRegex = /^\s*([^:\s\-]+?)\s*[:：]/;
         let topKeysIndices = [];
         for (let i = 0; i < lines.length; i++) {
@@ -142,7 +133,6 @@ function parseYamlToBlocks(text) {
                 topKeysIndices.push(i);
             }
         }
-
         if (topKeysIndices.length === 1 && lines.length > 2) {
             const firstLineIndex = topKeysIndices[0];
             const remainingLines = lines.slice(firstLineIndex + 1);
@@ -159,10 +149,8 @@ function parseYamlToBlocks(text) {
                 lines = remainingLines.map(l => l.length >= minIndent ? l.substring(minIndent) : l);
             }
         }
-
         let currentKey = null;
         let currentBuffer = [];
-
         const flushBuffer = () => {
             if (currentKey && currentBuffer.length > 0) {
                 let valuePart = "";
@@ -180,7 +168,6 @@ function parseYamlToBlocks(text) {
                 map.set(currentKey, valuePart);
             }
         };
-
         lines.forEach((line) => {
             const isTopLevel = (line.length < 200) && topLevelKeyRegex.test(line) && !line.trim().startsWith('-');
             const indentLevel = line.search(/\S|$/);
@@ -213,7 +200,6 @@ async function collectActiveWorldInfoContent() {
         const manualBooks = window.pwExtraBooks || [];
         const allBooks = [...new Set([...boundBooks, ...manualBooks])];
         if (allBooks.length > 20) allBooks.length = 20;
-
         for (const bookName of allBooks) {
             await yieldToBrowser();
             try {
@@ -240,10 +226,6 @@ function getCharacterPersonaString() {
     if (char.scenario) parts.push(`Scenario:\n${char.scenario}`);
     return parts.join('\n\n');
 }
-
-// ============================================================================
-// 2. 存储与系统函数
-// ============================================================================
 
 function loadData() {
     try { historyCache = JSON.parse(localStorage.getItem(STORAGE_KEY_HISTORY)) || []; } catch { historyCache = []; }
@@ -273,14 +255,12 @@ function saveData() {
 
 function saveHistory(item) {
     const limit = extension_settings[extensionName]?.historyLimit || 50;
-    
     if (!item.title || item.title === "未命名") {
         const context = getContext();
         const userName = $('.persona_name').first().text().trim() || "User";
         const charName = context.characters[context.characterId]?.name || "Char";
         item.title = `${userName} & ${charName}`;
     }
-
     historyCache.unshift(item);
     if (historyCache.length > limit) historyCache = historyCache.slice(0, limit);
     saveData();
@@ -290,11 +270,11 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v45'; // Bump version for CSS updates
+    const styleId = 'persona-weaver-css-v46';
     if ($(`#${styleId}`).length) return;
     
+    // [Fix Req 4] CSS 隔离优化，避免污染全局
     const css = `
-    /* ... 保持原有大部分 CSS 不变 ... */
     #pw-api-model-select { flex: 1; width: 0; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
     .pw-load-btn { font-size: 0.85em; background: linear-gradient(135deg, rgba(224, 175, 104, 0.2), rgba(224, 175, 104, 0.1)); border: 1px solid #e0af68; padding: 4px 12px; border-radius: 4px; cursor: pointer; color: #e0af68; font-weight: bold; margin-left: auto; display: inline-flex; align-items: center; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
     .pw-load-btn:hover { background: rgba(224, 175, 104, 0.3); transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.3); color: #fff; }
@@ -323,14 +303,14 @@ function injectStyles() {
     .pw-diff-label { font-size: 0.75em; padding: 4px 8px; background: rgba(0,0,0,0.3); color: #aaa; text-transform: uppercase; font-weight: bold; }
     .pw-diff-card.selected .pw-diff-label { color: #9ece6a; background: rgba(158, 206, 106, 0.1); }
     
+    /* [Fix Req 3] 允许所有卡片编辑 */
     .pw-diff-textarea { flex: 1; width: 100%; background: transparent; border: none; color: #eee; padding: 8px; font-family: inherit; font-size: 0.95em; resize: none; outline: none; line-height: 1.5; min-height: 80px; box-sizing: border-box; }
-    .pw-diff-card:not(.selected) .pw-diff-textarea { color: #aaa; pointer-events: auto !important; } /* Fix: allow click to select */
+    .pw-diff-card:not(.selected) .pw-diff-textarea { color: #888; pointer-events: auto !important; } 
     
     @media screen and (max-width: 600px) { .pw-diff-cards { flex-direction: column; } }
     
     .pw-btn.wi { background: linear-gradient(135deg, rgba(122, 162, 247, 0.2), rgba(0, 0, 0, 0)); border-color: #7aa2f7; color: #7aa2f7; }
 
-    /* 开场白轮播 */
     .pw-carousel-container { position: relative; width: 100%; overflow: hidden; margin-top: 10px; padding-bottom: 5px; }
     .pw-carousel-track { display: flex; transition: transform 0.3s ease-in-out; }
     .pw-opening-card { flex: 0 0 100%; width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.2); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
@@ -352,6 +332,10 @@ function injectStyles() {
 
     .pw-float-quote-btn { position: fixed; top: calc(20% + 60px); right: 0; background: linear-gradient(135deg, #e0af68, #d08f40); color: #1a1a1a; padding: 8px 12px; border-radius: 20px 0 0 20px; font-weight: bold; font-size: 0.85em; box-shadow: -2px 2px 8px rgba(0,0,0,0.4); cursor: pointer; z-index: 9999; display: none; align-items: center; gap: 4px; border: 1px solid rgba(255,255,255,0.3); border-right: none; backdrop-filter: blur(5px); }
     .pw-float-quote-btn:hover { padding-right: 18px; transform: translateX(-2px); }
+    
+    /* [Fix Req 1] 新的标题样式 */
+    .pw-opening-subtitle { font-family: 'Georgia', serif; font-style: italic; font-size: 0.9em; color: #888; margin-left: 10px; opacity: 0.8; margin-top: 2px; }
+    .pw-extra-req-label { font-size: 0.85em; opacity: 0.6; color: #e0af68; margin-bottom: 5px; font-weight: bold; }
     `;
     $('<style>').attr('id', styleId).text(css).appendTo('head');
 }
@@ -518,10 +502,6 @@ async function runGeneration(data, apiConfig) {
     return responseContent.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
 }
 
-// ============================================================================
-// 3. UI 渲染 logic
-// ============================================================================
-
 function updateCarousel() {
     if (totalSlides === 0) return;
     const offset = -currentSlideIndex * 100;
@@ -561,7 +541,8 @@ function renderOpeningResults(rawText) {
                 <div class="pw-opening-actions">
                     <button class="pw-mini-btn toggle-refine-btn"><i class="fa-solid fa-pen-fancy"></i> 润色</button>
                     <button class="pw-mini-btn pw-save-draft-btn"><i class="fa-solid fa-save"></i> 存入草稿</button>
-                    <button class="pw-btn save apply-btn"><i class="fa-solid fa-plus-circle"></i> 添加至开场白列表</button>
+                    <!-- [Fix Req 2] 修改按钮文案 -->
+                    <button class="pw-btn save apply-btn"><i class="fa-solid fa-plus-circle"></i> 添加至开场白</button>
                 </div>
             </div>
         `;
@@ -690,16 +671,16 @@ async function openCreatorPopup() {
     <!-- 开场白页面 -->
     <div id="pw-view-opening" class="pw-view">
         <div class="pw-scroll-area">
-            <!-- [Req 2] 标题修改 & 信息移动 -->
+            <!-- [Fix Req 1] 标题与 User/Char 整合 -->
             <div class="pw-info-display">
                 <div class="pw-info-item"><i class="fa-solid fa-comment-dots"></i><span>开场白</span></div>
-                <div style="font-family: 'Georgia', serif; font-style: italic; font-size: 0.9em; color: #aaa; margin-left: auto;">
+                <div class="pw-opening-subtitle">
                     User: ${currentName} <span style="opacity:0.5">&</span> Char: ${charName}
                 </div>
             </div>
             
-            <!-- [Req 2] 副标题 -->
-            <div style="font-size: 0.9em; font-weight: bold; opacity: 0.8; margin-bottom: 5px; color: #e0af68;">附加要求:</div>
+            <!-- [Fix Req 1] 副标题修改 -->
+            <div class="pw-extra-req-label">附加要求</div>
             <textarea id="pw-opening-req" class="pw-textarea pw-auto-height" placeholder="在此输入场景、时间、地点等要求..."></textarea>
             <button id="pw-btn-gen-opening" class="pw-btn gen" style="margin-top:10px;">生成开场白</button>
             <div id="pw-opening-results" class="pw-opening-result-container"></div>
@@ -808,19 +789,12 @@ async function openCreatorPopup() {
     }
 }
 
-// ============================================================================
-// 4. 事件绑定
-// ============================================================================
-
 function bindEvents() {
-    // [Fix 1] 移除 visibilitychange 监听，避免重复绑定和事件丢失
     $(document).off('.pw');
 
-    // --- 轮播图控制事件 ---
     $(document).on('click.pw', '#pw-prev-slide', (e) => { e.stopPropagation(); if (currentSlideIndex > 0) { currentSlideIndex--; updateCarousel(); } });
     $(document).on('click.pw', '#pw-next-slide', (e) => { e.stopPropagation(); if (currentSlideIndex < totalSlides - 1) { currentSlideIndex++; updateCarousel(); } });
 
-    // --- 开场白卡片内部按钮事件 ---
     $(document).on('click.pw', '.pw-save-draft-btn', function(e) {
         e.stopPropagation();
         const content = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
@@ -834,7 +808,6 @@ function bindEvents() {
         toastr.success(TEXT.TOAST_SNAPSHOT);
     });
 
-    // [Req 3] Apply Opening to Character Card (Add New)
     $(document).on('click.pw', '.apply-btn', async function(e) {
         e.stopPropagation();
         const finalContent = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
@@ -847,21 +820,22 @@ function bindEvents() {
             return toastr.warning("当前未加载任何角色卡，无法保存。");
         }
 
-        // [Req 3] 提示语改为“添加”
         if(confirm("确定将此内容添加为当前角色卡的新开场白 (Alternate Greeting) 吗？\n\n注意：这将修改并保存角色卡文件。")) {
             try {
                 let charObj = context.characters[chId];
                 
-                // [Req 3] Logic: Push to alternate_greetings
                 if (!charObj.data) charObj.data = {};
                 if (!charObj.data.alternate_greetings) charObj.data.alternate_greetings = [];
                 
                 charObj.data.alternate_greetings.push(finalContent);
 
-                if (typeof window.SillyTavern !== 'undefined' && typeof window.SillyTavern.saveCharacterDebounced === 'function') {
+                // [Fix Req 5] 使用正确引入的 saveCharacterDebounced
+                if (typeof saveCharacterDebounced === 'function') {
+                    await saveCharacterDebounced(chId);
+                    toastr.success("已添加新开场白并保存");
+                } else if (typeof window.SillyTavern !== 'undefined' && typeof window.SillyTavern.saveCharacterDebounced === 'function') {
                     await window.SillyTavern.saveCharacterDebounced(chId);
-                } else if (typeof window.saveCharacterDebounced === 'function') {
-                    await window.saveCharacterDebounced(chId);
+                    toastr.success("已添加新开场白并保存");
                 } else {
                     toastr.warning("未找到保存接口，仅在内存中更新。请手动点击酒馆的保存按钮。");
                 }
@@ -870,7 +844,6 @@ function bindEvents() {
                      window.TavernHelper.eventEmit(window.TavernHelper.events.CHARACTER_EDITED, { detail: { id: chId, character: charObj } });
                 }
 
-                toastr.success("已添加新开场白并保存");
             } catch (e) {
                 console.error(e);
                 toastr.error("保存失败: " + e.message);
@@ -883,7 +856,6 @@ function bindEvents() {
         $(this).closest('.pw-opening-card').find('.pw-card-refine-box').slideToggle();
     });
 
-    // Confirm Refine (Opening)
     $(document).on('click.pw', '.refine-confirm-btn', async function(e) {
         e.stopPropagation();
         const $card = $(this).closest('.pw-opening-card');
@@ -914,9 +886,7 @@ function bindEvents() {
             $('#pw-diff-raw-textarea').val(lastRawResponse);
             $('#pw-diff-list').empty();
 
-            // [Req 5] Old version should be readonly in raw view? No, editable in cards.
-            // Raw View setup
-            const oldTabHtml = `<textarea class="pw-diff-raw-textarea" readonly>${oldContent}</textarea>`; // Raw view usually shows new result, but let's keep it simple
+            const oldTabHtml = `<textarea class="pw-diff-raw-textarea" readonly>${oldContent}</textarea>`; 
             const newTabHtml = `<textarea class="pw-diff-raw-textarea" id="pw-opening-new-textarea">${refinedText}</textarea>`;
             
             $('.pw-diff-tab[data-view="diff"] div:first-child').text('原版本');
@@ -941,7 +911,6 @@ function bindEvents() {
         }
     });
 
-    // --- Tabs ---
     $(document).on('click.pw', '.pw-tab', function (e) {
         e.stopPropagation();
         $('.pw-tab').removeClass('active'); $(this).addClass('active');
@@ -950,7 +919,6 @@ function bindEvents() {
         if ($(this).data('tab') === 'history') renderHistoryList();
     });
 
-    // --- Template Editing ---
     $(document).on('click.pw', '#pw-toggle-edit-template', (e) => {
         e.stopPropagation();
         isEditingTemplate = !isEditingTemplate;
@@ -979,7 +947,6 @@ function bindEvents() {
         toastr.success("模版已更新");
     });
 
-    // --- Shortcuts ---
     $(document).on('click.pw', '.pw-shortcut-btn', function (e) {
         e.stopPropagation();
         const key = $(this).data('key');
@@ -1009,7 +976,6 @@ function bindEvents() {
         }
     });
 
-    // --- Float Button Selection Check [Fix 1: Safe Check] ---
     let selectionTimeout;
     const checkSelection = () => {
         clearTimeout(selectionTimeout);
@@ -1026,7 +992,7 @@ function bindEvents() {
                     if ($btn.is(':visible')) $btn.stop(true, true).fadeOut(200);
                 }
             } catch(e) { console.error("Selection check error", e); }
-        }, 200); // 增加防抖时间
+        }, 200);
     };
     $(document).on('touchend mouseup keyup', '.pw-opening-textarea, #pw-result-text', checkSelection);
 
@@ -1088,7 +1054,6 @@ function bindEvents() {
     };
     $(document).on('input.pw change.pw', '#pw-request, #pw-result-text, #pw-wi-toggle, .pw-input, .pw-select', saveCurrentState);
 
-    // --- Diff View Logic ---
     $(document).on('click.pw', '.pw-diff-tab', function (e) {
         e.stopPropagation();
         $('.pw-diff-tab').removeClass('active');
@@ -1119,7 +1084,6 @@ function bindEvents() {
         }
     });
 
-    // Refine (Persona)
     $(document).on('click.pw', '#pw-btn-refine', async function (e) {
         e.preventDefault(); e.stopPropagation();
         const refineReq = $('#pw-refine-input').val();
@@ -1161,8 +1125,8 @@ function bindEvents() {
                 if (isChanged) changeCount++;
                 if (!valOld && !valNew) return;
 
-                // [Req 5] 两个版本均可编辑。原版本不再 readonly。
                 let cardsHtml = '';
+                // [Fix Req 3] 移除只读限制，移除提示词
                 if (!isChanged) {
                     cardsHtml = `
                     <div class="pw-diff-card new selected single-view" data-val="${encodeURIComponent(valNew)}">
@@ -1170,14 +1134,13 @@ function bindEvents() {
                         <textarea class="pw-diff-textarea">${valNew}</textarea>
                     </div>`;
                 } else {
-                    // 默认选中新版本，但原版本也可以点击
                     cardsHtml = `
                     <div class="pw-diff-card old" data-val="${encodeURIComponent(valOld)}">
-                        <div class="pw-diff-label">原版本 (可编辑)</div>
+                        <div class="pw-diff-label">原版本</div>
                         <textarea class="pw-diff-textarea">${valOld || "(无)"}</textarea>
                     </div>
                     <div class="pw-diff-card new selected" data-val="${encodeURIComponent(valNew)}">
-                        <div class="pw-diff-label">新版本 (可编辑)</div>
+                        <div class="pw-diff-label">新版本</div>
                         <textarea class="pw-diff-textarea">${valNew || "(删除)"}</textarea>
                     </div>`;
                 }
@@ -1221,8 +1184,6 @@ function bindEvents() {
         const $row = $(this).closest('.pw-diff-row');
         if ($(this).hasClass('single-view')) return;
 
-        // [Req 5] 切换选中状态，但不影响可编辑性。
-        // 任何时候都可以编辑，选中的那个会被保存。
         $row.find('.pw-diff-card').removeClass('selected');
         $(this).addClass('selected');
     });
@@ -1252,7 +1213,6 @@ function bindEvents() {
                 let finalLines = [];
                 $('.pw-diff-row').each(function () {
                     const key = $(this).data('key');
-                    // 保存时只获取 .selected 的内容
                     const val = $(this).find('.pw-diff-card.selected .pw-diff-textarea').val().trimEnd();
                     if (val && val !== "(删除)" && val !== "(无)") {
                         if (val.includes('\n') || val.startsWith('  ')) finalLines.push(`${key}:\n${val}`);
@@ -1271,7 +1231,6 @@ function bindEvents() {
 
     $(document).on('click.pw', '#pw-diff-cancel', (e) => { e.stopPropagation(); $('#pw-diff-overlay').fadeOut(); });
 
-    // Generate Persona
     $(document).on('click.pw', '#pw-btn-gen', async function (e) {
         e.preventDefault(); e.stopPropagation();
         const req = $('#pw-request').val();
@@ -1306,7 +1265,6 @@ function bindEvents() {
         }
     });
 
-    // Generate Opening
     $(document).on('click.pw', '#pw-btn-gen-opening', async function(e) {
         e.preventDefault(); e.stopPropagation();
         const req = $('#pw-opening-req').val();
@@ -1386,7 +1344,6 @@ function bindEvents() {
         }
     });
 
-    // Save Draft (Persona)
     $(document).on('click.pw', '#pw-snapshot', function (e) {
         e.stopPropagation();
         const text = $('#pw-result-text').val();
@@ -1501,126 +1458,6 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-history-search-clear', function (e) { e.stopPropagation(); $('#pw-history-search').val('').trigger('input'); });
     $(document).on('click.pw', '#pw-history-clear-all', function (e) { e.stopPropagation(); if (confirm("清空?")) { historyCache = []; saveData(); renderHistoryList(); } });
 }
-
-const renderTemplateChips = () => {
-    const $container = $('#pw-template-chips').empty();
-    const blocks = parseYamlToBlocks(currentTemplate);
-    blocks.forEach((content, key) => {
-        const $chip = $(`<div class="pw-tag-chip"><i class="fa-solid fa-cube" style="opacity:0.5; margin-right:4px;"></i><span>${key}</span></div>`);
-        $chip.on('click', () => {
-            const $text = $('#pw-request');
-            const cur = $text.val();
-            const prefix = (cur && !cur.endsWith('\n') && cur.length > 0) ? '\n\n' : '';
-            let insertText = key + ":";
-            if (content && content.trim()) {
-                if (content.includes('\n') || content.startsWith(' ')) insertText += "\n" + content;
-                else insertText += " " + content;
-            } else insertText += " ";
-            $text.val(cur + prefix + insertText).focus();
-            $text.scrollTop($text[0].scrollHeight);
-        });
-        $container.append($chip);
-    });
-};
-
-const renderHistoryList = () => {
-    loadData();
-    const $list = $('#pw-history-list').empty();
-    const search = $('#pw-history-search').val().toLowerCase();
-    const filtered = historyCache.filter(item => {
-        if (!search) return true;
-        const content = (item.data.resultText || "").toLowerCase();
-        const title = (item.title || "").toLowerCase();
-        return title.includes(search) || content.includes(search);
-    });
-    if (filtered.length === 0) { $list.html('<div style="text-align:center; opacity:0.6; padding:20px;">暂无草稿</div>'); return; }
-
-    filtered.forEach((item, index) => {
-        const previewText = item.data.resultText || '无内容';
-        const displayTitle = item.title || "User & Char";
-        const typeLabel = item.data.type === 'opening' ? '<span style="color:#e0af68; font-size:0.8em; border:1px solid #e0af68; border-radius:3px; padding:0 3px; margin-right:5px;">开场白</span>' : '<span style="color:#9ece6a; font-size:0.8em; border:1px solid #9ece6a; border-radius:3px; padding:0 3px; margin-right:5px;">人设</span>';
-
-        const $el = $(`
-        <div class="pw-history-item">
-            <div class="pw-hist-main">
-                <div class="pw-hist-header">
-                    <span class="pw-hist-title-display">${typeLabel}${displayTitle}</span>
-                    <input type="text" class="pw-hist-title-input" value="${displayTitle}" style="display:none;">
-                    <div style="display:flex; gap:5px;">
-                        <i class="fa-solid fa-pen pw-hist-action-btn edit" title="编辑标题"></i>
-                        <i class="fa-solid fa-trash pw-hist-action-btn del" data-index="${index}" title="删除"></i>
-                    </div>
-                </div>
-                <div class="pw-hist-meta"><span>${item.timestamp || ''}</span></div>
-                <div class="pw-hist-desc">${previewText}</div>
-            </div>
-        </div>
-    `);
-        $el.on('click', function (e) {
-            if ($(e.target).closest('.pw-hist-action-btn, .pw-hist-title-input').length) return;
-            
-            if (item.data.type === 'opening') {
-                $('#pw-opening-req').val(item.request);
-                renderOpeningResults(item.data.resultText);
-                $('.pw-tab[data-tab="opening"]').click();
-            } else {
-                $('#pw-request').val(item.request); 
-                $('#pw-result-text').val(previewText); 
-                $('#pw-result-area').show();
-                $('#pw-request').addClass('minimized');
-                $('.pw-tab[data-tab="editor"]').click();
-            }
-        });
-        $el.find('.pw-hist-action-btn.del').on('click', function (e) {
-            e.stopPropagation();
-            if (confirm("删除?")) {
-                historyCache.splice(historyCache.indexOf(item), 1);
-                saveData(); renderHistoryList();
-            }
-        });
-        $list.append($el);
-    });
-};
-
-window.pwExtraBooks = [];
-const renderWiBooks = async () => {
-    const container = $('#pw-wi-container').empty();
-    const baseBooks = await getContextWorldBooks();
-    const allBooks = [...new Set([...baseBooks, ...(window.pwExtraBooks || [])])];
-    if (allBooks.length === 0) { container.html('<div style="opacity:0.6; padding:10px; text-align:center;">此角色未绑定世界书，请在“世界书”标签页手动添加或在酒馆主界面绑定。</div>'); return; }
-    for (const book of allBooks) {
-        const isBound = baseBooks.includes(book);
-        const $el = $(`<div class="pw-wi-book"><div class="pw-wi-header"><span><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span style="color:#9ece6a;font-size:0.8em;margin-left:5px;">(已绑定)</span>' : ''}</span><div>${!isBound ? '<i class="fa-solid fa-times remove-book" style="color:#ff6b6b;margin-right:10px;" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div></div><div class="pw-wi-list" data-book="${book}"></div></div>`);
-        $el.find('.remove-book').on('click', (e) => { e.stopPropagation(); window.pwExtraBooks = window.pwExtraBooks.filter(b => b !== book); renderWiBooks(); });
-        $el.find('.pw-wi-header').on('click', async function () {
-            const $list = $el.find('.pw-wi-list');
-            const $arrow = $(this).find('.arrow');
-            if ($list.is(':visible')) { $list.slideUp(); $arrow.removeClass('fa-flip-vertical'); }
-            else {
-                $list.slideDown(); $arrow.addClass('fa-flip-vertical');
-                if (!$list.data('loaded')) {
-                    $list.html('<div style="padding:10px;text-align:center;"><i class="fas fa-spinner fa-spin"></i></div>');
-                    const entries = await getWorldBookEntries(book);
-                    $list.empty();
-                    if (entries.length === 0) $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
-                    entries.forEach(entry => {
-                        const isChecked = entry.enabled ? 'checked' : '';
-                        const $item = $(`<div class="pw-wi-item"><div class="pw-wi-item-row"><input type="checkbox" class="pw-wi-check" ${isChecked} data-content="${encodeURIComponent(entry.content)}"><div style="font-weight:bold; font-size:0.9em; flex:1;">${entry.displayName}</div><i class="fa-solid fa-eye pw-wi-toggle-icon"></i></div><div class="pw-wi-desc">${entry.content}<div class="pw-wi-close-bar"><i class="fa-solid fa-angle-up"></i> 收起</div></div></div>`);
-                        $item.find('.pw-wi-toggle-icon').on('click', function (e) {
-                            e.stopPropagation();
-                            const $desc = $(this).closest('.pw-wi-item').find('.pw-wi-desc');
-                            if ($desc.is(':visible')) { $desc.slideUp(); $(this).css('color', ''); } else { $desc.slideDown(); $(this).css('color', '#5b8db8'); }
-                        });
-                        $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').css('color', ''); });
-                        $list.append($item);
-                    });
-                    $list.data('loaded', true);
-                }
-            }
-        });
-        container.append($el);
-    }
-};
 
 function addPersonaButton() {
     const container = $('.persona_controls_buttons_block');
