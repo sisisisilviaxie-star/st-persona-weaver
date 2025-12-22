@@ -193,7 +193,7 @@ const TEXT = {
     TOAST_WI_SUCCESS: (book) => `已写入世界书: ${book}`,
     TOAST_WI_FAIL: "当前角色未绑定世界书，无法写入",
     TOAST_WI_ERROR: "TavernHelper API 未加载，无法操作世界书",
-    TOAST_SNAPSHOT: "已存入草稿箱",
+    TOAST_SNAPSHOT: "已保存至草稿",
     TOAST_LOAD_CURRENT: "已读取当前酒馆人设内容"
 };
 
@@ -389,7 +389,7 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v43'; 
+    const styleId = 'persona-weaver-css-v44'; // Version bumped
     if ($(`#${styleId}`).length) return;
     
     const css = `
@@ -459,11 +459,20 @@ function injectStyles() {
     .pw-tab-sub { display: block; font-size: 0.75em; opacity: 0.6; font-weight: normal; margin-top: 2px; text-align: center; }
     .pw-diff-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
 
-    /* [Req 1.1] Header Subtitle */
     .pw-header-subtitle { font-size: 0.65em; opacity: 0.6; font-weight: normal; margin-left: 10px; color: #ccc; }
-    .pw-input-label { font-size: 0.9em; opacity: 0.6; margin-bottom: 5px; color: #aaa; }
+    
+    /* [Req 2] Updated Input Label style: Visible & Left Aligned */
+    .pw-input-label { 
+        font-size: 1.0em; 
+        font-weight: bold; 
+        color: #e0af68; /* Theme gold color */
+        margin-bottom: 5px; 
+        margin-top: 5px;
+        text-align: left; 
+        width: 100%;
+        display: block;
+    }
 
-    /* [Req 1.2] Diff View Textarea Height */
     .pw-diff-raw-textarea { min-height: 350px !important; }
 
     .pw-float-quote-btn { position: fixed; top: calc(20% + 60px); right: 0; background: linear-gradient(135deg, #e0af68, #d08f40); color: #1a1a1a; padding: 8px 12px; border-radius: 20px 0 0 20px; font-weight: bold; font-size: 0.85em; box-shadow: -2px 2px 8px rgba(0,0,0,0.4); cursor: pointer; z-index: 9999; display: none; align-items: center; gap: 4px; border: 1px solid rgba(255,255,255,0.3); border-right: none; backdrop-filter: blur(5px); }
@@ -680,8 +689,8 @@ function renderOpeningResults(rawText) {
 
                 <div class="pw-opening-actions">
                     <button class="pw-mini-btn toggle-refine-btn"><i class="fa-solid fa-pen-fancy"></i> 润色</button>
-                    <button class="pw-mini-btn pw-save-draft-btn"><i class="fa-solid fa-save"></i> 存入草稿</button>
-                    <!-- [Req 1.3] Button ID/Class used in delegation below -->
+                    <!-- [Req 1] Text changed to 保存 -->
+                    <button class="pw-mini-btn pw-save-draft-btn"><i class="fa-solid fa-save"></i> 保存</button>
                     <button class="pw-btn save apply-btn"><i class="fa-solid fa-plus-circle"></i> 加入开场白列表</button>
                 </div>
             </div>
@@ -735,8 +744,6 @@ async function openCreatorPopup() {
     };
 
     const charName = getContext().characters[getContext().characterId]?.name || "None";
-    
-    // [Req 1.1] Move Subtitle info to Main Title
     const headerTitle = `${TEXT.PANEL_TITLE}<span class="pw-header-subtitle">User: ${currentName} & Char: ${charName}</span>`;
 
     const html = `
@@ -815,12 +822,9 @@ async function openCreatorPopup() {
     <!-- 开场白页面 -->
     <div id="pw-view-opening" class="pw-view">
         <div class="pw-scroll-area">
-            <!-- [Req 1.1] Updated Title -->
-            <div class="pw-info-display">
-                <div class="pw-info-item"><i class="fa-solid fa-comment-dots"></i><span>开场白</span></div>
-            </div>
+            <!-- [Req 2] Removed the "Opening" title block -->
             
-            <!-- [Req 1.1] Updated Label -->
+            <!-- [Req 2] High visible label -->
             <div class="pw-input-label">附加要求</div>
             <textarea id="pw-opening-req" class="pw-textarea pw-auto-height" placeholder="在此输入场景、时间、地点等要求..."></textarea>
             <button id="pw-btn-gen-opening" class="pw-btn gen" style="margin-top:10px;">生成开场白</button>
@@ -935,21 +939,21 @@ async function openCreatorPopup() {
 // ============================================================================
 
 function bindEvents() {
-    $(document).off('.pw');
+    // [Fix] 防止重复绑定。如果已经绑定过，直接返回。
+    if (window.stPersonaWeaverBound) return;
+    window.stPersonaWeaverBound = true;
 
-    document.addEventListener("visibilitychange", function() {
-        if (!document.hidden) {
-            console.log("[PW] App visible, rebinding events...");
-            bindEvents();
-        }
-    }, { once: true }); 
+    console.log("[PW] Binding Events...");
+
+    // [Fix] 移除 visibilitychange 监听器。这通常是事件丢失的元凶。
+    // $(document).off('.pw'); // 也不要轻易off，除非确定是重载
 
     // --- 轮播图控制事件 ---
     $(document).on('click.pw', '#pw-prev-slide', () => { if (currentSlideIndex > 0) { currentSlideIndex--; updateCarousel(); } });
     $(document).on('click.pw', '#pw-next-slide', () => { if (currentSlideIndex < totalSlides - 1) { currentSlideIndex++; updateCarousel(); } });
 
     // --- 开场白卡片内部按钮事件 ---
-    // Save Draft
+    // [Req 1] Save Draft (Label changed in render)
     $(document).on('click.pw', '.pw-save-draft-btn', function() {
         const content = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
         const req = $('#pw-opening-req').val();
@@ -962,26 +966,22 @@ function bindEvents() {
         toastr.success(TEXT.TOAST_SNAPSHOT);
     });
 
-    // [Req 1.3] Apply to Alternate Greetings
+    // Apply to Alternate Greetings
     $(document).on('click.pw', '.apply-btn', async function() {
         const finalContent = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
         const context = getContext();
         
-        // Check if character is selected (ID 0 is valid, null/undefined is not)
         if (context.characterId === undefined || context.characterId === null) {
             return toastr.warning("未打开角色卡，无法添加到开场白列表");
         }
 
         const char = context.characters[context.characterId];
         
-        // Ensure data structure exists
         if (!char.data) char.data = {};
         if (!char.data.alternate_greetings) char.data.alternate_greetings = [];
         
-        // Add to list
         char.data.alternate_greetings.push(finalContent);
         
-        // Trigger auto-save (background)
         await saveCharacterDebounced();
         
         toastr.success("已添加到角色卡开场白列表 (Alternate Greetings)");
@@ -994,6 +994,7 @@ function bindEvents() {
 
     // Confirm Refine (Opening) -> Diff View
     $(document).on('click.pw', '.refine-confirm-btn', async function() {
+        console.log("[PW] Opening Refine Clicked");
         const $card = $(this).closest('.pw-opening-card');
         const refineInput = $card.find('.pw-card-refine-input').val();
         if(!refineInput) return toastr.warning("请输入要求");
@@ -1022,14 +1023,9 @@ function bindEvents() {
             $('#pw-diff-raw-textarea').val(lastRawResponse);
             $('#pw-diff-list').empty();
 
-            // [Req 1.2] Render BOTH as editable textareas for Opening Diff
-            // We reuse #pw-diff-list-view container but inject a textarea instead of list
-            // "Old" Version
             const oldTabHtml = `<textarea class="pw-diff-raw-textarea" id="pw-opening-old-textarea" spellcheck="false">${oldContent}</textarea>`;
-            // "New" Version
             const newTabHtml = `<textarea class="pw-diff-raw-textarea" id="pw-opening-new-textarea" spellcheck="false">${refinedText}</textarea>`;
             
-            // Adjust Tab Titles
             $('.pw-diff-tab[data-view="diff"] div:first-child').text('原版本');
             $('.pw-diff-tab[data-view="diff"] .pw-tab-sub').text('直接编辑');
             $('.pw-diff-tab[data-view="raw"] div:first-child').text('新版本');
@@ -1225,6 +1221,7 @@ function bindEvents() {
     // Refine (Persona)
     $(document).on('click.pw', '#pw-btn-refine', async function (e) {
         e.preventDefault();
+        console.log("[PW] Refine Clicked");
         const refineReq = $('#pw-refine-input').val();
         if (!refineReq) return toastr.warning("请输入润色意见");
         
@@ -1336,7 +1333,6 @@ function bindEvents() {
         let finalContent = "";
 
         if (source === 'opening') {
-            // [Req 1.2] Support saving from either edited version
             if (activeTab === 'diff') {
                 finalContent = $('#pw-opening-old-textarea').val();
             } else {
@@ -1375,6 +1371,7 @@ function bindEvents() {
     // Generate Persona
     $(document).on('click.pw', '#pw-btn-gen', async function (e) {
         e.preventDefault();
+        console.log("[PW] Gen Clicked");
         const req = $('#pw-request').val();
         if (!req) return toastr.warning("请输入要求");
         const $btn = $(this);
@@ -1410,6 +1407,7 @@ function bindEvents() {
     // Generate Opening
     $(document).on('click.pw', '#pw-btn-gen-opening', async function(e) {
         e.preventDefault();
+        console.log("[PW] Opening Gen Clicked");
         const req = $('#pw-opening-req').val();
         const $btn = $(this);
         const $results = $('#pw-opening-results');
@@ -1492,7 +1490,7 @@ function bindEvents() {
         saveHistory({ 
             request: req || "无", 
             timestamp: new Date().toLocaleString(), 
-            title: "", // Let default logic handle it
+            title: "", 
             data: { name: "Persona", resultText: text || "(无)", type: 'persona' } 
         });
         toastr.success(TEXT.TOAST_SNAPSHOT);
