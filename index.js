@@ -5,7 +5,7 @@ const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v20';
 const STORAGE_KEY_STATE = 'pw_state_v20';
 const STORAGE_KEY_TEMPLATE = 'pw_template_v2';
-const STORAGE_KEY_PROMPTS = 'pw_prompts_v6';
+const STORAGE_KEY_PROMPTS = 'pw_prompts_v6'; // Version bumped
 const BUTTON_ID = 'pw_persona_tool_btn';
 
 const defaultYamlTemplate =
@@ -114,6 +114,7 @@ Optimizing User Persona for {{char}}.
 5. Do NOT output status bars, progress bars, or Chain of Thought.
 6. Response: ONLY the final YAML content.`;
 
+// 修改：更强烈的 Markdown 和格式要求
 const defaultSystemPromptOpening =
 `Generate distinct opening scenes (First Messages) based on the following personas and context.
 
@@ -374,7 +375,7 @@ function saveData() {
 function saveHistory(item) {
     const limit = extension_settings[extensionName]?.historyLimit || 50;
     
-    // 强制修正标题逻辑
+    // 强制修正标题逻辑 (Req 1)
     if (!item.title || item.title === "未命名") {
         const context = getContext();
         const userName = $('.persona_name').first().text().trim() || "User";
@@ -391,9 +392,10 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 function injectStyles() {
-    const styleId = 'persona-weaver-css-v43'; // Bumped version
+    const styleId = 'persona-weaver-css-v42'; // Bumped version
     if ($(`#${styleId}`).length) return;
     
+    // [Req 5] Fix Animation: #pw-request remove transition
     const css = `
     #pw-api-model-select { flex: 1; width: 0; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
     
@@ -414,6 +416,7 @@ function injectStyles() {
     #pw-api-url { background-color: rgba(0, 0, 0, 0.2) !important; border: 1px solid var(--SmartThemeBorderColor) !important; color: var(--smart-theme-body-color) !important; }
     .pw-auto-height { min-height: 80px; max-height: 500px; overflow-y: auto; }
     
+    /* [Req 5] 移除滑动动画 */
     #pw-request { transition: none !important; } 
 
     #pw-history-clear-all { background: transparent; border: none; color: #ff6b6b; font-size: 0.85em; opacity: 0.6; padding: 5px; width: auto; margin: 10px auto; text-decoration: underline; }
@@ -447,6 +450,7 @@ function injectStyles() {
     .pw-opening-textarea { width: 100%; min-height: 350px; background: rgba(0, 0, 0, 0.15); border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; color: #eee; padding: 10px; font-family: inherit; font-size: 1.0em; line-height: 1.6; resize: vertical; outline: none; box-sizing: border-box; white-space: pre-wrap; }
     .pw-opening-textarea:focus { background: rgba(0,0,0,0.25); border-color: #e0af68; }
     
+    /* [Req 2.1] Action bars */
     .pw-opening-actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 5px; }
     .pw-carousel-nav { display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 15px; padding-top: 10px; border-top: 1px dashed var(--SmartThemeBorderColor); }
     
@@ -458,19 +462,9 @@ function injectStyles() {
     .pw-card-refine-box { display: none; flex-direction: column; gap: 8px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; border: 1px dashed var(--SmartThemeBorderColor); margin-top: 5px; }
     .pw-card-refine-input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--SmartThemeBorderColor); color: #ddd; padding: 8px; border-radius: 4px; resize: vertical; min-height: 60px; }
     
-    /* Tabs */
+    /* [Req 3] Diff Tab Subtitle */
     .pw-tab-sub { display: block; font-size: 0.75em; opacity: 0.6; font-weight: normal; margin-top: 2px; text-align: center; }
     .pw-diff-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
-
-    /* [Req 4] 修复润色对比文本框高度 */
-    .pw-diff-raw-view { display: none; flex-direction: column; flex: 1; height: 100%; min-height: 0; }
-    .pw-diff-raw-textarea { flex: 1; width: 100%; background: #111; color: #ccc; border: 1px solid #333; border-radius: 6px; padding: 10px; font-family: monospace; resize: none; outline: none; font-size: 0.9em; line-height: 1.5; box-sizing: border-box; min-height: 300px; }
-
-    /* [Req 6] 修复世界书列表样式 */
-    .pw-wi-list { display: none; padding: 5px; border-top: 1px solid var(--SmartThemeBorderColor); }
-    .pw-wi-item { background: rgba(0,0,0,0.2); border: 1px solid var(--SmartThemeBorderColor); border-radius: 4px; margin-bottom: 5px; padding: 8px; }
-    .pw-wi-item-row { display: flex; align-items: center; gap: 8px; }
-    .pw-wi-desc { display: none; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.85em; white-space: pre-wrap; color: #ccc; }
 
     /* 悬浮修改按钮 */
     .pw-float-quote-btn { position: fixed; top: calc(20% + 60px); right: 0; background: linear-gradient(135deg, #e0af68, #d08f40); color: #1a1a1a; padding: 8px 12px; border-radius: 20px 0 0 20px; font-weight: bold; font-size: 0.85em; box-shadow: -2px 2px 8px rgba(0,0,0,0.4); cursor: pointer; z-index: 9999; display: none; align-items: center; gap: 4px; border: 1px solid rgba(255,255,255,0.3); border-right: none; backdrop-filter: blur(5px); }
@@ -655,18 +649,29 @@ function updateCarousel() {
     $('#pw-next-slide').prop('disabled', currentSlideIndex === totalSlides - 1);
 }
 
+// [Req 2.4] 开场白结果渲染 - 增强版逻辑
 function renderOpeningResults(rawText) {
     const $container = $('#pw-opening-results').empty();
     
+    // 尝试正则匹配代码块
     let matches = [...rawText.matchAll(/```[\s\S]*?```/g)].map(m => m[0].replace(/```[a-z]*\n?/g, '').replace(/```$/, ''));
+    
+    // 如果没有找到代码块，尝试用分隔符匹配
     if (!matches || matches.length === 0) {
-        if (rawText.includes('---')) matches = rawText.split(/---+[^\n]*---+/g).map(s => s.trim()).filter(s => s.length > 10);
+        if (rawText.includes('---')) {
+            matches = rawText.split(/---+[^\n]*---+/g).map(s => s.trim()).filter(s => s.length > 10);
+        }
     }
-    if (!matches || matches.length === 0) matches = [rawText.trim()];
+    
+    // 如果还是没找到，或者文本太短，就当做只有这一个选项
+    if (!matches || matches.length === 0) {
+        matches = [rawText.trim()];
+    }
     
     let slidesHtml = '';
     totalSlides = matches.length;
     
+    // [Req 2.1, 2.3] 构建 HTML
     matches.forEach((content, i) => {
         slidesHtml += `
             <div class="pw-opening-card" data-index="${i}">
@@ -685,7 +690,7 @@ function renderOpeningResults(rawText) {
                 <div class="pw-opening-actions">
                     <button class="pw-mini-btn toggle-refine-btn"><i class="fa-solid fa-pen-fancy"></i> 润色</button>
                     <button class="pw-mini-btn pw-save-draft-btn"><i class="fa-solid fa-save"></i> 存入草稿</button>
-                    <button class="pw-btn save apply-btn"><i class="fa-solid fa-plus"></i> 添加到角色卡</button>
+                    <button class="pw-btn save apply-btn"><i class="fa-solid fa-check"></i> 应用</button>
                 </div>
             </div>
         `;
@@ -707,6 +712,8 @@ function renderOpeningResults(rawText) {
     $container.html(carouselHtml);
     currentSlideIndex = 0;
     updateCarousel();
+
+    // 注意：事件绑定已移动到 bindEvents，通过委托处理，解决 [Req 2.2] 卡死问题
 }
 
 async function openCreatorPopup() {
@@ -720,7 +727,6 @@ async function openCreatorPopup() {
     if (!currentName) currentName = $('h5#your_name').text().trim();
     if (!currentName) currentName = context.powerUserSettings?.persona_selected || "User";
 
-    const charName = context.characters[context.characterId]?.name || "None";
     const activePersonaContent = getActivePersonaDescription();
     
     let autoFilledResult = savedState.resultText || "";
@@ -737,9 +743,6 @@ async function openCreatorPopup() {
         }
         return `<option disabled>未找到世界书</option>`;
     };
-
-    // [Req 1] Title adjustment: Remove "生成器", move User/Char info
-    const openingTabTitleHtml = `<div class="pw-info-item"><i class="fa-solid fa-comment-dots"></i><span>开场白</span><span style="font-size:0.8em; opacity:0.6; margin-left:10px; font-weight:normal;">User: ${currentName} & Char: ${charName}</span></div>`;
 
     const html = `
 <div class="pw-wrapper">
@@ -818,42 +821,40 @@ async function openCreatorPopup() {
     <div id="pw-view-opening" class="pw-view">
         <div class="pw-scroll-area">
             <div class="pw-info-display">
-                ${openingTabTitleHtml}
+                <div class="pw-info-item"><i class="fa-solid fa-comment-dots"></i><span>开场白生成器</span></div>
             </div>
-            <!-- [Req 2] Added subtitle "附加要求" -->
-            <div style="color:#aaa; font-size:0.85em; margin-top:5px; margin-bottom:2px;">附加要求</div>
+            <!-- [Req 1] Added User & Char info -->
+            <div style="font-size:0.85em; opacity:0.7; margin-bottom:5px;">User: ${currentName} & Char: ${getContext().characters[getContext().characterId]?.name || "None"}</div>
+            
             <textarea id="pw-opening-req" class="pw-textarea pw-auto-height" placeholder="在此输入场景、时间、地点等要求..."></textarea>
             <button id="pw-btn-gen-opening" class="pw-btn gen" style="margin-top:10px;">生成开场白</button>
             <div id="pw-opening-results" class="pw-opening-result-container"></div>
         </div>
     </div>
 
-    <!-- [Req 4 & 5] Updated Diff Overlay for Dual Edit -->
     <div id="pw-diff-overlay" class="pw-diff-container" style="display:none;">
         <div class="pw-diff-tabs-bar">
+            <!-- [Req 3] Updated Diff Tab layout -->
             <div class="pw-diff-tab active" data-view="diff">
-                <div id="pw-diff-tab-old-title">原版本</div><div class="pw-tab-sub">可编辑</div>
+                <div>智能对比</div><div class="pw-tab-sub">选择编辑</div>
             </div>
             <div class="pw-diff-tab" data-view="raw">
-                <div id="pw-diff-tab-new-title">新版本</div><div class="pw-tab-sub">可编辑</div>
+                <div>新版原文</div><div class="pw-tab-sub">直接编辑</div>
             </div>
         </div>
         
         <div class="pw-diff-content-area">
-            <div id="pw-diff-list-view" class="pw-diff-raw-view" style="display:flex;">
-                <!-- Reusing pw-diff-raw-view class for full height textarea -->
-                <textarea id="pw-diff-old-textarea" class="pw-diff-raw-textarea" spellcheck="false"></textarea>
-                <!-- Only used for Persona Diff List -->
-                <div id="pw-diff-list" style="display:none; flex-direction:column; gap:10px;"></div>
+            <div id="pw-diff-list-view" class="pw-diff-list-view">
+                <div id="pw-diff-list" style="display:flex; flex-direction:column; gap:10px;"></div>
             </div>
-            <div id="pw-diff-raw-view" class="pw-diff-raw-view" style="display:none;">
+            <div id="pw-diff-raw-view" class="pw-diff-raw-view">
                 <textarea id="pw-diff-raw-textarea" class="pw-diff-raw-textarea" spellcheck="false"></textarea>
             </div>
         </div>
 
         <div class="pw-diff-actions">
             <button class="pw-btn danger" id="pw-diff-cancel">放弃修改</button>
-            <button class="pw-btn save" id="pw-diff-confirm">保存当前视图内容</button>
+            <button class="pw-btn save" id="pw-diff-confirm">保存并应用</button>
         </div>
     </div>
 
@@ -943,54 +944,47 @@ function bindEvents() {
 
     document.addEventListener("visibilitychange", function() {
         if (!document.hidden) {
+            console.log("[PW] App visible, rebinding events...");
             bindEvents();
         }
     }, { once: true }); 
 
+    // --- 轮播图控制事件 ---
+    // [Req 2.2] 使用事件委托处理，避免 DOM 刷新后事件丢失
     $(document).on('click.pw', '#pw-prev-slide', () => { if (currentSlideIndex > 0) { currentSlideIndex--; updateCarousel(); } });
     $(document).on('click.pw', '#pw-next-slide', () => { if (currentSlideIndex < totalSlides - 1) { currentSlideIndex++; updateCarousel(); } });
 
     // --- 开场白卡片内部按钮事件 ---
+    // [Req 2.3] Save Draft
     $(document).on('click.pw', '.pw-save-draft-btn', function() {
         const content = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
         const req = $('#pw-opening-req').val();
         saveHistory({ 
             request: req || "开场白生成", 
             timestamp: new Date().toLocaleString(), 
-            title: "",
+            title: "", // saveHistory logic will fill default
             data: { name: "Opening", resultText: content, type: 'opening' } 
         });
         toastr.success(TEXT.TOAST_SNAPSHOT);
     });
 
-    // [Req 3] Apply Opening - Add to Character Card
+    // Apply Opening
     $(document).on('click.pw', '.apply-btn', async function() {
         const finalContent = $(this).closest('.pw-opening-card').find('.pw-opening-textarea').val();
-        const context = getContext();
-        if (!context.characterId && context.characterId !== 0) return toastr.error("未打开角色卡，无法保存");
-        
-        try {
-            const char = context.characters[context.characterId];
-            // Ensure array exists
-            if (!char.data.alternate_greetings) char.data.alternate_greetings = [];
-            
-            // Add new opening
-            char.data.alternate_greetings.push(finalContent);
-            
-            // Trigger save
-            if (window.saveCharacterDebounced) window.saveCharacterDebounced();
-            else if (typeof saveSettingsDebounced === 'function') {
-                // If specific char save not available, force a global save which usually includes chars
-                await saveSettingsDebounced();
+        if(confirm("确定将此内容替换为当前对话的开场白（第0层消息）吗？")) {
+            const context = getContext();
+            if (context.chat && context.chat.length > 0) {
+                context.chat[0].mes = finalContent;
+                await saveChat();
+                await reloadCurrentChat();
+                toastr.success("开场白已更新");
+            } else {
+                toastr.warning("当前没有对话可修改");
             }
-            
-            toastr.success("已添加到角色卡的新开场白列表中");
-        } catch (e) {
-            console.error(e);
-            toastr.error("保存失败: " + e.message);
         }
     });
 
+    // Toggle Refine
     $(document).on('click.pw', '.toggle-refine-btn', function() {
         $(this).closest('.pw-opening-card').find('.pw-card-refine-box').slideToggle();
     });
@@ -1022,22 +1016,24 @@ function bindEvents() {
             currentRefiningCard = $card;
             
             $('#pw-diff-overlay').data('source', 'opening');
-            
-            // [Req 5] Populate dual editable areas
-            $('#pw-diff-old-textarea').val(oldContent);
-            $('#pw-diff-raw-textarea').val(refinedText);
+            $('#pw-diff-raw-textarea').val(lastRawResponse);
+            $('#pw-diff-list').empty();
 
-            // Hide list view for opening, show both text areas if possible or just toggle logic
-            // For Opening, we use two raw views basically
-            $('#pw-diff-list').hide();
-            $('#pw-diff-old-textarea').show(); // Show old as textarea
+            // Render Diff view specifically for opening
+            const oldTabHtml = `<textarea class="pw-diff-raw-textarea" readonly>${oldContent}</textarea>`;
+            const newTabHtml = `<textarea class="pw-diff-raw-textarea" id="pw-opening-new-textarea">${refinedText}</textarea>`;
             
-            // Set Titles
-            $('#pw-diff-tab-old-title').text('原版本');
-            $('#pw-diff-tab-new-title').text('新版本');
+            // Temporary title change for opening context
+            $('.pw-diff-tab[data-view="diff"] div:first-child').text('原版本');
+            $('.pw-diff-tab[data-view="diff"] .pw-tab-sub').text('只读');
+            $('.pw-diff-tab[data-view="raw"] div:first-child').text('新版本');
+            $('.pw-diff-tab[data-view="raw"] .pw-tab-sub').text('直接编辑');
             
-            // Reset Active Tab to New
-            $('.pw-diff-tab[data-view="raw"]').click();
+            $('.pw-diff-tab[data-view="raw"]').addClass('active');
+            $('.pw-diff-tab[data-view="diff"]').removeClass('active');
+
+            $('#pw-diff-list-view').html(oldTabHtml).hide();
+            $('#pw-diff-raw-view').html(newTabHtml).show();
 
             $('#pw-diff-overlay').fadeIn();
             $card.find('.pw-card-refine-input').val(''); 
@@ -1050,6 +1046,7 @@ function bindEvents() {
         }
     });
 
+    // --- Tabs ---
     $(document).on('click.pw', '.pw-tab', function () {
         $('.pw-tab').removeClass('active'); $(this).addClass('active');
         $('.pw-view').removeClass('active');
@@ -1057,6 +1054,7 @@ function bindEvents() {
         if ($(this).data('tab') === 'history') renderHistoryList();
     });
 
+    // --- Template Editing ---
     $(document).on('click.pw', '#pw-toggle-edit-template', () => {
         isEditingTemplate = !isEditingTemplate;
         if (isEditingTemplate) {
@@ -1083,6 +1081,7 @@ function bindEvents() {
         toastr.success("模版已更新");
     });
 
+    // --- Shortcuts ---
     $(document).on('click.pw', '.pw-shortcut-btn', function () {
         const key = $(this).data('key');
         const $text = $('#pw-template-text');
@@ -1110,6 +1109,7 @@ function bindEvents() {
         }
     });
 
+    // --- Float Button Selection Check ---
     let selectionTimeout;
     const checkSelection = () => {
         clearTimeout(selectionTimeout);
@@ -1192,25 +1192,19 @@ function bindEvents() {
         $(this).addClass('active');
         const view = $(this).data('view');
         
-        const source = $('#pw-diff-overlay').data('source');
-        
-        if (source === 'opening') {
-            // Opening Mode: Show appropriate textarea container
+        const isOpeningMode = $('#pw-diff-overlay').data('source') === 'opening';
+
+        if (isOpeningMode) {
             if (view === 'diff') { 
-                $('#pw-diff-list-view').show(); // Reused as "Old Textarea" container
+                $('#pw-diff-list-view').show();
                 $('#pw-diff-raw-view').hide();
-                $('#pw-diff-old-textarea').show();
-                $('#pw-diff-list').hide();
             } else { 
                 $('#pw-diff-list-view').hide();
                 $('#pw-diff-raw-view').show();
             }
         } else {
-            // Persona Mode: Smart List vs Raw
             if (view === 'diff') {
                 $('#pw-diff-list-view').show();
-                $('#pw-diff-old-textarea').hide();
-                $('#pw-diff-list').show().css('display', 'flex');
                 $('#pw-diff-raw-view').hide();
             } else {
                 $('#pw-diff-list-view').hide();
@@ -1222,10 +1216,12 @@ function bindEvents() {
         }
     });
 
+    // Refine (Persona)
     $(document).on('click.pw', '#pw-btn-refine', async function (e) {
         e.preventDefault();
         const refineReq = $('#pw-refine-input').val();
         if (!refineReq) return toastr.warning("请输入润色意见");
+        
         if(!promptsCache.initial) loadData();
 
         const oldText = $('#pw-result-text').val();
@@ -1243,10 +1239,8 @@ function bindEvents() {
             };
             const responseText = await runGeneration(config, config);
 
-            // Populate Raw View
-            $('#pw-diff-raw-textarea').val(responseText);
+            $('#pw-diff-raw-textarea').val(lastRawResponse);
 
-            // Populate Smart Diff View
             const oldMap = parseYamlToBlocks(oldText);
             const newMap = parseYamlToBlocks(responseText);
             const allKeys = [...new Set([...oldMap.keys(), ...newMap.keys()])];
@@ -1295,13 +1289,18 @@ function bindEvents() {
 
             $('#pw-diff-overlay').data('source', 'persona');
             
-            // Set Titles for Persona Mode
-            $('#pw-diff-tab-old-title').text('智能对比');
-            $('#pw-diff-tab-new-title').text('新版原文');
+            // Restore Tab names
+            $('.pw-diff-tab[data-view="diff"] div:first-child').text('智能对比');
+            $('.pw-diff-tab[data-view="diff"] .pw-tab-sub').text('选择编辑');
+            $('.pw-diff-tab[data-view="raw"] div:first-child').text('新版原文');
+            $('.pw-diff-tab[data-view="raw"] .pw-tab-sub').text('直接编辑');
 
-            if (changeCount === 0 && !responseText) toastr.warning("返回内容为空，请切换到“新版原文”查看");
+            if (changeCount === 0 && !responseText) {
+                toastr.warning("返回内容为空，请切换到“直接编辑”查看");
+            } else if (changeCount === 0) {
+                toastr.info("没有检测到内容变化");
+            }
 
-            // Show Smart List
             $('.pw-diff-tab[data-view="diff"]').click();
             $('#pw-diff-overlay').fadeIn();
             $('#pw-refine-input').val('');
@@ -1324,7 +1323,6 @@ function bindEvents() {
         $(this).find('.pw-diff-textarea').prop('readonly', false).focus();
     });
 
-    // [Req 5] Confirm Edit
     $(document).on('click.pw', '#pw-diff-confirm', function () {
         const source = $('#pw-diff-overlay').data('source');
         const activeTab = $('.pw-diff-tab.active').data('view');
@@ -1332,12 +1330,10 @@ function bindEvents() {
         let finalContent = "";
 
         if (source === 'opening') {
-            // Check active tab to see which textarea to grab
             if (activeTab === 'diff') {
-                // "Old" tab in this context means the left-side view (Old Textarea)
-                finalContent = $('#pw-diff-old-textarea').val();
+                finalContent = $('#pw-diff-list-view').find('textarea').val();
             } else {
-                finalContent = $('#pw-diff-raw-textarea').val();
+                finalContent = $('#pw-diff-raw-view').find('textarea').val();
             }
             
             if (currentRefiningCard) {
@@ -1345,7 +1341,6 @@ function bindEvents() {
                 currentRefiningCard.find('.pw-card-refine-box').slideUp();
             }
         } else {
-            // Persona Logic
             if (activeTab === 'raw') {
                 finalContent = $('#pw-diff-raw-textarea').val();
             } else {
@@ -1431,6 +1426,9 @@ function bindEvents() {
             };
             
             const rawText = await runGeneration(config, config);
+            
+            // [Req 2.3] Remove auto-save to drafts. Only explicit save does that.
+            // But we keep render.
             renderOpeningResults(rawText);
             
         } catch (e) {
@@ -1489,7 +1487,7 @@ function bindEvents() {
         saveHistory({ 
             request: req || "无", 
             timestamp: new Date().toLocaleString(), 
-            title: "", 
+            title: "", // Let default logic handle it
             data: { name: "Persona", resultText: text || "(无)", type: 'persona' } 
         });
         toastr.success(TEXT.TOAST_SNAPSHOT);
@@ -1626,7 +1624,7 @@ const renderHistoryList = () => {
 
     filtered.forEach((item, index) => {
         const previewText = item.data.resultText || '无内容';
-        const displayTitle = item.title || "User & Char";
+        const displayTitle = item.title || "User & Char"; // Fallback default
         const typeLabel = item.data.type === 'opening' ? '<span style="color:#e0af68; font-size:0.8em; border:1px solid #e0af68; border-radius:3px; padding:0 3px; margin-right:5px;">开场白</span>' : '<span style="color:#9ece6a; font-size:0.8em; border:1px solid #9ece6a; border-radius:3px; padding:0 3px; margin-right:5px;">人设</span>';
 
         const $el = $(`
