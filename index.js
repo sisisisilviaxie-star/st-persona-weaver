@@ -1691,4 +1691,60 @@ const renderWiBooks = async () => {
     if (allBooks.length === 0) { container.html('<div style="opacity:0.6; padding:10px; text-align:center;">此角色未绑定世界书，请在“世界书”标签页手动添加或在酒馆主界面绑定。</div>'); return; }
     for (const book of allBooks) {
         const isBound = baseBooks.includes(book);
-        const $el = $(`<div class="pw-wi-book"><div class="pw-wi-header"
+        const $el = $(`<div class="pw-wi-book"><div class="pw-wi-header"><span><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span style="color:#9ece6a;font-size:0.8em;margin-left:5px;">(已绑定)</span>' : ''}</span><div>${!isBound ? '<i class="fa-solid fa-times remove-book" style="color:#ff6b6b;margin-right:10px;" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div></div><div class="pw-wi-list" data-book="${book}"></div></div>`);
+        $el.find('.remove-book').on('click', (e) => { e.stopPropagation(); window.pwExtraBooks = window.pwExtraBooks.filter(b => b !== book); renderWiBooks(); });
+        $el.find('.pw-wi-header').on('click', async function () {
+            const $list = $el.find('.pw-wi-list');
+            const $arrow = $(this).find('.arrow');
+            if ($list.is(':visible')) { $list.slideUp(); $arrow.removeClass('fa-flip-vertical'); }
+            else {
+                $list.slideDown(); $arrow.addClass('fa-flip-vertical');
+                if (!$list.data('loaded')) {
+                    $list.html('<div style="padding:10px;text-align:center;"><i class="fas fa-spinner fa-spin"></i></div>');
+                    const entries = await getWorldBookEntries(book);
+                    $list.empty();
+                    if (entries.length === 0) $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
+                    entries.forEach(entry => {
+                        const isChecked = entry.enabled ? 'checked' : '';
+                        const $item = $(`<div class="pw-wi-item"><div class="pw-wi-item-row"><input type="checkbox" class="pw-wi-check" ${isChecked} data-content="${encodeURIComponent(entry.content)}"><div style="font-weight:bold; font-size:0.9em; flex:1;">${entry.displayName}</div><i class="fa-solid fa-eye pw-wi-toggle-icon"></i></div><div class="pw-wi-desc">${entry.content}<div class="pw-wi-close-bar"><i class="fa-solid fa-angle-up"></i> 收起</div></div></div>`);
+                        $item.find('.pw-wi-toggle-icon').on('click', function (e) {
+                            e.stopPropagation();
+                            const $desc = $(this).closest('.pw-wi-item').find('.pw-wi-desc');
+                            if ($desc.is(':visible')) { $desc.slideUp(); $(this).css('color', ''); } else { $desc.slideDown(); $(this).css('color', '#5b8db8'); }
+                        });
+                        $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').css('color', ''); });
+                        $list.append($item);
+                    });
+                    $list.data('loaded', true);
+                }
+            }
+        });
+        container.append($el);
+    }
+};
+
+function addPersonaButton() {
+    const container = $('.persona_controls_buttons_block');
+    if (container.length === 0 || $(`#${BUTTON_ID}`).length > 0) return;
+    const newButton = $(`<div id="${BUTTON_ID}" class="menu_button fa-solid fa-wand-magic-sparkles interactable" title="${TEXT.BTN_TITLE}" tabindex="0" role="button"></div>`);
+    newButton.on('click', openCreatorPopup);
+    container.prepend(newButton);
+}
+
+function startPolling() {
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(() => {
+        const container = $('.persona_controls_buttons_block');
+        const btn = $(`#${BUTTON_ID}`);
+        if (container.length > 0 && btn.length === 0) {
+            addPersonaButton();
+        }
+    }, 2000);
+}
+
+jQuery(async () => {
+    injectStyles();
+    addPersonaButton();
+    startPolling();
+    bindEvents();
+});
