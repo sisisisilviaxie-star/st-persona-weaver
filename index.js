@@ -162,7 +162,29 @@ let currentGreetingsList = [];
 const yieldToBrowser = () => new Promise(resolve => requestAnimationFrame(resolve));
 const forcePaint = () => new Promise(resolve => setTimeout(resolve, 50));
 
+// [Modified] 使用 TavernHelper 获取更完整的角色信息
 function getCharacterInfoText() {
+    // 优先尝试使用 TavernHelper (更稳健，支持 V2 深度设定)
+    if (window.TavernHelper && typeof window.TavernHelper.getCharData === 'function') {
+        const data = window.TavernHelper.getCharData('current');
+        if (!data) return "";
+
+        const parts = [];
+        if (data.description) parts.push(`Description:\n${data.description}`);
+        if (data.personality) parts.push(`Personality:\n${data.personality}`);
+        if (data.scenario) parts.push(`Scenario:\n${data.scenario}`);
+        
+        // 尝试获取 V2 卡片的深度设定 (depth_prompt)
+        // 注意：getCharData 返回的是 v1CharData 结构，V2 数据通常在 data 字段中
+        if (data.data && data.data.extensions && data.data.extensions.depth_prompt) {
+             const dp = data.data.extensions.depth_prompt;
+             if (dp.prompt) parts.push(`Depth Prompt:\n${dp.prompt}`);
+        }
+        
+        return parts.join('\n\n');
+    }
+
+    // 降级方案：直接访问 context (旧逻辑)
     const context = getContext();
     const charId = context.characterId;
     if (charId === undefined || !context.characters[charId]) return "";
