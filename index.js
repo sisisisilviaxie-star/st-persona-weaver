@@ -151,7 +151,6 @@ let availableWorldBooks = [];
 let isEditingTemplate = false;
 let lastRawResponse = "";
 let isProcessing = false;
-// 缓存开场白数据，供Select使用
 let currentGreetingsList = []; 
 
 // ============================================================================
@@ -176,6 +175,7 @@ function getCharacterInfoText() {
     return parts.join('\n\n');
 }
 
+// [Updated] Rename logic: 开场白 #0, #1...
 function getCharacterGreetingsList() {
     const context = getContext();
     const charId = context.characterId;
@@ -186,11 +186,11 @@ function getCharacterGreetingsList() {
 
     const list = [];
     if (data.first_mes) {
-        list.push({ label: "默认开场白 (First Message)", content: data.first_mes });
+        list.push({ label: "开场白 #0", content: data.first_mes });
     }
     if (Array.isArray(data.alternate_greetings)) {
         data.alternate_greetings.forEach((greeting, index) => {
-            list.push({ label: `替代开场白 #${index + 1}`, content: greeting });
+            list.push({ label: `开场白 #${index + 1}`, content: greeting });
         });
     }
     return list;
@@ -280,12 +280,10 @@ function findMatchingKey(targetKey, map) {
     return null;
 }
 
-// [Updated] 收集函数
 async function collectContextData() {
     let wiContent = [];
     let greetingsContent = "";
 
-    // 1. 收集世界书
     try {
         const boundBooks = await getContextWorldBooks();
         const manualBooks = window.pwExtraBooks || [];
@@ -303,8 +301,6 @@ async function collectContextData() {
         }
     } catch (e) { console.warn(e); }
 
-    // 2. 收集开场白 (From Textarea, which is populated by Select)
-    // 直接读取预览框的内容，如果它是可见的且有值
     const previewVal = $('#pw-greetings-preview').val();
     if (previewVal && $('#pw-greetings-preview').is(':visible')) {
         greetingsContent = previewVal;
@@ -441,8 +437,21 @@ function injectStyles() {
     .pw-context-header { padding: 10px; background: rgba(0,0,0,0.2); cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; user-select: none; }
     .pw-context-header:hover { background: rgba(0,0,0,0.3); }
     
-    /* Greeting Preview */
-    #pw-greetings-preview { display:none; background:rgba(0,0,0,0.3); border:1px solid var(--SmartThemeBorderColor); border-radius:4px; padding:8px; margin-top:8px; color:#aaa; font-size:0.9em; width:100%; box-sizing:border-box; resize:vertical; }
+    /* Greeting Preview - Improved Style */
+    #pw-greetings-preview { 
+        display:none; 
+        background: rgba(0,0,0,0.5); /* Darker background */
+        border: 1px solid var(--SmartThemeBorderColor); 
+        border-radius: 4px; 
+        padding: 10px; 
+        margin-top: 8px; 
+        color: var(--smart-theme-body-color); /* Theme Text Color */
+        font-size: 0.9em; 
+        width: 100%; 
+        box-sizing: border-box; 
+        resize: vertical; 
+        line-height: 1.5;
+    }
     `;
     $('<style>').attr('id', styleId).text(css).appendTo('head');
 }
@@ -763,25 +772,33 @@ async function openCreatorPopup() {
 
     <div id="pw-float-quote-btn" class="pw-float-quote-btn"><i class="fa-solid fa-pen-to-square"></i> 修改此段</div>
 
-    <!-- [Updated] Context View Structure: Char removed, Greetings Select, WI expanded -->
+    <!-- [Updated] Context View -->
     <div id="pw-view-context" class="pw-view">
         <div class="pw-scroll-area">
             
             <!-- Greetings Section (Select Box) -->
             <div class="pw-card-section">
-                <div class="pw-row">
-                    <label style="font-weight:bold; color:#e0af68;">角色开场白 (选填)</label>
-                    <select id="pw-greetings-select" class="pw-input" style="flex:1; max-width:60%;">
-                        <option value="">(不使用开场白)</option>
-                    </select>
+                <!-- Collapsible Header for Greetings -->
+                <div class="pw-context-header" id="pw-greet-header">
+                    <label style="font-weight:bold; color:#e0af68; cursor:pointer;">角色开场白</label>
+                    <i class="fa-solid fa-chevron-down arrow"></i>
                 </div>
-                <textarea id="pw-greetings-preview" readonly></textarea>
+                
+                <div id="pw-greet-body" style="display:block; padding-top:5px;">
+                    <div class="pw-row">
+                        <select id="pw-greetings-select" class="pw-input" style="flex:1; width:100%;">
+                            <option value="">(不使用开场白)</option>
+                        </select>
+                    </div>
+                    <textarea id="pw-greetings-preview" readonly></textarea>
+                </div>
             </div>
 
             <!-- World Info Section (Expanded by default, body visible) -->
             <div class="pw-card-section">
-                <div class="pw-row" style="margin-bottom:5px;">
-                    <label style="font-weight:bold; color:#7aa2f7;">世界书 (选填)</label>
+                <div class="pw-context-header" id="pw-wi-header">
+                    <span><i class="fa-solid fa-book"></i> 世界书</span>
+                    <i class="fa-solid fa-chevron-down arrow"></i>
                 </div>
                 
                 <div id="pw-wi-body" style="display:block; padding-top:5px;">
@@ -833,7 +850,12 @@ async function openCreatorPopup() {
                     <textarea id="pw-prompt-initial" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;">${promptsCache.initial}</textarea>
                     
                     <div style="display:flex; justify-content:space-between; margin-top:15px;"><span class="pw-prompt-label">人设润色指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-refine" style="font-size:0.7em;">恢复默认</button></div>
+                    <!-- [Updated] Added missing buttons for refine -->
                     <div class="pw-var-btns">
+                        <div class="pw-var-btn" data-ins="{{char}}"><span>Char名</span><span class="code">{{char}}</span></div>
+                        <div class="pw-var-btn" data-ins="{{charInfo}}"><span>角色设定</span><span class="code">{{charInfo}}</span></div>
+                        <div class="pw-var-btn" data-ins="{{greetings}}"><span>开场白</span><span class="code">{{greetings}}</span></div>
+                        <div class="pw-var-btn" data-ins="{{wi}}"><span>世界书内容</span><span class="code">{{wi}}</span></div>
                         <div class="pw-var-btn" data-ins="{{tags}}"><span>模版(必要)</span><span class="code">{{tags}}</span></div>
                         <div class="pw-var-btn" data-ins="{{current}}"><span>当前文本</span><span class="code">{{current}}</span></div>
                         <div class="pw-var-btn" data-ins="{{input}}"><span>润色意见</span><span class="code">{{input}}</span></div>
@@ -886,7 +908,21 @@ function bindEvents() {
     }
     window.openPersonaWeaver = openCreatorPopup;
 
-    // --- Header Toggles (Prompt) ---
+    // --- Header Toggles ---
+    $(document).on('click.pw', '#pw-greet-header', function() {
+        const $body = $('#pw-greet-body');
+        const $arrow = $(this).find('.arrow');
+        if ($body.is(':visible')) { $body.slideUp(); $arrow.removeClass('fa-flip-vertical'); }
+        else { $body.slideDown(); $arrow.addClass('fa-flip-vertical'); }
+    });
+
+    $(document).on('click.pw', '#pw-wi-header', function() {
+        const $body = $('#pw-wi-body');
+        const $arrow = $(this).find('.arrow');
+        if ($body.is(':visible')) { $body.slideUp(); $arrow.removeClass('fa-flip-vertical'); }
+        else { $body.slideDown(); $arrow.addClass('fa-flip-vertical'); }
+    });
+
     $(document).on('click.pw', '#pw-prompt-header', function() {
         const $body = $('#pw-prompt-container');
         const $arrow = $(this).find('.arrow');
@@ -1548,5 +1584,5 @@ jQuery(async () => {
     injectStyles();
     addPersonaButton(); // Try once immediately
     bindEvents(); // Standard event binding
-    console.log("[PW] Persona Weaver Loaded (v2.4 Context Refine)");
+    console.log("[PW] Persona Weaver Loaded (v2.5 Final UI Fixes)");
 });
