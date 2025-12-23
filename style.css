@@ -4,8 +4,7 @@
 .pw-wrapper {
     display: flex; flex-direction: column; height: 100%; max-height: 90vh;
     font-size: 14px; color: var(--smart-theme-body-color); position: relative;
-    box-sizing: border-box;
-    overflow: hidden; 
+    box-sizing: border-box; overflow: hidden;
 }
 
 .pw-scroll-area {
@@ -45,6 +44,21 @@
 }
 .pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: #e0af68; font-size: 1.05em; }
 
+/* 载入按钮：无背景，金边 */
+.pw-load-btn {
+    font-size: 0.85em;
+    background: transparent;
+    border: 1px solid #e0af68;
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #e0af68;
+    font-weight: bold;
+    margin-left: auto;
+    display: inline-flex; align-items: center; transition: all 0.2s;
+}
+.pw-load-btn:hover { background: rgba(224, 175, 104, 0.1); box-shadow: 0 0 5px rgba(224, 175, 104, 0.2); }
+
 .pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .pw-tags-label { font-weight: bold; opacity: 0.8; font-size: 0.85em; }
 .pw-tags-actions { display: flex; gap: 10px; align-items: center; }
@@ -55,20 +69,19 @@
     display: inline-flex; align-items: center; background: rgba(0, 0, 0, 0.2);
     border: 1px solid var(--SmartThemeBorderColor); padding: 4px 10px; border-radius: 6px;
     font-size: 0.9em; cursor: pointer; transition: all 0.2s;
-    border-left: 3px solid #e0af68; 
+    border-left: 3px solid #e0af68;
 }
 .pw-tag-chip:hover { background: rgba(255, 255, 255, 0.1); border-color: #e0af68; transform: translateY(-1px); }
 
-/* [需求1] 模版编辑器 & 底部快捷键栏 */
+/* 模版编辑器 */
 .pw-template-editor-area {
     display: none; flex-direction: column; gap: 0;
     background: rgba(0,0,0,0.2); border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor); overflow: hidden;
 }
 .pw-template-textarea {
     width: 100%; height: 200px; font-family: monospace; font-size: 0.85em;
-    background: rgba(0,0,0,0.3); border: none; color: #ccc;
-    resize: vertical; padding: 8px; white-space: pre; outline: none;
-    box-sizing: border-box;
+    background: var(--smart-theme-input-bg, rgba(0, 0, 0, 0.5)); color: var(--smart-theme-body-color, #eee);
+    border: none; resize: vertical; padding: 8px; white-space: pre; outline: none; box-sizing: border-box;
 }
 .pw-template-footer {
     display: flex; justify-content: space-between; align-items: center;
@@ -77,7 +90,7 @@
 }
 .pw-shortcut-bar { display: flex; gap: 5px; align-items: center; }
 .pw-shortcut-btn {
-    padding: 4px 8px; cursor: pointer; font-size: 0.85em; 
+    padding: 4px 8px; cursor: pointer; font-size: 0.85em;
     background: rgba(0,0,0,0.3); color: #ccc; border-radius: 4px; border: 1px solid transparent;
     transition: all 0.2s; font-family: monospace;
 }
@@ -110,9 +123,9 @@
 .pw-btn.primary { background: rgba(0,0,0,0.3); }
 .pw-btn.danger { background: rgba(255,100,100,0.1); border-color: #ff6b6b; color: #ff6b6b; }
 
-.pw-mini-btn { 
-    font-size: 0.85em; opacity: 0.8; cursor: pointer; display: flex; align-items: center; gap: 4px; 
-    padding: 6px 10px; border-radius: 4px; border: 1px solid var(--SmartThemeBorderColor); 
+.pw-mini-btn {
+    font-size: 0.85em; opacity: 0.8; cursor: pointer; display: flex; align-items: center; gap: 4px;
+    padding: 6px 10px; border-radius: 4px; border: 1px solid var(--SmartThemeBorderColor);
     background: rgba(255,255,255,0.05); color: var(--smart-theme-body-color);
 }
 .pw-mini-btn:hover { background: rgba(255,255,255,0.15); opacity: 1; border-color: #e0af68; }
@@ -123,57 +136,44 @@
 .pw-relative-container { position: relative; }
 
 .pw-result-textarea {
-    width: 100%; 
-    min-height: 450px; 
+    width: 100%; min-height: 450px;
     background: rgba(0, 0, 0, 0.15);
-    border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px 6px 0 0; 
+    border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px 6px 0 0;
     color: var(--smart-theme-body-color); padding: 12px;
     font-family: inherit; font-size: 1.0em; line-height: 1.6;
     resize: vertical; outline: none; white-space: pre-wrap; margin-bottom: 0;
 }
 
 .pw-refine-toolbar {
-    display: flex; flex-direction: row; 
-    gap: 0; align-items: stretch;
-    background: rgba(0,0,0,0.2); 
+    display: flex; flex-direction: row; gap: 0; align-items: stretch;
+    background: rgba(0,0,0,0.2);
     border: 1px solid var(--SmartThemeBorderColor); border-top: none;
-    border-radius: 0 0 6px 6px; margin-bottom: 5px;
-    overflow: hidden;
+    border-radius: 0 0 6px 6px; margin-bottom: 5px; overflow: hidden;
 }
 
 .pw-refine-input {
-    flex: 1; 
-    border: none; background: rgba(255,255,255,0.05); padding: 10px; 
+    flex: 1; border: none; background: rgba(255,255,255,0.05); padding: 10px;
     font-size: 0.95em; color: var(--smart-theme-body-color);
-    resize: none; overflow-y: auto; 
-    min-height: 80px; 
-    line-height: 1.5;
+    resize: none; overflow-y: auto; min-height: 80px; line-height: 1.5;
 }
 .pw-refine-input:focus { outline: none; background: rgba(0,0,0,0.3); }
 
 .pw-refine-btn-vertical {
-    width: 40px; 
-    cursor: pointer; opacity: 0.9;
-    background: rgba(255,255,255,0.08); 
-    border-left: 1px solid var(--SmartThemeBorderColor);
+    width: 40px; cursor: pointer; opacity: 0.9;
+    background: rgba(255,255,255,0.08); border-left: 1px solid var(--SmartThemeBorderColor);
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-    color: #e0af68; font-weight: bold;
-    transition: all 0.2s;
-    flex-shrink: 0;
+    color: #e0af68; font-weight: bold; transition: all 0.2s; flex-shrink: 0;
 }
 .pw-refine-btn-vertical:hover { background: rgba(224, 175, 104, 0.1); opacity: 1; }
 .pw-refine-btn-text { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 2px; }
 
+/* 悬浮修改按钮 */
 .pw-float-quote-btn {
-    position: fixed; 
-    top: 20%; right: 0;
-    background: linear-gradient(135deg, #e0af68, #d08f40);
-    color: #1a1a1a;
-    padding: 8px 12px; 
-    border-radius: 20px 0 0 20px; 
-    font-weight: bold; font-size: 0.85em; 
-    box-shadow: -2px 2px 8px rgba(0,0,0,0.4);
-    cursor: pointer; z-index: 9999; 
+    position: fixed; top: 20%; right: 0;
+    background: linear-gradient(135deg, #e0af68, #d08f40); color: #1a1a1a;
+    padding: 8px 12px; border-radius: 20px 0 0 20px;
+    font-weight: bold; font-size: 0.85em;
+    box-shadow: -2px 2px 8px rgba(0,0,0,0.4); cursor: pointer; z-index: 9999;
     display: none; align-items: center; gap: 4px;
     border: 1px solid rgba(255,255,255,0.3); border-right: none;
     backdrop-filter: blur(5px);
@@ -181,16 +181,15 @@
 .pw-float-quote-btn:hover { padding-right: 18px; transform: translateX(-2px); }
 
 /* =========================================
-   6. 结构化 Diff 对比视图 (含 Tabs) [需求4]
+   6. Diff 对比视图
 ========================================= */
 .pw-diff-container {
     display: flex; flex-direction: column; gap: 0;
-    background: #151515; padding: 0;
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 100;
+    background: var(--smart-theme-bg, #151515); padding: 0;
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000;
     box-sizing: border-box; color: #e0e0e0;
 }
 
-/* Tab 头部 */
 .pw-diff-tabs-bar {
     display: flex; border-bottom: 1px solid #333; background: rgba(0,0,0,0.2);
     padding: 5px 5px 0 5px; gap: 5px; flex-shrink: 0;
@@ -200,45 +199,35 @@
     background: #222; border: 1px solid transparent; border-bottom: none;
     opacity: 0.6; font-weight: bold; font-size: 0.95em; transition: all 0.2s;
 }
-.pw-diff-tab.active {
-    opacity: 1; background: #151515; color: #e0af68; border-color: #333; border-bottom: 2px solid #151515; margin-bottom: -1px;
-}
+.pw-diff-tab.active { opacity: 1; background: #151515; color: #e0af68; border-color: #333; border-bottom: 2px solid #151515; margin-bottom: -1px; }
 .pw-diff-tab:hover:not(.active) { opacity: 0.9; background: #2a2a2a; }
 
-/* 内容区域 */
 .pw-diff-content-area { flex: 1; overflow: hidden; position: relative; padding: 10px; display: flex; flex-direction: column; }
-
-/* 列表视图 */
 .pw-diff-list-view { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 5px; height: 100%; }
-
-/* [需求4] 原文编辑视图 */
 .pw-diff-raw-view { display: none; flex-direction: column; height: 100%; }
 .pw-diff-raw-textarea {
     flex: 1; width: 100%; background: #111; color: #ccc;
     border: 1px solid #333; border-radius: 6px; padding: 10px;
     font-family: monospace; resize: none; outline: none; font-size: 0.9em; line-height: 1.5;
-    box-sizing: border-box;
+    box-sizing: border-box; min-height: 350px;
 }
 
-.pw-diff-row { background: #222; border: 1px solid #3a3a3a; border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-.pw-diff-attr-name { font-weight: bold; color: #9ece6a; font-size: 0.95em; padding-bottom: 3px; border-bottom: 1px dashed #333; }
-.pw-diff-options { display: flex; gap: 8px; }
-.pw-diff-opt { flex: 1; padding: 6px 8px; border: 1px solid #333; border-radius: 4px; cursor: pointer; position: relative; background: #1a1a1a; transition: all 0.1s; min-width: 0; }
-.pw-diff-opt:hover { border-color: #555; }
-.pw-diff-opt.single-view { cursor: default; opacity: 0.7; border-style: dotted; background: #222; }
-.pw-diff-opt.selected { border-color: #e0af68; background: rgba(224, 175, 104, 0.08); }
-.pw-diff-opt.selected::after { content: '✔'; position: absolute; top: 2px; right: 5px; color: #e0af68; font-size: 0.8em; font-weight: bold; }
-.pw-diff-opt-label { font-size: 0.7em; opacity: 0.5; margin-bottom: 2px; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
-.pw-diff-opt-text { font-size: 0.9em; line-height: 1.4; word-break: break-word; color: #ccc; white-space: pre-wrap; font-family: monospace; }
-.pw-diff-opt.old.diff-active .pw-diff-opt-text { text-decoration: line-through; opacity: 0.6; color: #ff6b6b; }
-.pw-diff-opt.new.diff-active .pw-diff-opt-text { color: #9ece6a; }
-.pw-diff-edit-area { margin-top: 3px; }
-.pw-diff-custom-input { width: 100%; background: #111; border: 1px solid #333; color: #eee; padding: 6px 8px; border-radius: 4px; font-size: 0.9em; min-height: 60px; font-family: inherit; line-height: 1.4; box-sizing: border-box; resize: vertical; }
-.pw-diff-custom-input:focus { border-color: #e0af68; outline: none; }
+.pw-diff-row { background: var(--smart-theme-bg, #1a1a1a); border: 1px solid var(--SmartThemeBorderColor, #333); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.pw-diff-attr-name { font-weight: bold; color: #9ece6a; font-size: 1em; padding-bottom: 5px; border-bottom: 1px solid var(--SmartThemeBorderColor, #333); margin-bottom: 5px; }
+.pw-diff-cards { display: flex; gap: 10px; }
+.pw-diff-card { flex: 1; display: flex; flex-direction: column; border: 2px solid transparent; border-radius: 6px; background: rgba(0,0,0,0.2); overflow: hidden; transition: all 0.2s; cursor: pointer; opacity: 0.6; position: relative; }
+.pw-diff-card.selected { border-color: #9ece6a; opacity: 1; background: rgba(0,0,0,0.3); box-shadow: 0 0 10px rgba(158, 206, 106, 0.1); }
+.pw-diff-card:not(.selected):hover { opacity: 0.8; }
+.pw-diff-card.single-view { flex: 1; opacity: 1; background: rgba(158, 206, 106, 0.05); border-color: #9ece6a; cursor: text; }
+.pw-diff-label { font-size: 0.75em; padding: 4px 8px; background: rgba(0,0,0,0.3); color: #aaa; text-transform: uppercase; font-weight: bold; }
+.pw-diff-card.selected .pw-diff-label { color: #9ece6a; background: rgba(158, 206, 106, 0.1); }
+.pw-diff-textarea { flex: 1; width: 100%; background: transparent; border: none; color: var(--smart-theme-body-color, #eee); padding: 8px; font-family: inherit; font-size: 0.95em; resize: none; outline: none; line-height: 1.5; min-height: 80px; box-sizing: border-box; }
+.pw-diff-card:not(.selected) .pw-diff-textarea { color: #888; pointer-events: none; }
+.pw-diff-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 10px; border-top: 1px solid #333; flex-shrink: 0; background: #151515; }
 
-.pw-diff-actions { 
-    display: flex; justify-content: flex-end; gap: 10px; 
-    padding: 10px; border-top: 1px solid #333; flex-shrink: 0; background: #151515;
+@media screen and (max-width: 600px) {
+    .pw-diff-cards { flex-direction: column; }
+    .pw-footer { flex-wrap: wrap; }
 }
 
 /* =========================================
@@ -253,10 +242,11 @@
 .pw-compact-btn { width: 32px; height: 32px; border-radius: 4px; border: 1px solid var(--SmartThemeBorderColor); background: rgba(255,255,255,0.05); color: var(--smart-theme-body-color); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1em; opacity: 0.7; transition: all 0.2s; }
 .pw-compact-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); border-color: #e0af68; }
 .pw-compact-btn.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
-.pw-footer-main-btn { flex: 1; padding: 0 15px; height: 32px; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: bold; font-size: 0.9em; border-radius: 4px; cursor: pointer; background: linear-gradient(135deg, rgba(100, 200, 100, 0.2), rgba(0, 0, 0, 0)); border: 1px solid #9ece6a; color: #9ece6a; }
-.pw-footer-main-btn:hover { filter: brightness(1.2); }
-.pw-wi-sync-toggle { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 4px; cursor: pointer; border: 1px solid var(--SmartThemeBorderColor); background: rgba(0,0,0,0.2); font-size: 0.9em; opacity: 0.6; color: var(--smart-theme-body-color); }
-.pw-wi-sync-toggle.active { opacity: 1; border-color: #9ece6a; color: #9ece6a; background: rgba(158, 206, 106, 0.1); }
+.pw-btn.wi { background: linear-gradient(135deg, rgba(122, 162, 247, 0.2), rgba(0, 0, 0, 0)); border-color: #7aa2f7; color: #7aa2f7; }
+
+.pw-tab-sub { display: block; font-size: 0.75em; opacity: 0.6; font-weight: normal; margin-top: 2px; text-align: center; }
+.pw-diff-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
+.pw-header-subtitle { font-size: 0.65em; opacity: 0.6; font-weight: normal; margin-left: 10px; color: var(--smart-theme-body-color); }
 
 /* =========================================
    8. API & Prompt & History
@@ -286,7 +276,6 @@
 .pw-wi-item { background: rgba(255,255,255,0.05); padding: 6px 10px; border-radius: 4px; margin-bottom: 4px; }
 .pw-wi-item-row { display: flex; align-items: center; gap: 8px; }
 .pw-wi-check { transform: scale(1.1); cursor: pointer; }
-.pw-wi-desc { display: none; margin-top: 5px; padding: 5px; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.85em; white-space: pre-wrap; }
 .pw-wi-close-bar { text-align: center; font-size: 0.8em; opacity: 0.6; cursor: pointer; margin-top: 3px; }
 .pw-search-box { position: relative; display: flex; align-items: center; margin-bottom: 10px; background: rgba(0,0,0,0.2); border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor); }
 .pw-search-icon { position: absolute; left: 10px; opacity: 0.5; pointer-events: none; color: var(--smart-theme-body-color); }
@@ -304,7 +293,54 @@
 }
 #pw_persona_tool_btn:hover { opacity: 1; color: #e0af68; }
 
-@media screen and (max-width: 600px) {
-    .pw-footer { flex-wrap: wrap; }
-    .pw-diff-options { flex-direction: column; gap: 5px; }
+#pw-api-model-select { flex: 1; width: 0; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+#pw-api-url { background-color: var(--smart-theme-input-bg, rgba(0, 0, 0, 0.2)) !important; border: 1px solid var(--SmartThemeBorderColor) !important; color: var(--smart-theme-body-color) !important; }
+
+/* 折叠标题样式 */
+.pw-context-header { padding: 10px; background: rgba(0,0,0,0.2); cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; user-select: none; }
+.pw-context-header:hover { background: rgba(0,0,0,0.3); }
+
+/* 标签样式：纯色文字，无背景 */
+.pw-section-label { font-weight: bold; font-size: 1em; padding: 2px 4px; }
+.pw-label-gold { color: #e0af68; }
+.pw-label-blue { color: #7aa2f7; }
+
+/* 预览展开按钮/条 */
+.pw-preview-toggle-bar {
+    background: rgba(0,0,0,0.4); 
+    color: var(--smart-theme-body-color, #ccc);
+    font-size: 0.85em;
+    text-align: center;
+    padding: 6px;
+    margin-top: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: 1px solid var(--SmartThemeBorderColor);
+    user-select: none;
+    font-weight: bold;
+}
+.pw-preview-toggle-bar:hover { background: rgba(0,0,0,0.5); color: var(--smart-theme-body-color); }
+
+/* [核心修改] 统一的浅色半透明背景 (开场白预览 & 世界书条目) */
+.pw-wi-desc, #pw-greetings-preview {
+    display: none;
+    background: rgba(0, 0, 0, 0.3) !important; /* 回滚到浅色 */
+    color: var(--smart-theme-body-color) !important; /* 使用主题颜色 */
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 0.9em;
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    line-height: 1.5;
+    margin-top: 5px;
+}
+
+#pw-greetings-preview {
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    margin-top: -1px;
+    min-height: 60px;
 }
