@@ -133,9 +133,8 @@ const defaultSettings = {
     indepApiUrl: 'https://api.openai.com/v1', indepApiKey: '', indepApiModel: 'gpt-3.5-turbo'
 };
 
-// [Color Update] Panel Title uses #BA9B92 (Grey Tea Red)
 const TEXT = {
-    PANEL_TITLE: `<span style="color:#BA9B92; margin-right:5px;"><i class="fa-solid fa-wand-magic-sparkles"></i></span>User人设生成器`,
+    PANEL_TITLE: `<span style="color:#e0af68; margin-right:5px;"><i class="fa-solid fa-wand-magic-sparkles"></i></span>User人设生成器`,
     BTN_TITLE: "打开设定生成器",
     TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已保存并覆盖！`,
     TOAST_WI_SUCCESS: (book) => `已写入世界书: ${book}`,
@@ -287,6 +286,7 @@ async function collectContextData() {
     let wiContent = [];
     let greetingsContent = "";
 
+    // 1. 收集世界书
     try {
         const boundBooks = await getContextWorldBooks();
         const manualBooks = window.pwExtraBooks || [];
@@ -304,6 +304,7 @@ async function collectContextData() {
         }
     } catch (e) { console.warn(e); }
 
+    // 2. 收集开场白
     const selectedIdx = $('#pw-greetings-select').val();
     if (selectedIdx !== "" && selectedIdx !== null && currentGreetingsList[selectedIdx]) {
         greetingsContent = currentGreetingsList[selectedIdx].content;
@@ -374,178 +375,6 @@ function saveHistory(item) {
 
 function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(data)); }
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
-
-function injectStyles() {
-    const styleId = 'persona-weaver-css-v46-lite'; 
-    if ($(`#${styleId}`).length) return;
-    
-    // [Color Palette Update]
-    // #BA9B92 (Grey Tea Red) - Primary
-    // #987F74 (Withered Branch Brown) - Secondary/Hover
-    // #C4C0C1 (Residual Frost Grey) - Accents/Borders
-    // #F0ECEB (Snow Covered White) - Highlights
-    const css = `
-    #pw-api-model-select { flex: 1; width: 0; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
-    
-    .pw-load-btn { 
-        font-size: 0.85em; 
-        background: transparent; 
-        border: 1px solid #BA9B92; 
-        padding: 4px 12px; 
-        border-radius: 4px; 
-        cursor: pointer; 
-        color: #BA9B92; 
-        font-weight: bold; 
-        margin-left: auto; 
-        display: inline-flex; align-items: center; transition: all 0.2s; 
-    }
-    .pw-load-btn:hover { 
-        background: rgba(186, 155, 146, 0.1); 
-    }
-
-    .pw-template-textarea { background: var(--smart-theme-input-bg, rgba(0, 0, 0, 0.5)) !important; color: var(--smart-theme-body-color, #eee) !important; font-family: 'Consolas', 'Monaco', monospace; line-height: 1.4; height: 350px !important; border-radius: 0 0 6px 6px !important; border-top: none !important; }
-    
-    .pw-shortcut-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 10px; height: auto; gap: 2px; min-width: 40px; }
-    .pw-shortcut-btn span:first-child { font-size: 0.8em; opacity: 0.8; }
-    .pw-shortcut-btn span.code { font-weight: bold; font-family: monospace; color: #BA9B92; font-size: 1.1em; }
-
-    .pw-var-btns { gap: 6px; }
-    .pw-var-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 10px; height: auto; gap: 0; border-color: rgba(128,128,128,0.4); }
-    .pw-var-btn span:first-child { font-weight: bold; font-size: 0.8em; }
-    .pw-var-btn span.code { font-size: 0.75em; opacity: 0.7; font-family: monospace; }
-
-    #pw-api-url { background-color: var(--smart-theme-input-bg, rgba(0, 0, 0, 0.2)) !important; border: 1px solid var(--SmartThemeBorderColor) !important; color: var(--smart-theme-body-color) !important; }
-    .pw-auto-height { min-height: 80px; max-height: 500px; overflow-y: auto; }
-    
-    #pw-request { transition: none !important; } 
-
-    #pw-history-clear-all { background: transparent; border: none; color: #ff6b6b; font-size: 0.85em; opacity: 0.6; padding: 5px; width: auto; margin: 10px auto; text-decoration: underline; }
-    #pw-history-clear-all:hover { opacity: 1; background: transparent; transform: none; }
-
-    .pw-diff-row { background: var(--smart-theme-bg, #1a1a1a); border: 1px solid var(--SmartThemeBorderColor, #333); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-    .pw-diff-attr-name { font-weight: bold; color: #F0ECEB; font-size: 1em; padding-bottom: 5px; border-bottom: 1px solid var(--SmartThemeBorderColor, #333); margin-bottom: 5px; }
-    
-    .pw-diff-cards { display: flex; gap: 10px; }
-    .pw-diff-card { flex: 1; display: flex; flex-direction: column; border: 2px solid transparent; border-radius: 6px; background: rgba(0,0,0,0.2); overflow: hidden; transition: all 0.2s; cursor: pointer; opacity: 0.6; position: relative; }
-    .pw-diff-card.selected { border-color: #BA9B92; opacity: 1; background: rgba(0,0,0,0.3); box-shadow: 0 0 10px rgba(186, 155, 146, 0.1); }
-    .pw-diff-card:not(.selected):hover { opacity: 0.8; }
-    .pw-diff-card.single-view { flex: 1; opacity: 1; background: rgba(186, 155, 146, 0.05); border-color: #BA9B92; cursor: text; }
-    
-    .pw-diff-label { font-size: 0.75em; padding: 4px 8px; background: rgba(0,0,0,0.3); color: #aaa; text-transform: uppercase; font-weight: bold; }
-    .pw-diff-card.selected .pw-diff-label { color: #BA9B92; background: rgba(186, 155, 146, 0.1); }
-    
-    .pw-diff-textarea { flex: 1; width: 100%; background: transparent; border: none; color: var(--smart-theme-body-color, #eee); padding: 8px; font-family: inherit; font-size: 0.95em; resize: none; outline: none; line-height: 1.5; min-height: 80px; box-sizing: border-box; }
-    .pw-diff-card:not(.selected) .pw-diff-textarea { color: #888; pointer-events: none; }
-    
-    @media screen and (max-width: 600px) { .pw-diff-cards { flex-direction: column; } }
-    
-    .pw-btn.wi { background: linear-gradient(135deg, rgba(196, 192, 193, 0.2), rgba(0, 0, 0, 0)); border-color: #C4C0C1; color: #C4C0C1; }
-
-    .pw-tab-sub { display: block; font-size: 0.75em; opacity: 0.6; font-weight: normal; margin-top: 2px; text-align: center; }
-    .pw-diff-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
-    
-    /* Updated Active Tab Color to Guofeng Red */
-    .pw-tab.active { opacity: 1; background: var(--SmartThemeBlurTintColor); border-bottom: 2px solid #BA9B92; color: var(--smart-theme-body-color); font-weight: bold; }
-    .pw-diff-tab.active { opacity: 1; background: #151515; color: #BA9B92; border-color: #333; border-bottom: 2px solid #151515; margin-bottom: -1px; }
-
-    .pw-header-subtitle { font-size: 0.65em; opacity: 0.6; font-weight: normal; margin-left: 10px; color: var(--smart-theme-body-color); }
-    
-    .pw-diff-raw-textarea { min-height: 350px !important; }
-
-    /* Updated Float Button Gradient */
-    .pw-float-quote-btn { position: fixed; top: calc(20% + 60px); right: 0; background: linear-gradient(135deg, #BA9B92, #987F74); color: #1a1a1a; padding: 8px 12px; border-radius: 20px 0 0 20px; font-weight: bold; font-size: 0.85em; box-shadow: -2px 2px 8px rgba(0,0,0,0.4); cursor: pointer; z-index: 9999; display: none; align-items: center; gap: 4px; border: 1px solid rgba(255,255,255,0.3); border-right: none; backdrop-filter: blur(5px); }
-    .pw-float-quote-btn:hover { padding-right: 18px; transform: translateX(-2px); }
-    
-    .pw-diff-container { z-index: 2000 !important; background: var(--smart-theme-bg, #151515); }
-
-    .pw-context-header { padding: 10px; background: rgba(0,0,0,0.2); cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; user-select: none; }
-    .pw-context-header:hover { background: rgba(0,0,0,0.3); }
-    
-    /* Labels */
-    .pw-section-label { font-weight: bold; font-size: 1em; padding: 2px 4px; }
-    .pw-label-gold { color: #BA9B92; } /* Grey Tea Red */
-    .pw-label-blue { color: #C4C0C1; } /* Residual Frost Grey */
-
-    /* Toggle Bar */
-    .pw-preview-toggle-bar {
-        background: rgba(0,0,0,0.2);
-        color: var(--smart-theme-body-color, #ccc);
-        font-size: 0.85em;
-        text-align: center;
-        padding: 6px;
-        margin-top: 8px;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background 0.2s;
-        border: 1px solid var(--SmartThemeBorderColor);
-        user-select: none;
-    }
-    .pw-preview-toggle-bar:hover { background: rgba(0,0,0,0.3); color: #fff; }
-
-    /* Greeting Content Box */
-    #pw-greetings-preview {
-        display: none;
-        background: rgba(0, 0, 0, 0.5) !important; 
-        border: 1px solid var(--SmartThemeBorderColor); 
-        border-top: none;
-        border-radius: 0 0 4px 4px; 
-        padding: 8px; 
-        color: #eee !important; 
-        font-size: 0.9em; 
-        width: 100%; 
-        box-sizing: border-box; 
-        resize: vertical; 
-        min-height: 60px; 
-        line-height: 1.5;
-        margin-top: -1px; 
-    }
-    
-    /* Tag Chips */
-    .pw-tag-chip {
-        display: inline-flex; align-items: center; background: rgba(0, 0, 0, 0.2);
-        border: 1px solid var(--SmartThemeBorderColor); padding: 4px 10px; border-radius: 6px;
-        font-size: 0.9em; cursor: pointer; transition: all 0.2s;
-        border-left: 3px solid #BA9B92; 
-    }
-    .pw-tag-chip:hover { background: rgba(255, 255, 255, 0.1); border-color: #BA9B92; transform: translateY(-1px); }
-    
-    /* Edit Toggle */
-    .pw-tags-edit-toggle { cursor: pointer; font-size: 0.8em; color: #987F74; }
-    
-    /* Buttons */
-    .pw-btn {
-        display: flex; align-items: center; justify-content: center; gap: 6px;
-        padding: 6px 12px; border-radius: 6px; border: 1px solid var(--SmartThemeBorderColor);
-        background: var(--SmartThemeBlurTintColor); color: var(--smart-theme-body-color);
-        cursor: pointer; font-weight: bold; width: auto; transition: all 0.2s; font-size: 0.95em;
-    }
-    .pw-btn:hover { filter: brightness(1.2); transform: translateY(-1px); }
-    .pw-btn.gen { background: linear-gradient(135deg, rgba(186, 155, 146, 0.2), rgba(0, 0, 0, 0)); border-color: #BA9B92; color: #BA9B92; width: 100%; margin-top: 5px;}
-    .pw-btn.save { background: linear-gradient(135deg, rgba(186, 155, 146, 0.2), rgba(0, 0, 0, 0)); border-color: #BA9B92; color: #BA9B92; }
-    .pw-mini-btn:hover { background: rgba(255,255,255,0.15); opacity: 1; border-color: #BA9B92; }
-    .pw-compact-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); border-color: #BA9B92; }
-    
-    .pw-hist-title-display { font-weight: bold; color: #BA9B92; font-size: 1.0em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-    .pw-hist-action-btn:hover { opacity: 1; color: #987F74; }
-    
-    .pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: #BA9B92; font-size: 1.05em; }
-    .pw-prompt-label { font-weight: bold; margin-bottom: 5px; display: block; color: #BA9B92; }
-    .pw-var-btn:hover { opacity: 1; border-color: #987F74; }
-    
-    .pw-refine-btn-vertical {
-        width: 40px; 
-        cursor: pointer; opacity: 0.9;
-        background: rgba(255,255,255,0.08); 
-        border-left: 1px solid var(--SmartThemeBorderColor);
-        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-        color: #BA9B92; font-weight: bold;
-        transition: all 0.2s;
-        flex-shrink: 0;
-    }
-    .pw-refine-btn-vertical:hover { background: rgba(186, 155, 146, 0.1); opacity: 1; }
-    `;
-    $('<style>').attr('id', styleId).text(css).appendTo('head');
-}
 
 async function forceSavePersona(name, description) {
     const context = getContext();
@@ -1676,8 +1505,7 @@ function addPersonaButton() {
 }
 
 jQuery(async () => {
-    injectStyles();
     addPersonaButton(); // Try once immediately
     bindEvents(); // Standard event binding
-    console.log("[PW] Persona Weaver Loaded (v2.8 Guofeng Final)");
+    console.log("[PW] Persona Weaver Loaded (v2.7 Visual Refine)");
 });
