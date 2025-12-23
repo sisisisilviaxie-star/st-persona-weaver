@@ -1,71 +1,72 @@
 /* =========================================
-   Theme: Coffee Afternoon (咖啡色午后)
-   Design: 优雅、复古、日常、下午茶风格
+   Theme: Snow & Frost (雪尽霜余)
+   Style: 新中式、清冷、极简、高雅
+   Type:  Light Mode (浅色主题)
 ========================================= */
 
 .pw-wrapper {
-    /* --- 核心调色板变量 --- */
-    --pw-bg-color: #344038;           /* 深苔藓绿：整体背景 */
-    --pw-panel-bg: rgba(232, 228, 217, 0.05); /* 装饰块背景 */
+    /* --- 核心调色板 (基于图片提取) --- */
+    --pw-bg-color: #F0ECEB;           /* 雪覆白：整体背景 */
     
-    --pw-paper-bg: #E8E4D9;           /* 信纸米色：输入框背景 */
-    --pw-paper-text: #4A3B32;         /* 咖啡深褐：输入框文字 */
-    --pw-paper-border: #8C8475;       /* 灰褐色：输入框边框 */
+    --pw-paper-bg: #FFFFFF;           /* 纯白：输入框背景 (比雪覆白更亮，突出层次) */
+    --pw-paper-text: #5D4B44;         /* 深褐：正文文字 (基于枯枝褐加深，保证阅读清晰) */
+    --pw-paper-border: #C4C0C1;       /* 残霜灰：边框 */
     
-    --pw-text-light: #EBE8E1;         /* 浅奶油色：深色背景上的文字 */
-    --pw-text-muted: #9DA8A0;         /* 灰绿色：次要文字 */
+    --pw-text-main: #5D4B44;          /* 主文字色 */
+    --pw-text-muted: #987F74;         /* 枯枝褐：次要文字/标题 */
     
-    --pw-accent-gold: #C4A66F;        /* 复古金：高亮、按钮、边框 */
-    --pw-accent-brown: #5C4A3D;       /* 浓缩咖啡：标签背景 */
+    --pw-accent-red: #BA9B92;         /* 灰茶红：主高亮、按钮 */
+    --pw-accent-grey: #DCD6D6;        /* 浅灰：标签背景 */
     
-    --pw-btn-primary-bg: #C4A66F;     /* 金色按钮背景 */
-    --pw-btn-primary-text: #2F241E;   /* 金色按钮上的深色文字 */
+    --pw-btn-primary-bg: #BA9B92;     /* 灰茶红背景 */
+    --pw-btn-primary-text: #FFFFFF;   /* 按钮文字白 */
     
-    --pw-danger: #A65D57;             /* 豆沙红：删除/警告 */
-    --pw-link: #8FB5C4;               /* 雾霾蓝：链接/次要高亮 */
+    --pw-danger: #D47D7D;             /* 柔和红：删除 */
+    --pw-link: #7D94A6;               /* 霜蓝：链接/已绑定 */
 
-    /* --- 1. 容器与基础布局 --- */
+    /* --- 布局属性 --- */
     display: flex; flex-direction: column; height: 100%; max-height: 90vh;
     font-size: 14px; 
-    color: var(--pw-text-light);
-    background-color: var(--pw-bg-color); /* 覆盖默认背景 */
+    color: var(--pw-text-main);
+    background-color: var(--pw-bg-color);
     position: relative;
     box-sizing: border-box; overflow: hidden;
-    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    /* 使用衬线字体增强国风感 */
+    font-family: "Songti SC", "SimSun", "Noto Serif SC", serif; 
 }
 
+/* 滚动条 */
 .pw-scroll-area {
     flex-grow: 1; overflow-y: auto; padding-right: 5px;
     display: flex; flex-direction: column; gap: 8px;
     padding-bottom: 10px; min-height: 0;
 }
-
-/* 自定义滚动条 */
 .pw-scroll-area::-webkit-scrollbar { width: 6px; }
-.pw-scroll-area::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
-.pw-scroll-area::-webkit-scrollbar-thumb { background: var(--pw-accent-gold); border-radius: 3px; opacity: 0.5; }
+.pw-scroll-area::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); }
+.pw-scroll-area::-webkit-scrollbar-thumb { background: var(--pw-accent-red); border-radius: 3px; opacity: 0.6; }
 
 /* =========================================
    2. 顶部 Header
 ========================================= */
-.pw-header { flex-shrink: 0; margin-bottom: 8px; border-bottom: 1px dashed var(--pw-accent-gold); padding-bottom: 5px; }
+.pw-header { flex-shrink: 0; margin-bottom: 8px; border-bottom: 1px solid var(--pw-paper-border); padding-bottom: 5px; }
 .pw-top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.pw-title { font-size: 1.2em; font-weight: bold; display: flex; align-items: center; gap: 8px; color: var(--pw-accent-gold); }
+.pw-title { font-size: 1.2em; font-weight: bold; display: flex; align-items: center; gap: 8px; color: var(--pw-text-muted); }
 
 .pw-tabs { display: flex; flex-direction: row; gap: 5px; overflow-x: auto; }
 .pw-tab {
-    padding: 6px 12px; cursor: pointer; border-radius: 6px 6px 0 0;
+    padding: 6px 15px; cursor: pointer; border-radius: 6px 6px 0 0;
     color: var(--pw-text-muted);
     transition: all 0.2s; white-space: nowrap; border: 1px solid transparent; border-bottom: none;
     display: flex; align-items: center; gap: 5px; font-size: 0.9em;
-    font-family: serif; letter-spacing: 1px;
+    font-weight: bold;
 }
-.pw-tab:hover { color: var(--pw-text-light); background: rgba(255,255,255,0.05); }
+.pw-tab:hover { color: var(--pw-accent-red); background: rgba(255,255,255,0.5); }
 .pw-tab.active { 
     background: var(--pw-paper-bg); 
-    color: var(--pw-paper-text); 
+    color: var(--pw-accent-red); 
     font-weight: bold; 
-    border-top: 2px solid var(--pw-accent-gold);
+    border-top: 3px solid var(--pw-accent-red); /* 顶部红线 */
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.02);
 }
 
 .pw-view { display: none; flex-grow: 1; overflow: hidden; flex-direction: column; height: 100%; width: 100%; }
@@ -76,28 +77,29 @@
 ========================================= */
 .pw-info-display {
     display: flex; align-items: center; gap: 10px; 
-    background: rgba(0,0,0,0.2);
+    background: #FFFFFF;
     padding: 8px; border-radius: 6px; 
-    border: 1px solid var(--pw-accent-gold);
+    border: 1px solid var(--pw-paper-border);
     margin-bottom: 5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
 }
-.pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--pw-accent-gold); font-size: 1.05em; }
-#pw-display-name { color: var(--pw-text-light); text-decoration: underline; text-decoration-color: var(--pw-accent-gold); }
+.pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--pw-text-muted); font-size: 1.05em; }
+#pw-display-name { color: var(--pw-text-main); border-bottom: 1px dashed var(--pw-accent-red); }
 
 /* 载入按钮 */
 .pw-load-btn {
     font-size: 0.85em;
     background: transparent;
-    border: 1px solid var(--pw-accent-gold);
+    border: 1px solid var(--pw-text-muted);
     padding: 4px 12px;
     border-radius: 20px;
     cursor: pointer;
-    color: var(--pw-accent-gold);
+    color: var(--pw-text-muted);
     font-weight: bold;
     margin-left: auto;
     display: inline-flex; align-items: center; transition: all 0.2s;
 }
-.pw-load-btn:hover { background: var(--pw-accent-gold); color: var(--pw-bg-color); }
+.pw-load-btn:hover { background: var(--pw-text-muted); color: #fff; }
 
 .pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .pw-tags-label { font-weight: bold; color: var(--pw-text-muted); font-size: 0.85em; }
@@ -106,41 +108,41 @@
 .pw-tags-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .pw-tag-chip {
     display: inline-flex; align-items: center; 
-    background: var(--pw-accent-brown);
-    color: var(--pw-text-light);
-    border: 1px solid var(--pw-accent-gold);
+    background: var(--pw-accent-grey); /* 浅灰底 */
+    color: var(--pw-text-main);
+    border: 1px solid transparent;
     padding: 4px 10px; border-radius: 4px;
     font-size: 0.9em; cursor: pointer; transition: all 0.2s;
 }
-.pw-tag-chip:hover { background: var(--pw-accent-gold); color: var(--pw-paper-text); transform: translateY(-1px); }
-.pw-tag-chip i { color: var(--pw-accent-gold); }
-.pw-tag-chip:hover i { color: var(--pw-paper-text); }
+.pw-tag-chip:hover { background: var(--pw-accent-red); color: #fff; transform: translateY(-1px); }
+.pw-tag-chip i { color: var(--pw-text-muted); }
+.pw-tag-chip:hover i { color: #fff; }
 
 /* 模版编辑器 */
 .pw-template-editor-area {
     display: none; flex-direction: column; gap: 0;
-    background: rgba(0,0,0,0.3); border-radius: 6px; border: 1px solid var(--pw-accent-gold); overflow: hidden;
+    background: #fff; border-radius: 6px; border: 1px solid var(--pw-paper-border); overflow: hidden;
 }
 .pw-template-textarea {
     width: 100%; height: 200px; font-family: monospace; font-size: 0.85em;
-    background: #252e28; color: #ccc;
+    background: #FAFAFA; color: var(--pw-paper-text);
     border: none; resize: vertical; padding: 8px; white-space: pre; outline: none; box-sizing: border-box;
 }
 .pw-template-footer {
     display: flex; justify-content: space-between; align-items: center;
-    background: #2f3a33; padding: 5px 10px;
-    border-top: 1px solid var(--pw-accent-gold);
+    background: #F2F2F2; padding: 5px 10px;
+    border-top: 1px solid var(--pw-paper-border);
 }
 .pw-shortcut-bar { display: flex; gap: 5px; align-items: center; }
 .pw-shortcut-btn {
     padding: 2px 8px; cursor: pointer; font-size: 0.85em;
-    background: rgba(255,255,255,0.1); color: #ccc; border-radius: 4px; 
-    transition: all 0.2s; font-family: monospace; border: 1px solid transparent;
+    background: #fff; color: var(--pw-text-main); border-radius: 4px; 
+    transition: all 0.2s; font-family: monospace; border: 1px solid var(--pw-paper-border);
 }
-.pw-shortcut-btn:hover { border-color: var(--pw-accent-gold); color: var(--pw-accent-gold); }
+.pw-shortcut-btn:hover { border-color: var(--pw-accent-red); color: var(--pw-accent-red); }
 
 /* =========================================
-   4. 输入框与按钮 (信纸风格)
+   4. 输入框与按钮
 ========================================= */
 .pw-input, .pw-textarea, .pw-select {
     background-color: var(--pw-paper-bg) !important;
@@ -148,169 +150,170 @@
     color: var(--pw-paper-text) !important;
     border-radius: 4px; padding: 8px;
     font-family: inherit; font-size: inherit; outline: none; box-sizing: border-box;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.03);
 }
 .pw-input:focus, .pw-textarea:focus, .pw-select:focus { 
-    border-color: var(--pw-accent-gold) !important; 
+    border-color: var(--pw-accent-red) !important; 
     background-color: #fff !important; 
+    box-shadow: 0 0 0 2px rgba(186, 155, 146, 0.1) !important;
 }
 .pw-textarea { resize: vertical; line-height: 1.5; }
-.pw-input::placeholder, .pw-textarea::placeholder { color: rgba(74, 59, 50, 0.5); }
+.pw-input::placeholder, .pw-textarea::placeholder { color: #BBB; }
 
-#pw-request { min-height: 200px; transition: min-height 0.3s ease; border-left: 4px solid var(--pw-accent-gold) !important; }
+#pw-request { min-height: 200px; transition: min-height 0.3s ease; border-left: 4px solid var(--pw-accent-red) !important; }
 #pw-request.minimized { min-height: 80px; height: 80px !important; }
 
-/* 按钮通用样式 */
+/* 按钮通用 */
 .pw-btn {
     display: flex; align-items: center; justify-content: center; gap: 6px;
     padding: 6px 12px; border-radius: 6px; 
-    border: 1px solid var(--pw-accent-gold);
-    background: transparent; color: var(--pw-accent-gold);
+    border: 1px solid var(--pw-text-muted);
+    background: transparent; color: var(--pw-text-muted);
     cursor: pointer; font-weight: bold; width: auto; transition: all 0.2s; font-size: 0.95em;
 }
-.pw-btn:hover { background: rgba(196, 166, 111, 0.1); transform: translateY(-1px); }
+.pw-btn:hover { background: rgba(186, 155, 146, 0.1); transform: translateY(-1px); }
 
-/* 生成按钮 (实心金) */
+/* 生成按钮 (灰茶红) */
 .pw-btn.gen { 
     background: var(--pw-btn-primary-bg); 
     color: var(--pw-btn-primary-text);
     border: none;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 5px rgba(186, 155, 146, 0.4);
     width: 100%; margin-top: 5px;
 }
-.pw-btn.gen:hover { background: #d4b882; filter: none; }
+.pw-btn.gen:hover { background: #A88A82; filter: none; }
 
-/* 覆盖当前人设 (金边) */
+/* 覆盖当前人设 (枯枝褐) */
 .pw-btn.save { 
-    border-color: var(--pw-accent-gold); 
-    color: var(--pw-accent-gold); 
+    border-color: var(--pw-text-muted); 
+    color: var(--pw-text-muted); 
 }
 .pw-btn.save:hover { 
-    background: var(--pw-accent-gold); 
-    color: var(--pw-bg-color); 
+    background: var(--pw-text-muted); 
+    color: #fff; 
 }
 
-/* 通用主按钮 */
-.pw-btn.primary { background: rgba(255,255,255,0.1); color: var(--pw-text-light); border-color: var(--pw-text-muted); }
-.pw-btn.primary:hover { border-color: var(--pw-accent-gold); color: var(--pw-accent-gold); }
+/* 主按钮 */
+.pw-btn.primary { background: #fff; color: var(--pw-text-main); border-color: var(--pw-paper-border); }
+.pw-btn.primary:hover { border-color: var(--pw-accent-red); color: var(--pw-accent-red); }
 
-/* 危险按钮 (红) */
+/* 危险按钮 */
 .pw-btn.danger { border-color: var(--pw-danger); color: var(--pw-danger); }
-.pw-btn.danger:hover { background: rgba(166, 93, 87, 0.1); }
+.pw-btn.danger:hover { background: rgba(212, 125, 125, 0.1); }
 
-/* 保存至世界书 (灰褐) */
+/* 保存至世界书 (残霜灰) */
 .pw-btn.wi { 
-    border-color: #8C8475; 
-    color: #EBE8E1; 
+    border-color: #999; 
+    color: #777; 
 }
 .pw-btn.wi:hover {
-    border-color: var(--pw-accent-gold);
-    color: var(--pw-accent-gold);
+    border-color: var(--pw-text-muted);
+    color: var(--pw-text-muted);
 }
 
 .pw-mini-btn {
     font-size: 0.85em; opacity: 0.8; cursor: pointer; display: flex; align-items: center; gap: 4px;
-    padding: 4px 8px; border-radius: 4px; border: 1px solid var(--pw-text-muted);
-    background: transparent; color: var(--pw-text-light);
+    padding: 4px 8px; border-radius: 4px; border: 1px solid var(--pw-paper-border);
+    background: transparent; color: var(--pw-text-main);
 }
-.pw-mini-btn:hover { opacity: 1; border-color: var(--pw-accent-gold); color: var(--pw-accent-gold); }
+.pw-mini-btn:hover { opacity: 1; border-color: var(--pw-accent-red); color: var(--pw-accent-red); }
 
 /* =========================================
-   5. 结果区域与润色栏 (仿信纸)
+   5. 结果区域与润色栏
 ========================================= */
 .pw-relative-container { position: relative; }
 
 .pw-result-textarea {
     width: 100%; min-height: 450px;
     background: var(--pw-paper-bg); 
-    border: 1px solid var(--pw-accent-gold); border-bottom: none; border-radius: 6px 6px 0 0;
+    border: 1px solid var(--pw-accent-red); border-bottom: none; border-radius: 6px 6px 0 0;
     color: var(--pw-paper-text);
     padding: 15px;
     font-family: inherit; font-size: 1.0em; line-height: 1.6;
     resize: vertical; outline: none; white-space: pre-wrap; margin-bottom: 0;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
-    background-image: repeating-linear-gradient(transparent, transparent 31px, rgba(0,0,0,0.05) 31px, rgba(0,0,0,0.05) 32px);
-    background-attachment: local;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.02);
 }
 
 .pw-refine-toolbar {
     display: flex; flex-direction: row; gap: 0; align-items: stretch;
-    background: #3e4b43;
-    border: 1px solid var(--pw-accent-gold); border-top: 1px solid rgba(0,0,0,0.1);
+    background: #F5F5F5;
+    border: 1px solid var(--pw-accent-red); border-top: 1px solid #EEE;
     border-radius: 0 0 6px 6px; margin-bottom: 5px; overflow: hidden;
 }
 
 .pw-refine-input {
-    flex: 1; border: none; background: rgba(0,0,0,0.2); padding: 10px;
-    font-size: 0.95em; color: var(--pw-text-light);
+    flex: 1; border: none; background: #FFF; padding: 10px;
+    font-size: 0.95em; color: var(--pw-text-main);
     resize: none; overflow-y: auto; min-height: 80px; line-height: 1.5;
 }
-.pw-refine-input:focus { outline: none; background: rgba(0,0,0,0.3); }
+.pw-refine-input:focus { outline: none; background: #FAFAFA; }
 
 .pw-refine-btn-vertical {
     width: 40px; cursor: pointer; 
-    background: var(--pw-accent-gold); 
-    border-left: 1px solid rgba(0,0,0,0.1);
+    background: var(--pw-accent-red); 
+    border-left: 1px solid rgba(0,0,0,0.05);
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-    color: var(--pw-btn-primary-text); font-weight: bold; transition: all 0.2s; flex-shrink: 0;
+    color: #FFF; font-weight: bold; transition: all 0.2s; flex-shrink: 0;
 }
-.pw-refine-btn-vertical:hover { filter: brightness(1.1); }
+.pw-refine-btn-vertical:hover { filter: brightness(0.95); }
 .pw-refine-btn-text { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 2px; }
 
+/* 悬浮修改按钮 */
 .pw-float-quote-btn {
     position: fixed; top: 20%; right: 0;
-    background: var(--pw-accent-gold); color: var(--pw-btn-primary-text);
+    background: var(--pw-accent-red); color: #FFF;
     padding: 8px 12px; border-radius: 20px 0 0 20px;
     font-weight: bold; font-size: 0.85em;
-    box-shadow: -2px 2px 8px rgba(0,0,0,0.4); cursor: pointer; z-index: 9999;
+    box-shadow: -2px 2px 8px rgba(0,0,0,0.1); cursor: pointer; z-index: 9999;
     display: none; align-items: center; gap: 4px;
-    border: 1px solid #fff; border-right: none;
+    border: 1px solid #FFF; border-right: none;
 }
 .pw-float-quote-btn:hover { padding-right: 18px; transform: translateX(-2px); }
 
 /* =========================================
-   6. Diff 对比视图 (保持深色，适配阅读)
+   6. Diff 对比视图 (浅色版适配)
 ========================================= */
 .pw-diff-container {
     display: flex; flex-direction: column; gap: 0;
-    background: #1a1f1c; 
+    background: var(--pw-bg-color); /* 雪覆白 */
     padding: 0;
     position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000;
-    box-sizing: border-box; color: #e0e0e0;
+    box-sizing: border-box; color: var(--pw-text-main);
 }
 
 .pw-diff-tabs-bar {
-    display: flex; border-bottom: 1px solid #333; background: #252e28;
+    display: flex; border-bottom: 1px solid #DDD; background: #E8E2E0;
     padding: 5px 5px 0 5px; gap: 5px; flex-shrink: 0;
 }
 .pw-diff-tab {
     padding: 8px 15px; cursor: pointer; border-radius: 6px 6px 0 0;
-    background: #333; border: 1px solid transparent; border-bottom: none;
+    background: #DDD; border: 1px solid transparent; border-bottom: none;
     opacity: 0.6; font-weight: bold; font-size: 0.95em; transition: all 0.2s;
+    color: #666;
 }
-.pw-diff-tab.active { opacity: 1; background: #1a1f1c; color: var(--pw-accent-gold); border-color: #333; border-bottom: 2px solid #1a1f1c; margin-bottom: -1px; }
+.pw-diff-tab.active { opacity: 1; background: var(--pw-bg-color); color: var(--pw-accent-red); border-color: #DDD; border-bottom: 2px solid var(--pw-bg-color); margin-bottom: -1px; }
 
 .pw-diff-content-area { flex: 1; overflow: hidden; position: relative; padding: 10px; display: flex; flex-direction: column; }
 .pw-diff-list-view { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 5px; height: 100%; }
 .pw-diff-raw-view { display: none; flex-direction: column; height: 100%; }
 .pw-diff-raw-textarea {
-    flex: 1; width: 100%; background: #111; color: #ccc;
-    border: 1px solid #333; border-radius: 6px; padding: 10px;
+    flex: 1; width: 100%; background: #FFF; color: var(--pw-text-main);
+    border: 1px solid #CCC; border-radius: 6px; padding: 10px;
     font-family: monospace; resize: none; outline: none; font-size: 0.9em; line-height: 1.5;
     box-sizing: border-box; min-height: 350px;
 }
 
-.pw-diff-row { background: #252e28; border: 1px solid #38423b; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-.pw-diff-attr-name { font-weight: bold; color: var(--pw-accent-gold); font-size: 1em; padding-bottom: 5px; border-bottom: 1px solid #38423b; margin-bottom: 5px; }
+.pw-diff-row { background: #FFF; border: 1px solid #DDD; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.pw-diff-attr-name { font-weight: bold; color: var(--pw-text-muted); font-size: 1em; padding-bottom: 5px; border-bottom: 1px dashed #DDD; margin-bottom: 5px; }
 .pw-diff-cards { display: flex; gap: 10px; }
-.pw-diff-card { flex: 1; display: flex; flex-direction: column; border: 2px solid transparent; border-radius: 6px; background: rgba(0,0,0,0.2); overflow: hidden; transition: all 0.2s; cursor: pointer; opacity: 0.6; position: relative; }
-.pw-diff-card.selected { border-color: var(--pw-accent-gold); opacity: 1; background: rgba(0,0,0,0.3); }
+.pw-diff-card { flex: 1; display: flex; flex-direction: column; border: 2px solid transparent; border-radius: 6px; background: #F9F9F9; overflow: hidden; transition: all 0.2s; cursor: pointer; opacity: 0.6; position: relative; }
+.pw-diff-card.selected { border-color: var(--pw-accent-red); opacity: 1; background: #FFF; box-shadow: 0 0 5px rgba(186, 155, 146, 0.2); }
 .pw-diff-card:not(.selected):hover { opacity: 0.8; }
-.pw-diff-label { font-size: 0.75em; padding: 4px 8px; background: rgba(0,0,0,0.3); color: #aaa; text-transform: uppercase; font-weight: bold; }
-.pw-diff-card.selected .pw-diff-label { color: var(--pw-accent-gold); background: rgba(196, 166, 111, 0.1); }
-.pw-diff-textarea { flex: 1; width: 100%; background: transparent; border: none; color: #eee; padding: 8px; font-family: inherit; font-size: 0.95em; resize: none; outline: none; line-height: 1.5; min-height: 80px; box-sizing: border-box; }
-.pw-diff-card:not(.selected) .pw-diff-textarea { color: #888; pointer-events: none; }
-.pw-diff-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 10px; border-top: 1px solid #333; flex-shrink: 0; background: #1a1f1c; }
+.pw-diff-label { font-size: 0.75em; padding: 4px 8px; background: #EEE; color: #888; text-transform: uppercase; font-weight: bold; }
+.pw-diff-card.selected .pw-diff-label { color: var(--pw-accent-red); background: rgba(186, 155, 146, 0.1); }
+.pw-diff-textarea { flex: 1; width: 100%; background: transparent; border: none; color: var(--pw-text-main); padding: 8px; font-family: inherit; font-size: 0.95em; resize: none; outline: none; line-height: 1.5; min-height: 80px; box-sizing: border-box; }
+.pw-diff-card:not(.selected) .pw-diff-textarea { color: #AAA; pointer-events: none; }
+.pw-diff-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 10px; border-top: 1px solid #DDD; flex-shrink: 0; background: #F0ECEB; }
 
 @media screen and (max-width: 600px) {
     .pw-diff-cards { flex-direction: column; }
@@ -321,92 +324,94 @@
    7. 底部动作栏
 ========================================= */
 .pw-footer {
-    margin-top: auto; padding-top: 8px; border-top: 1px solid rgba(196, 166, 111, 0.3);
+    margin-top: auto; padding-top: 8px; border-top: 1px solid #DCD6D6;
     display: flex; justify-content: space-between; align-items: center; gap: 8px;
-    flex-shrink: 0; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 0 0 6px 6px;
+    flex-shrink: 0; background: #E8E2E0; padding: 8px; border-radius: 0 0 6px 6px;
 }
 .pw-footer-group { display: flex; gap: 5px; align-items: center; }
 .pw-compact-btn { 
     width: 32px; height: 32px; border-radius: 4px; 
-    border: 1px solid var(--pw-text-muted); 
-    background: transparent; color: var(--pw-text-light); 
-    display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1em; opacity: 0.7; transition: all 0.2s; 
+    border: 1px solid #CCC; 
+    background: #FFF; color: #666; 
+    display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1em; opacity: 0.8; transition: all 0.2s; 
 }
-.pw-compact-btn:hover { opacity: 1; border-color: var(--pw-accent-gold); color: var(--pw-accent-gold); }
+.pw-compact-btn:hover { opacity: 1; border-color: var(--pw-accent-red); color: var(--pw-accent-red); }
 .pw-compact-btn.danger:hover { border-color: var(--pw-danger); color: var(--pw-danger); }
 
-.pw-tab-sub { display: block; font-size: 0.75em; opacity: 0.6; font-weight: normal; margin-top: 2px; text-align: center; font-family: sans-serif; }
+.pw-tab-sub { display: block; font-size: 0.75em; opacity: 0.6; font-weight: normal; margin-top: 2px; text-align: center; }
 .pw-diff-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
-.pw-header-subtitle { font-size: 0.65em; opacity: 0.8; font-weight: normal; margin-left: 10px; color: var(--pw-text-muted); font-family: serif; font-style: italic; }
+.pw-header-subtitle { font-size: 0.65em; opacity: 0.8; font-weight: normal; margin-left: 10px; color: #999; }
 
 /* =========================================
    8. API & Prompt & History
 ========================================= */
-.pw-prompt-editor-block { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--pw-accent-gold); }
-.pw-prompt-label { font-weight: bold; margin-bottom: 5px; display: block; color: var(--pw-accent-gold); }
+.pw-prompt-editor-block { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--pw-paper-border); }
+.pw-prompt-label { font-weight: bold; margin-bottom: 5px; display: block; color: var(--pw-text-muted); }
 .pw-var-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 5px; }
-.pw-var-btn { font-size: 0.8em; padding: 2px 6px; border: 1px solid var(--pw-text-muted); border-radius: 4px; cursor: pointer; opacity: 0.7; color: var(--pw-text-light); }
-.pw-var-btn:hover { opacity: 1; border-color: var(--pw-accent-gold); color: var(--pw-accent-gold); }
+.pw-var-btn { font-size: 0.8em; padding: 2px 6px; border: 1px solid #CCC; border-radius: 4px; cursor: pointer; opacity: 0.8; color: var(--pw-text-main); background: #FFF; }
+.pw-var-btn:hover { opacity: 1; border-color: var(--pw-accent-red); color: var(--pw-accent-red); }
 
 /* History Section */
 .pw-hist-header { display: flex; align-items: center; justify-content: space-between; gap: 5px; }
-.pw-hist-title-display { font-weight: bold; color: var(--pw-accent-gold); font-size: 1.0em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-.pw-hist-title-input { background: rgba(0,0,0,0.3); border: 1px solid var(--pw-link); color: #fff; font-size: 1.0em; padding: 2px 4px; border-radius: 3px; width: 100%; }
-.pw-hist-action-btn { opacity: 0.5; cursor: pointer; padding: 2px 5px; font-size: 0.85em; color: var(--pw-text-light); }
-.pw-hist-action-btn:hover { opacity: 1; color: var(--pw-accent-gold); }
+.pw-hist-title-display { font-weight: bold; color: var(--pw-text-muted); font-size: 1.0em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.pw-hist-title-input { background: #FFF; border: 1px solid var(--pw-link); color: #333; font-size: 1.0em; padding: 2px 4px; border-radius: 3px; width: 100%; }
+.pw-hist-action-btn { opacity: 0.5; cursor: pointer; padding: 2px 5px; font-size: 0.85em; color: #666; }
+.pw-hist-action-btn:hover { opacity: 1; color: var(--pw-accent-red); }
 .pw-hist-action-btn.del:hover { color: var(--pw-danger); }
 
 .pw-card-section { 
-    background: rgba(0, 0, 0, 0.2); 
-    border: 1px solid var(--pw-accent-gold); 
+    background: #FFFFFF; 
+    border: 1px solid var(--pw-paper-border); 
     border-radius: 8px; padding: 10px; 
     display: flex; flex-direction: column; gap: 8px; 
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
 }
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; flex-wrap: wrap; }
 .pw-wi-controls { display: flex; gap: 6px; width: 100%; align-items: center; }
 .pw-wi-select { flex-grow: 1; width: auto; min-width: 0; }
 .pw-wi-refresh-btn { flex-shrink: 0; padding: 6px; width: auto; }
-.pw-wi-book { border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; margin-bottom: 6px; overflow: hidden; }
-.pw-wi-header { padding: 8px; background: rgba(255,255,255,0.05); cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: var(--pw-text-light); }
-.pw-wi-list { display: none; padding: 8px; border-top: 1px solid rgba(255,255,255,0.1); }
-.pw-wi-item { background: rgba(0,0,0,0.2); padding: 6px 10px; border-radius: 4px; margin-bottom: 4px; }
+.pw-wi-book { border: 1px solid #EEE; border-radius: 6px; margin-bottom: 6px; overflow: hidden; }
+.pw-wi-header { padding: 8px; background: #F9F9F9; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: var(--pw-text-main); }
+.pw-wi-list { display: none; padding: 8px; border-top: 1px solid #EEE; }
+.pw-wi-item { background: #FAFAFA; padding: 6px 10px; border-radius: 4px; margin-bottom: 4px; border: 1px solid transparent; }
+.pw-wi-item:hover { border-color: #EEE; }
 .pw-wi-item-row { display: flex; align-items: center; gap: 8px; }
-.pw-wi-check { transform: scale(1.1); cursor: pointer; accent-color: var(--pw-accent-gold); }
+.pw-wi-check { transform: scale(1.1); cursor: pointer; accent-color: var(--pw-accent-red); }
 .pw-wi-close-bar { text-align: center; font-size: 0.8em; opacity: 0.6; cursor: pointer; margin-top: 3px; color: var(--pw-link); }
 
 .pw-search-box { position: relative; display: flex; align-items: center; margin-bottom: 10px; background: var(--pw-paper-bg); border-radius: 6px; border: 1px solid var(--pw-paper-border); }
-.pw-search-icon { position: absolute; left: 10px; opacity: 0.5; pointer-events: none; color: var(--pw-paper-text); }
+.pw-search-icon { position: absolute; left: 10px; opacity: 0.5; pointer-events: none; color: #999; }
 .pw-search-input { width: 100%; padding-left: 32px !important; padding-right: 30px; border: none; background: transparent; color: var(--pw-paper-text); }
-.pw-search-clear { position: absolute; right: 10px; opacity: 0.5; cursor: pointer; z-index: 2; color: var(--pw-paper-text); }
+.pw-search-clear { position: absolute; right: 10px; opacity: 0.5; cursor: pointer; z-index: 2; color: #999; }
 
-.pw-history-item { background: rgba(0,0,0,0.1); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 8px; margin-bottom: 6px; display: flex; gap: 8px; cursor: pointer; transition: background 0.2s; }
-.pw-history-item:hover { background: rgba(255,255,255,0.05); border-color: var(--pw-accent-gold); }
+.pw-history-item { background: #FFF; border: 1px solid #EEE; border-radius: 6px; padding: 8px; margin-bottom: 6px; display: flex; gap: 8px; cursor: pointer; transition: background 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+.pw-history-item:hover { background: #FCFCFC; border-color: var(--pw-accent-red); }
 .pw-hist-main { flex: 1; display: flex; flex-direction: column; gap: 3px; overflow: hidden; }
-.pw-hist-meta { display: flex; gap: 8px; font-size: 0.75em; opacity: 0.6; color: var(--pw-text-muted); }
-.pw-hist-desc { font-size: 0.85em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--pw-text-light); }
+.pw-hist-meta { display: flex; gap: 8px; font-size: 0.75em; opacity: 0.6; color: #999; }
+.pw-hist-desc { font-size: 0.85em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--pw-text-main); }
 
 #pw_persona_tool_btn {
     color: var(--smart-theme-body-color); cursor: pointer; display: flex; align-items: center; justify-content: center;
     width: 30px; height: 30px; margin-right: 5px; font-size: 1.1em; opacity: 0.7; transition: opacity 0.2s;
 }
-#pw_persona_tool_btn:hover { opacity: 1; color: var(--pw-accent-gold); }
+#pw_persona_tool_btn:hover { opacity: 1; color: var(--pw-accent-red); }
 
 #pw-api-model-select { flex: 1; width: 0; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
 #pw-api-url { background-color: var(--pw-paper-bg) !important; color: var(--pw-paper-text) !important; }
 
 /* 折叠标题样式 */
-.pw-context-header { padding: 10px; background: rgba(255,255,255,0.05); cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; user-select: none; border: 1px solid transparent; }
-.pw-context-header:hover { background: rgba(255,255,255,0.08); border-color: var(--pw-accent-gold); }
+.pw-context-header { padding: 10px; background: #F9F9F9; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; user-select: none; border: 1px solid transparent; }
+.pw-context-header:hover { background: #F0ECEB; border-color: var(--pw-accent-red); }
 
 /* 标签样式 */
 .pw-section-label { font-weight: bold; font-size: 1em; padding: 2px 4px; font-family: serif; letter-spacing: 0.5px; }
-.pw-label-gold { color: var(--pw-accent-gold); }
-.pw-label-blue { color: var(--pw-accent-gold); } /* 强制统一为金色 */
+.pw-label-gold { color: var(--pw-text-muted); }
+.pw-label-blue { color: var(--pw-link); }
 
 /* 预览展开按钮/条 */
 .pw-preview-toggle-bar {
-    background: rgba(0,0,0,0.4); 
-    color: var(--pw-text-light);
+    background: #E8E2E0; 
+    color: var(--pw-text-main);
     font-size: 0.85em;
     text-align: center;
     padding: 6px;
@@ -414,18 +419,18 @@
     border-radius: 4px;
     cursor: pointer;
     transition: background 0.2s;
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid #DDD;
     user-select: none;
     font-weight: bold;
 }
-.pw-preview-toggle-bar:hover { background: rgba(0,0,0,0.5); color: var(--pw-accent-gold); border-color: var(--pw-accent-gold); }
+.pw-preview-toggle-bar:hover { background: #DCD6D6; color: var(--pw-accent-red); border-color: var(--pw-accent-red); }
 
 /* 文字预览框 (覆盖信纸风，使用半透明背景) */
 .pw-wi-desc, #pw-greetings-preview {
     display: none;
-    background: rgba(0, 0, 0, 0.3) !important; 
-    color: var(--pw-text-light) !important;
-    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.6) !important; 
+    color: var(--pw-text-main) !important;
+    border: 1px solid #DDD;
     border-radius: 4px;
     padding: 8px;
     font-size: 0.9em;
@@ -450,7 +455,7 @@
 
 /* 1. 世界书 - (已绑定) 文字 */
 .pw-bound-status {
-    color: var(--pw-accent-gold);
+    color: var(--pw-link); /* 霜蓝 */
     font-size: 0.8em;
     margin-left: 5px;
     font-weight: bold;
@@ -469,7 +474,7 @@
 
 /* 3. 顶部标题的魔杖图标 */
 .pw-title-icon {
-    color: var(--pw-accent-gold);
+    color: var(--pw-accent-red);
     margin-right: 5px;
 }
 
@@ -480,10 +485,10 @@
 
 /* 5. 世界书条目展开图标 (眼睛) */
 .pw-wi-toggle-icon {
-    color: var(--pw-text-muted);
+    color: #CCC;
     cursor: pointer;
     margin-left: 8px;
 }
 .pw-wi-toggle-icon.active {
-    color: var(--pw-link);
+    color: var(--pw-accent-red);
 }
