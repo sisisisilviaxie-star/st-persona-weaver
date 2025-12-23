@@ -134,7 +134,7 @@ const defaultSettings = {
 };
 
 const TEXT = {
-    PANEL_TITLE: `<span style="color:#e0af68; margin-right:5px;"><i class="fa-solid fa-wand-magic-sparkles"></i></span>User人设生成器`,
+    PANEL_TITLE: `<span class="pw-title-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></span>User人设生成器`,
     BTN_TITLE: "打开设定生成器",
     TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已保存并覆盖！`,
     TOAST_WI_SUCCESS: (book) => `已写入世界书: ${book}`,
@@ -478,7 +478,7 @@ async function getWorldBookEntries(bookName) {
     return [];
 }
 
-// [Updated] Generation Logic
+// [Updated] Generation Logic (Fixed for Google API)
 async function runGeneration(data, apiConfig) {
     const context = getContext();
     const charId = context.characterId;
@@ -511,7 +511,10 @@ async function runGeneration(data, apiConfig) {
             let baseUrl = apiConfig.indepApiUrl.replace(/\/$/, '');
             if (baseUrl.endsWith('/chat/completions')) baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
             const url = `${baseUrl}/chat/completions`;
-            const messages = [{ role: 'system', content: systemPrompt }];
+            
+            // [Fixed] Role 'system' -> 'user' for Google API compatibility
+            const messages = [{ role: 'user', content: systemPrompt }];
+            
             const res = await fetch(url, {
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.indepApiKey}` },
@@ -529,10 +532,11 @@ async function runGeneration(data, apiConfig) {
             responseContent = json.choices[0].message.content;
         } else {
             if (window.TavernHelper && typeof window.TavernHelper.generateRaw === 'function') {
-                console.log("[PW] Using TavernHelper.generateRaw");
+                console.log("[PW] Using TavernHelper.generateRaw (Role: User)");
                 responseContent = await window.TavernHelper.generateRaw({
                     user_input: '',
-                    ordered_prompts: [{ role: 'system', content: systemPrompt }],
+                    // [Fixed] Role 'system' -> 'user' for Google API compatibility
+                    ordered_prompts: [{ role: 'user', content: systemPrompt }],
                     overrides: {
                         chat_history: { prompts: [] },
                         world_info_before: '',
@@ -621,7 +625,7 @@ async function openCreatorPopup() {
                 <div class="pw-tags-container" id="pw-template-chips"></div>
                 
                 <div class="pw-template-editor-area" id="pw-template-editor">
-                    <div class="pw-template-footer" style="border-top:none; border-bottom:1px solid var(--SmartThemeBorderColor); border-radius:6px 6px 0 0;">
+                    <div class="pw-template-footer" style="border-top:none; border-bottom:1px solid var(--pw-border); border-radius:6px 6px 0 0;">
                         <div class="pw-shortcut-bar">
                             <div class="pw-shortcut-btn" data-key="  "><span>缩进</span><span class="code">Tab</span></div>
                             <div class="pw-shortcut-btn" data-key=": "><span>冒号</span><span class="code">:</span></div>
@@ -886,17 +890,18 @@ function bindEvents() {
     });
 
     // --- Template Editing ---
+    // [CSS Fix] 使用 class 切换颜色
     $(document).on('click.pw', '#pw-toggle-edit-template', () => {
         isEditingTemplate = !isEditingTemplate;
         if (isEditingTemplate) {
             $('#pw-template-text').val(currentTemplate);
             $('#pw-template-chips').hide();
             $('#pw-template-editor').css('display', 'flex');
-            $('#pw-toggle-edit-template').text("取消编辑").css('color', '#ff6b6b');
+            $('#pw-toggle-edit-template').text("取消编辑").addClass('editing');
         } else {
             $('#pw-template-editor').hide();
             $('#pw-template-chips').css('display', 'flex');
-            $('#pw-toggle-edit-template').text("编辑模版").css('color', '#5b8db8');
+            $('#pw-toggle-edit-template').text("编辑模版").removeClass('editing');
         }
     });
 
@@ -908,7 +913,7 @@ function bindEvents() {
         isEditingTemplate = false;
         $('#pw-template-editor').hide();
         $('#pw-template-chips').css('display', 'flex');
-        $('#pw-toggle-edit-template').text("编辑模版").css('color', '#5b8db8');
+        $('#pw-toggle-edit-template').text("编辑模版").removeClass('editing');
         toastr.success("模版已更新");
     });
 
@@ -1451,7 +1456,8 @@ const renderWiBooks = async () => {
     if (allBooks.length === 0) { container.html('<div style="opacity:0.6; padding:10px; text-align:center;">此角色未绑定世界书，请在“世界书”标签页手动添加或在酒馆主界面绑定。</div>'); return; }
     for (const book of allBooks) {
         const isBound = baseBooks.includes(book);
-        const $el = $(`<div class="pw-wi-book"><div class="pw-wi-header"><span><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span style="color:#9ece6a;font-size:0.8em;margin-left:5px;">(已绑定)</span>' : ''}</span><div>${!isBound ? '<i class="fa-solid fa-times remove-book" style="color:#ff6b6b;margin-right:10px;" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div></div><div class="pw-wi-list" data-book="${book}"></div></div>`);
+        // [CSS Fix] 使用 class 代替内联 style
+        const $el = $(`<div class="pw-wi-book"><div class="pw-wi-header"><span><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span class="pw-bound-status">(已绑定)</span>' : ''}</span><div>${!isBound ? '<i class="fa-solid fa-times remove-book pw-remove-book-icon" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div></div><div class="pw-wi-list" data-book="${book}"></div></div>`);
         $el.find('.remove-book').on('click', (e) => { e.stopPropagation(); window.pwExtraBooks = window.pwExtraBooks.filter(b => b !== book); renderWiBooks(); });
         $el.find('.pw-wi-header').on('click', async function () {
             const $list = $el.find('.pw-wi-list');
@@ -1467,12 +1473,13 @@ const renderWiBooks = async () => {
                     entries.forEach(entry => {
                         const isChecked = entry.enabled ? 'checked' : '';
                         const $item = $(`<div class="pw-wi-item"><div class="pw-wi-item-row"><input type="checkbox" class="pw-wi-check" ${isChecked} data-content="${encodeURIComponent(entry.content)}"><div style="font-weight:bold; font-size:0.9em; flex:1;">${entry.displayName}</div><i class="fa-solid fa-eye pw-wi-toggle-icon"></i></div><div class="pw-wi-desc">${entry.content}<div class="pw-wi-close-bar"><i class="fa-solid fa-angle-up"></i> 收起</div></div></div>`);
+                        // [CSS Fix] 使用 class 切换状态
                         $item.find('.pw-wi-toggle-icon').on('click', function (e) {
                             e.stopPropagation();
                             const $desc = $(this).closest('.pw-wi-item').find('.pw-wi-desc');
-                            if ($desc.is(':visible')) { $desc.slideUp(); $(this).css('color', ''); } else { $desc.slideDown(); $(this).css('color', '#5b8db8'); }
+                            if ($desc.is(':visible')) { $desc.slideUp(); $(this).removeClass('active'); } else { $desc.slideDown(); $(this).addClass('active'); }
                         });
-                        $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').css('color', ''); });
+                        $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').removeClass('active'); });
                         $list.append($item);
                     });
                     $list.data('loaded', true);
@@ -1508,5 +1515,5 @@ jQuery(async () => {
     // injectStyles(); // Removed: Style injection handled by style.css file
     addPersonaButton(); // Try once immediately
     bindEvents(); // Standard event binding
-    console.log("[PW] Persona Weaver Loaded (v2.8 Split Files)");
+    console.log("[PW] Persona Weaver Loaded (v2.9 Google API Fixed + CSS Colors)");
 });
