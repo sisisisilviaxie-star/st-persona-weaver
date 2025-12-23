@@ -1,21 +1,3 @@
-主 API “没有反应”通常是因为 generateQuietPrompt 在新版酒馆中的行为差异，或者是因为之前代码中我也尝试去“优化”数据收集逻辑（collectContextData），导致传给主 API 的文本格式与你原本能跑通的逻辑不一致。
-
-既然你原本的代码逻辑是稳定可用的，我将严格回滚核心逻辑到你提供的版本：
-
-回滚 runGeneration：恢复你原本的 wiContext 处理逻辑（在函数内拼接数组），而不是我改写的 wiText。
-回滚 collectActiveWorldInfoContent：恢复原本的世界书收集逻辑。
-保留修复：保留了独立 API (Google) 必须用 user 角色的修复。
-保留样式：保留了 CSS 控制颜色的优化。
-请直接覆盖 index.js，这次应该能完美解决主 API 无响应的问题：
-
-code
-JavaScript
-
-download
-
-content_copy
-
-expand_less
 import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
