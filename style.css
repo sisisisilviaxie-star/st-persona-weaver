@@ -1,12 +1,12 @@
 /* =========================================
    Theme: Coffee Afternoon (咖啡色午后)
-   基于参考图：优雅、复古、日常、下午茶
+   Design: 优雅、复古、日常、下午茶风格
 ========================================= */
 
 .pw-wrapper {
-    /* --- 核心调色板 --- */
+    /* --- 核心调色板变量 --- */
     --pw-bg-color: #344038;           /* 深苔藓绿：整体背景 */
-    --pw-panel-bg: rgba(232, 228, 217, 0.05); /* 装饰块背景：极淡的米色透明 */
+    --pw-panel-bg: rgba(232, 228, 217, 0.05); /* 装饰块背景 */
     
     --pw-paper-bg: #E8E4D9;           /* 信纸米色：输入框背景 */
     --pw-paper-text: #4A3B32;         /* 咖啡深褐：输入框文字 */
@@ -24,22 +24,23 @@
     --pw-danger: #A65D57;             /* 豆沙红：删除/警告 */
     --pw-link: #8FB5C4;               /* 雾霾蓝：链接/次要高亮 */
 
-    /* --- 布局属性 --- */
+    /* --- 1. 容器与基础布局 --- */
     display: flex; flex-direction: column; height: 100%; max-height: 90vh;
     font-size: 14px; 
-    color: var(--pw-text-light); /* 默认文字颜色 */
-    background-color: var(--pw-bg-color); /* 强制覆盖酒馆背景 */
+    color: var(--pw-text-light);
+    background-color: var(--pw-bg-color); /* 覆盖默认背景 */
     position: relative;
     box-sizing: border-box; overflow: hidden;
     font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 
-/* 覆盖滚动条样式，使其融入主题 */
 .pw-scroll-area {
     flex-grow: 1; overflow-y: auto; padding-right: 5px;
     display: flex; flex-direction: column; gap: 8px;
     padding-bottom: 10px; min-height: 0;
 }
+
+/* 自定义滚动条 */
 .pw-scroll-area::-webkit-scrollbar { width: 6px; }
 .pw-scroll-area::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
 .pw-scroll-area::-webkit-scrollbar-thumb { background: var(--pw-accent-gold); border-radius: 3px; opacity: 0.5; }
@@ -57,8 +58,7 @@
     color: var(--pw-text-muted);
     transition: all 0.2s; white-space: nowrap; border: 1px solid transparent; border-bottom: none;
     display: flex; align-items: center; gap: 5px; font-size: 0.9em;
-    font-family: serif; /* 增加一点复古感 */
-    letter-spacing: 1px;
+    font-family: serif; letter-spacing: 1px;
 }
 .pw-tab:hover { color: var(--pw-text-light); background: rgba(255,255,255,0.05); }
 .pw-tab.active { 
@@ -78,7 +78,7 @@
     display: flex; align-items: center; gap: 10px; 
     background: rgba(0,0,0,0.2);
     padding: 8px; border-radius: 6px; 
-    border: 1px solid var(--pw-accent-gold); /* 金边 */
+    border: 1px solid var(--pw-accent-gold);
     margin-bottom: 5px;
 }
 .pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--pw-accent-gold); font-size: 1.05em; }
@@ -90,7 +90,7 @@
     background: transparent;
     border: 1px solid var(--pw-accent-gold);
     padding: 4px 12px;
-    border-radius: 20px; /* 圆角增加优雅感 */
+    border-radius: 20px;
     cursor: pointer;
     color: var(--pw-accent-gold);
     font-weight: bold;
@@ -106,9 +106,9 @@
 .pw-tags-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .pw-tag-chip {
     display: inline-flex; align-items: center; 
-    background: var(--pw-accent-brown); /* 咖啡色背景 */
+    background: var(--pw-accent-brown);
     color: var(--pw-text-light);
-    border: 1px solid var(--pw-accent-gold); /* 金边 */
+    border: 1px solid var(--pw-accent-gold);
     padding: 4px 10px; border-radius: 4px;
     font-size: 0.9em; cursor: pointer; transition: all 0.2s;
 }
@@ -123,7 +123,7 @@
 }
 .pw-template-textarea {
     width: 100%; height: 200px; font-family: monospace; font-size: 0.85em;
-    background: #252e28; color: #ccc; /* 编辑器保持深色代码风 */
+    background: #252e28; color: #ccc;
     border: none; resize: vertical; padding: 8px; white-space: pre; outline: none; box-sizing: border-box;
 }
 .pw-template-footer {
@@ -143,9 +143,9 @@
    4. 输入框与按钮 (信纸风格)
 ========================================= */
 .pw-input, .pw-textarea, .pw-select {
-    background-color: var(--pw-paper-bg) !important; /* 强制信纸色 */
+    background-color: var(--pw-paper-bg) !important;
     border: 1px solid var(--pw-paper-border) !important;
-    color: var(--pw-paper-text) !important; /* 强制深色文字 */
+    color: var(--pw-paper-text) !important;
     border-radius: 4px; padding: 8px;
     font-family: inherit; font-size: inherit; outline: none; box-sizing: border-box;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
@@ -160,7 +160,7 @@
 #pw-request { min-height: 200px; transition: min-height 0.3s ease; border-left: 4px solid var(--pw-accent-gold) !important; }
 #pw-request.minimized { min-height: 80px; height: 80px !important; }
 
-/* 按钮样式重构 */
+/* 按钮通用样式 */
 .pw-btn {
     display: flex; align-items: center; justify-content: center; gap: 6px;
     padding: 6px 12px; border-radius: 6px; 
@@ -170,7 +170,7 @@
 }
 .pw-btn:hover { background: rgba(196, 166, 111, 0.1); transform: translateY(-1px); }
 
-/* 生成按钮 - 特殊设计 */
+/* 生成按钮 (实心金) */
 .pw-btn.gen { 
     background: var(--pw-btn-primary-bg); 
     color: var(--pw-btn-primary-text);
@@ -180,16 +180,33 @@
 }
 .pw-btn.gen:hover { background: #d4b882; filter: none; }
 
-.pw-btn.save { border-color: #9ece6a; color: #9ece6a; }
-.pw-btn.save:hover { background: rgba(158, 206, 106, 0.1); }
+/* 覆盖当前人设 (金边) */
+.pw-btn.save { 
+    border-color: var(--pw-accent-gold); 
+    color: var(--pw-accent-gold); 
+}
+.pw-btn.save:hover { 
+    background: var(--pw-accent-gold); 
+    color: var(--pw-bg-color); 
+}
 
+/* 通用主按钮 */
 .pw-btn.primary { background: rgba(255,255,255,0.1); color: var(--pw-text-light); border-color: var(--pw-text-muted); }
 .pw-btn.primary:hover { border-color: var(--pw-accent-gold); color: var(--pw-accent-gold); }
 
+/* 危险按钮 (红) */
 .pw-btn.danger { border-color: var(--pw-danger); color: var(--pw-danger); }
 .pw-btn.danger:hover { background: rgba(166, 93, 87, 0.1); }
 
-.pw-btn.wi { border-color: var(--pw-link); color: var(--pw-link); }
+/* 保存至世界书 (灰褐) */
+.pw-btn.wi { 
+    border-color: #8C8475; 
+    color: #EBE8E1; 
+}
+.pw-btn.wi:hover {
+    border-color: var(--pw-accent-gold);
+    color: var(--pw-accent-gold);
+}
 
 .pw-mini-btn {
     font-size: 0.85em; opacity: 0.8; cursor: pointer; display: flex; align-items: center; gap: 4px;
@@ -205,21 +222,20 @@
 
 .pw-result-textarea {
     width: 100%; min-height: 450px;
-    background: var(--pw-paper-bg); /* 信纸色 */
+    background: var(--pw-paper-bg); 
     border: 1px solid var(--pw-accent-gold); border-bottom: none; border-radius: 6px 6px 0 0;
-    color: var(--pw-paper-text); /* 深色字 */
+    color: var(--pw-paper-text);
     padding: 15px;
     font-family: inherit; font-size: 1.0em; line-height: 1.6;
     resize: vertical; outline: none; white-space: pre-wrap; margin-bottom: 0;
     box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
-    /* 信纸横线效果 (可选) */
     background-image: repeating-linear-gradient(transparent, transparent 31px, rgba(0,0,0,0.05) 31px, rgba(0,0,0,0.05) 32px);
     background-attachment: local;
 }
 
 .pw-refine-toolbar {
     display: flex; flex-direction: row; gap: 0; align-items: stretch;
-    background: #3e4b43; /* 深一点的绿色 */
+    background: #3e4b43;
     border: 1px solid var(--pw-accent-gold); border-top: 1px solid rgba(0,0,0,0.1);
     border-radius: 0 0 6px 6px; margin-bottom: 5px; overflow: hidden;
 }
@@ -241,7 +257,6 @@
 .pw-refine-btn-vertical:hover { filter: brightness(1.1); }
 .pw-refine-btn-text { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 2px; }
 
-/* 悬浮修改按钮 */
 .pw-float-quote-btn {
     position: fixed; top: 20%; right: 0;
     background: var(--pw-accent-gold); color: var(--pw-btn-primary-text);
@@ -258,7 +273,7 @@
 ========================================= */
 .pw-diff-container {
     display: flex; flex-direction: column; gap: 0;
-    background: #1a1f1c; /* 很深的绿色 */
+    background: #1a1f1c; 
     padding: 0;
     position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000;
     box-sizing: border-box; color: #e0e0e0;
@@ -386,7 +401,7 @@
 /* 标签样式 */
 .pw-section-label { font-weight: bold; font-size: 1em; padding: 2px 4px; font-family: serif; letter-spacing: 0.5px; }
 .pw-label-gold { color: var(--pw-accent-gold); }
-.pw-label-blue { color: var(--pw-link); }
+.pw-label-blue { color: var(--pw-accent-gold); } /* 强制统一为金色 */
 
 /* 预览展开按钮/条 */
 .pw-preview-toggle-bar {
@@ -427,4 +442,48 @@
     border-radius: 0 0 4px 4px;
     margin-top: -1px;
     min-height: 60px;
+}
+
+/* =========================================
+   9. JS 动态元素的样式类 (替换 JS 内联样式)
+========================================= */
+
+/* 1. 世界书 - (已绑定) 文字 */
+.pw-bound-status {
+    color: var(--pw-accent-gold);
+    font-size: 0.8em;
+    margin-left: 5px;
+    font-weight: bold;
+}
+
+/* 2. 世界书 - 移除图标 (X) */
+.pw-remove-book-icon {
+    color: var(--pw-danger);
+    margin-right: 10px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+.pw-remove-book-icon:hover {
+    transform: scale(1.1);
+}
+
+/* 3. 顶部标题的魔杖图标 */
+.pw-title-icon {
+    color: var(--pw-accent-gold);
+    margin-right: 5px;
+}
+
+/* 4. 模版编辑状态 (用于替换 JS 里的 .css('color', ...)) */
+.pw-tags-edit-toggle.editing {
+    color: var(--pw-danger) !important;
+}
+
+/* 5. 世界书条目展开图标 (眼睛) */
+.pw-wi-toggle-icon {
+    color: var(--pw-text-muted);
+    cursor: pointer;
+    margin-left: 8px;
+}
+.pw-wi-toggle-icon.active {
+    color: var(--pw-link);
 }
