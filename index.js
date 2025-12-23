@@ -1,31 +1,29 @@
 /* =========================================
-   Theme: Native High Contrast (原生·百搭高对比)
-   Design: 放弃花哨配色，确保在任何主题下都绝对清晰
+   Theme: Native High Contrast (原生高对比)
+   Logic: 放弃所有自定义色相，完全跟随酒馆字色
+          通过 透明度 和 粗体 区分层级
 ========================================= */
 
 .pw-wrapper {
-    /* --- 核心变量：完全跟随酒馆定义 --- */
+    /* --- 核心变量：直接映射酒馆原生变量 --- */
     
-    /* 1. 核心文字：直接用酒馆的正文颜色，保证绝对能看清 */
+    /* 1. 核心文字：强制使用酒馆当前主题的文字颜色 */
     --pw-text-main: var(--smart-theme-body-color); 
     
-    /* 2. 次要文字：用正文颜色加透明度，而不是灰色，这样背景黑白都能用 */
+    /* 2. 次要文字：使用主文字色，但降低不透明度 (百搭方案) */
     --pw-text-muted: var(--smart-theme-body-color); 
-    /* 稍后在具体类里设置 opacity: 0.7 */
-
-    /* 3. 边框：跟随酒馆设定 */
+    
+    /* 3. 边框颜色：跟随酒馆设定 */
     --pw-border: var(--SmartThemeBorderColor);
     
-    /* 4. 背景：跟随酒馆输入框背景 (通常是半透明) */
-    --pw-bg-color: var(--smart-theme-bg, transparent); 
-    --pw-paper-bg: var(--smart-theme-input-bg, rgba(0, 0, 0, 0.2)); 
+    /* 4. 背景：使用半透明，让背景图透出来 */
+    --pw-bg-color: transparent; 
+    --pw-paper-bg: var(--smart-theme-input-bg, rgba(0, 0, 0, 0.05)); 
     
-    /* 5. 按钮/高亮：使用边框颜色作为主色，最稳妥 */
-    --pw-accent-color: var(--smart-theme-body-color); 
+    /* 5. 重点色：不再用金/蓝，而是直接用酒馆的强调色(通常是链接色) */
+    --pw-accent: var(--smart-theme-input-focus-border-color, var(--pw-text-main));
     
-    /* 6. 特殊状态 */
-    --pw-danger: #ff6b6b;  /* 仅保留删除红，通常在深浅色都可见 */
-    --pw-link: var(--smart-theme-body-color); /* 链接也用主色，加下划线区别 */
+    --pw-danger: #ff6b6b;  /* 仅保留红色用于警告 */
 
     /* --- 布局属性 --- */
     display: flex; flex-direction: column; height: 100%; max-height: 90vh;
@@ -47,7 +45,7 @@
 .pw-scroll-area::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); }
 .pw-scroll-area::-webkit-scrollbar-thumb { 
     background: var(--pw-text-main); 
-    opacity: 0.3;
+    opacity: 0.3; /* 滚动条半透明 */
     border-radius: 3px; 
 }
 
@@ -63,91 +61,87 @@
 .pw-title { 
     font-size: 1.2em; font-weight: bold; 
     display: flex; align-items: center; gap: 8px; 
-    color: var(--pw-text-main); /* 强制主色 */
+    color: var(--pw-text-main); /* 强制跟随主题 */
 }
 
 .pw-tabs { display: flex; flex-direction: row; gap: 5px; overflow-x: auto; }
 .pw-tab {
     padding: 6px 12px; cursor: pointer; border-radius: 6px 6px 0 0;
-    color: var(--pw-text-main); opacity: 0.6; /* 默认半透明 */
-    transition: all 0.2s; white-space: nowrap; 
+    opacity: 0.6; transition: all 0.2s; white-space: nowrap; 
     border: 1px solid transparent;
     display: flex; align-items: center; gap: 5px; font-size: 0.9em;
-    font-weight: bold;
+    color: var(--pw-text-main);
+    background: rgba(128,128,128,0.1);
 }
-.pw-tab:hover { opacity: 0.9; background: rgba(128,128,128,0.1); }
+.pw-tab:hover { opacity: 0.9; background: rgba(128,128,128,0.2); }
 .pw-tab.active { 
     opacity: 1; 
     background: var(--pw-paper-bg); 
-    border-bottom: 3px solid var(--pw-text-main); /* 用粗边框标识 */
-    font-weight: 900; 
+    border-bottom: 2px solid var(--pw-text-main); /* 下划线跟随字色 */
+    font-weight: bold; 
 }
 
 .pw-view { display: none; flex-grow: 1; overflow: hidden; flex-direction: column; height: 100%; width: 100%; }
 .pw-view.active { display: flex; }
 
 /* =========================================
-   3. 组件样式 (核心修改区：去色)
+   3. 组件样式 (解决这里看不清的问题)
 ========================================= */
 .pw-info-display {
     display: flex; align-items: center; gap: 10px; 
-    background: var(--pw-paper-bg);
+    background: rgba(128,128,128,0.1); /* 万能半透明底 */
     padding: 8px; border-radius: 6px; 
     border: 1px solid var(--pw-border); 
     margin-bottom: 5px;
 }
-/* 修改：图标和名字不再用金色，改用主色 */
+/* 解决：用户名颜色 */
 .pw-info-item { 
     display: flex; align-items: center; gap: 6px; 
     font-weight: bold; 
-    color: var(--pw-text-main); 
+    color: var(--pw-text-main); /* 强制主色 */
     font-size: 1.05em; 
 }
 #pw-display-name { 
-    color: var(--pw-text-main); 
-    border-bottom: 2px solid var(--pw-text-main); /* 下划线增强强调 */
+    text-decoration: underline; 
+    opacity: 0.9; 
 }
 
-/* 载入按钮：不再是金色，而是边框色 */
+/* 解决：载入按钮颜色 */
 .pw-load-btn {
     font-size: 0.85em;
     background: transparent;
-    border: 1px solid var(--pw-border);
+    border: 1px solid currentColor; /* 边框色 = 文字色 */
     padding: 4px 12px;
     border-radius: 4px;
     cursor: pointer;
-    color: var(--pw-text-main);
+    color: var(--pw-text-main); /* 强制主色 */
+    opacity: 0.8;
     font-weight: bold;
     margin-left: auto;
     display: inline-flex; align-items: center; transition: all 0.2s;
-    opacity: 0.8;
 }
 .pw-load-btn:hover { 
     opacity: 1;
-    background: var(--pw-text-main); 
-    color: var(--smart-theme-bg); /* 反色 */
+    background: rgba(128,128,128,0.2); 
 }
 
 .pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.pw-tags-label { font-weight: bold; opacity: 0.9; font-size: 0.85em; color: var(--pw-text-main); }
+.pw-tags-label { font-weight: bold; opacity: 0.8; font-size: 0.85em; color: var(--pw-text-main); }
 .pw-tags-edit-toggle { cursor: pointer; font-size: 0.8em; opacity: 0.7; text-decoration: underline; }
 
 .pw-tags-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .pw-tag-chip {
     display: inline-flex; align-items: center; 
-    background: var(--pw-paper-bg);
+    background: rgba(128, 128, 128, 0.15);
     border: 1px solid var(--pw-border); 
     padding: 4px 10px; border-radius: 6px;
     font-size: 0.9em; cursor: pointer; transition: all 0.2s;
     color: var(--pw-text-main);
-    font-weight: bold;
 }
 .pw-tag-chip:hover { 
-    filter: brightness(1.2);
-    border-color: var(--pw-text-main); 
+    background: rgba(128, 128, 128, 0.3); 
     transform: translateY(-1px); 
 }
-.pw-tag-chip i { opacity: 0.6; }
 
 /* 模版编辑器 */
 .pw-template-editor-area {
@@ -156,7 +150,7 @@
 }
 .pw-template-textarea {
     width: 100%; height: 200px; font-family: monospace; font-size: 0.85em;
-    background: transparent; 
+    background: transparent;
     color: var(--pw-text-main);
     border: none; resize: vertical; padding: 8px; white-space: pre; outline: none; box-sizing: border-box;
 }
@@ -169,22 +163,22 @@
 .pw-shortcut-btn {
     padding: 4px 8px; cursor: pointer; font-size: 0.85em;
     background: rgba(128,128,128,0.2); color: inherit; border-radius: 4px; border: 1px solid transparent;
-    transition: all 0.2s; font-family: monospace; opacity: 0.9;
+    transition: all 0.2s; font-family: monospace; opacity: 0.8;
 }
-.pw-shortcut-btn:hover { border-color: var(--pw-text-main); opacity: 1; }
+.pw-shortcut-btn:hover { opacity: 1; border-color: var(--pw-text-main); }
 
 /* =========================================
-   4. 输入框与按钮 (百搭款)
+   4. 输入框与按钮 (原生风格)
 ========================================= */
 .pw-input, .pw-textarea, .pw-select {
-    background-color: var(--pw-paper-bg) !important;
-    border: 1px solid var(--pw-border) !important;
-    color: var(--pw-text-main) !important; 
+    background-color: var(--pw-paper-bg);
+    border: 1px solid var(--pw-border);
+    color: var(--pw-text-main); 
     border-radius: 6px; padding: 8px;
     font-family: inherit; font-size: inherit; outline: none; box-sizing: border-box;
 }
 .pw-input:focus, .pw-textarea:focus, .pw-select:focus { 
-    border-color: var(--pw-text-main) !important; 
+    border-color: var(--pw-text-main); 
     box-shadow: 0 0 5px rgba(128,128,128,0.2);
 }
 .pw-textarea { resize: vertical; line-height: 1.5; }
@@ -197,17 +191,16 @@
     display: flex; align-items: center; justify-content: center; gap: 6px;
     padding: 6px 12px; border-radius: 6px; 
     border: 1px solid var(--pw-border);
-    background: var(--pw-paper-bg); 
+    background: rgba(128,128,128,0.1);
     color: var(--pw-text-main);
     cursor: pointer; font-weight: bold; width: auto; transition: all 0.2s; font-size: 0.95em;
-    opacity: 0.9;
 }
-.pw-btn:hover { opacity: 1; border-color: var(--pw-text-main); }
+.pw-btn:hover { background: rgba(128,128,128,0.25); filter: brightness(1.1); }
 
-/* 生成按钮 (最显眼) */
+/* 生成按钮 (实心，为了显眼) */
 .pw-btn.gen { 
     background: var(--pw-text-main); 
-    color: var(--smart-theme-bg); /* 按钮反色：黑底白字 或 白底黑字 */
+    color: var(--smart-theme-bg, #000); /* 文字颜色反转，保证对比 */
     border: none;
     width: 100%; margin-top: 5px;
 }
@@ -215,30 +208,30 @@
 
 /* 覆盖当前人设 */
 .pw-btn.save { 
-    border-color: var(--pw-text-main); 
+    border-color: var(--pw-text-main);
     color: var(--pw-text-main);
 }
-.pw-btn.save:hover { background: rgba(128,128,128,0.1); }
 
-/* 危险按钮 (红) */
+/* 危险按钮 */
 .pw-btn.danger { 
     border-color: var(--pw-danger); 
     color: var(--pw-danger); 
+    background: transparent;
 }
-.pw-btn.danger:hover { background: rgba(255,100,100,0.1); }
+.pw-btn.danger:hover { background: rgba(255, 107, 107, 0.1); }
 
 /* 保存至世界书 */
 .pw-btn.wi { 
-    border-color: var(--pw-border); 
-    color: var(--pw-text-main);
+    border-color: var(--pw-text-main); 
+    color: var(--pw-text-main); 
     opacity: 0.8;
 }
-.pw-btn.wi:hover { opacity: 1; border-color: var(--pw-text-main); }
+.pw-btn.wi:hover { opacity: 1; }
 
 .pw-mini-btn {
     font-size: 0.85em; opacity: 0.8; cursor: pointer; display: flex; align-items: center; gap: 4px;
     padding: 6px 10px; border-radius: 4px; border: 1px solid var(--pw-border);
-    background: transparent; color: var(--pw-text-main);
+    background: rgba(128,128,128,0.1); color: var(--pw-text-main);
 }
 .pw-mini-btn:hover { opacity: 1; border-color: var(--pw-text-main); }
 
@@ -272,23 +265,23 @@
 .pw-refine-input:focus { outline: none; background: rgba(128,128,128,0.05); }
 
 .pw-refine-btn-vertical {
-    width: 40px; cursor: pointer; opacity: 0.9;
-    background: transparent; 
+    width: 40px; cursor: pointer;
+    background: rgba(128,128,128,0.15); 
     border-left: 1px solid var(--pw-border);
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
     color: var(--pw-text-main); font-weight: bold; transition: all 0.2s; flex-shrink: 0;
 }
-.pw-refine-btn-vertical:hover { background: rgba(128,128,128,0.1); opacity: 1; }
+.pw-refine-btn-vertical:hover { background: rgba(128,128,128,0.3); }
 .pw-refine-btn-text { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 2px; }
 
 /* 悬浮修改按钮 */
 .pw-float-quote-btn {
     position: fixed; top: 20%; right: 0;
-    background: var(--pw-text-main); /* 反色按钮 */
-    color: var(--smart-theme-bg);
+    background: var(--pw-paper-bg); 
+    color: var(--pw-text-main);
     padding: 8px 12px; border-radius: 20px 0 0 20px;
     font-weight: bold; font-size: 0.85em;
-    box-shadow: -2px 2px 8px rgba(0,0,0,0.2); cursor: pointer; z-index: 9999;
+    box-shadow: -2px 2px 8px rgba(0,0,0,0.4); cursor: pointer; z-index: 9999;
     display: none; align-items: center; gap: 4px;
     border: 1px solid var(--pw-border); border-right: none;
     backdrop-filter: blur(5px);
@@ -300,7 +293,7 @@
 ========================================= */
 .pw-diff-container {
     display: flex; flex-direction: column; gap: 0;
-    background: var(--smart-theme-bg, #151515); 
+    background: var(--smart-theme-bg, #222); /* 跟随主题背景 */
     padding: 0;
     position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000;
     box-sizing: border-box; color: var(--pw-text-main);
@@ -313,16 +306,16 @@
 }
 .pw-diff-tab {
     padding: 8px 15px; cursor: pointer; border-radius: 6px 6px 0 0;
-    background: rgba(0,0,0,0.1); border: 1px solid transparent; border-bottom: none;
+    background: rgba(128,128,128,0.1); border: 1px solid transparent; border-bottom: none;
     opacity: 0.6; font-weight: bold; font-size: 0.95em; transition: all 0.2s;
     color: var(--pw-text-main);
 }
 .pw-diff-tab.active { 
     opacity: 1; 
-    background: var(--smart-theme-bg); 
+    background: transparent;
     color: var(--pw-text-main); 
     border-color: var(--pw-border); 
-    border-bottom: 2px solid var(--smart-theme-bg); 
+    border-bottom: 2px solid var(--pw-text-main); 
     margin-bottom: -1px; 
 }
 
@@ -331,7 +324,7 @@
 .pw-diff-raw-view { display: none; flex-direction: column; height: 100%; }
 .pw-diff-raw-textarea {
     flex: 1; width: 100%; 
-    background: var(--pw-paper-bg); 
+    background: rgba(0,0,0,0.1); 
     color: var(--pw-text-main);
     border: 1px solid var(--pw-border); border-radius: 6px; padding: 10px;
     font-family: monospace; resize: none; outline: none; font-size: 0.9em; line-height: 1.5;
@@ -351,13 +344,13 @@
 }
 .pw-diff-cards { display: flex; gap: 10px; }
 .pw-diff-card { flex: 1; display: flex; flex-direction: column; border: 2px solid transparent; border-radius: 6px; background: rgba(128,128,128,0.1); overflow: hidden; transition: all 0.2s; cursor: pointer; opacity: 0.6; position: relative; }
-.pw-diff-card.selected { border-color: var(--pw-text-main); opacity: 1; background: var(--pw-paper-bg); }
+.pw-diff-card.selected { border-color: var(--pw-text-main); opacity: 1; background: rgba(128,128,128,0.2); }
 .pw-diff-card:not(.selected):hover { opacity: 0.8; }
-.pw-diff-label { font-size: 0.75em; padding: 4px 8px; background: rgba(128,128,128,0.2); color: var(--pw-text-main); text-transform: uppercase; font-weight: bold; }
-.pw-diff-card.selected .pw-diff-label { color: var(--pw-text-main); background: rgba(128,128,128,0.1); }
+.pw-diff-label { font-size: 0.75em; padding: 4px 8px; background: rgba(0,0,0,0.2); color: inherit; text-transform: uppercase; font-weight: bold; }
+.pw-diff-card.selected .pw-diff-label { color: var(--pw-text-main); background: rgba(128,128,128,0.3); }
 .pw-diff-textarea { flex: 1; width: 100%; background: transparent; border: none; color: var(--pw-text-main); padding: 8px; font-family: inherit; font-size: 0.95em; resize: none; outline: none; line-height: 1.5; min-height: 80px; box-sizing: border-box; }
 .pw-diff-card:not(.selected) .pw-diff-textarea { opacity: 0.5; pointer-events: none; }
-.pw-diff-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 10px; border-top: 1px solid var(--pw-border); flex-shrink: 0; background: var(--smart-theme-bg); }
+.pw-diff-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 10px; border-top: 1px solid var(--pw-border); flex-shrink: 0; background: var(--smart-theme-bg, #222); }
 
 @media screen and (max-width: 600px) {
     .pw-diff-cards { flex-direction: column; }
@@ -385,7 +378,7 @@
 
 .pw-tab-sub { display: block; font-size: 0.75em; opacity: 0.6; font-weight: normal; margin-top: 2px; text-align: center; }
 .pw-diff-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
-.pw-header-subtitle { font-size: 0.65em; opacity: 0.7; font-weight: normal; margin-left: 10px; color: var(--pw-text-main); }
+.pw-header-subtitle { font-size: 0.65em; opacity: 0.6; font-weight: normal; margin-left: 10px; color: var(--pw-text-main); }
 
 /* =========================================
    8. API & Prompt & History
@@ -393,20 +386,27 @@
 .pw-prompt-editor-block { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--pw-border); }
 .pw-prompt-label { font-weight: bold; margin-bottom: 5px; display: block; color: var(--pw-text-main); }
 .pw-var-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 5px; }
-.pw-var-btn { font-size: 0.8em; padding: 2px 6px; border: 1px solid var(--pw-border); border-radius: 4px; cursor: pointer; opacity: 0.8; color: var(--pw-text-main); }
-.pw-var-btn:hover { opacity: 1; border-color: var(--pw-text-main); font-weight: bold; }
+.pw-var-btn { font-size: 0.8em; padding: 2px 6px; border: 1px solid var(--pw-border); border-radius: 4px; cursor: pointer; opacity: 0.7; color: var(--pw-text-main); }
+.pw-var-btn:hover { opacity: 1; border-color: var(--pw-text-main); background: rgba(128,128,128,0.2); }
 
 /* History Section */
 .pw-hist-header { display: flex; align-items: center; justify-content: space-between; gap: 5px; }
-/* 历史记录标题：去色，改用加粗 */
-.pw-hist-title-display { font-weight: 900; color: var(--pw-text-main); font-size: 1.0em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-.pw-hist-title-input { background: var(--pw-paper-bg); border: 1px solid var(--pw-border); color: inherit; font-size: 1.0em; padding: 2px 4px; border-radius: 3px; width: 100%; }
+
+/* 解决：历史记录标题颜色 */
+.pw-hist-title-display { 
+    font-weight: bold; 
+    color: var(--pw-text-main); /* 强制主色 */
+    font-size: 1.0em; 
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; 
+}
+
+.pw-hist-title-input { background: rgba(0,0,0,0.1); border: 1px solid var(--pw-text-main); color: inherit; font-size: 1.0em; padding: 2px 4px; border-radius: 3px; width: 100%; }
 .pw-hist-action-btn { opacity: 0.5; cursor: pointer; padding: 2px 5px; font-size: 0.85em; color: var(--pw-text-main); }
-.pw-hist-action-btn:hover { opacity: 1; }
+.pw-hist-action-btn:hover { opacity: 1; color: var(--pw-text-main); font-weight: bold; }
 .pw-hist-action-btn.del:hover { color: var(--pw-danger); }
 
 .pw-card-section { 
-    background: var(--pw-paper-bg); 
+    background: rgba(128, 128, 128, 0.1); 
     border: 1px solid var(--pw-border); 
     border-radius: 8px; padding: 10px; 
     display: flex; flex-direction: column; gap: 8px; 
@@ -423,7 +423,7 @@
 .pw-wi-check { transform: scale(1.1); cursor: pointer; }
 .pw-wi-close-bar { text-align: center; font-size: 0.8em; opacity: 0.6; cursor: pointer; margin-top: 3px; color: var(--pw-text-main); }
 
-.pw-search-box { position: relative; display: flex; align-items: center; margin-bottom: 10px; background: var(--pw-paper-bg); border-radius: 6px; border: 1px solid var(--pw-border); }
+.pw-search-box { position: relative; display: flex; align-items: center; margin-bottom: 10px; background: rgba(128,128,128,0.1); border-radius: 6px; border: 1px solid var(--pw-border); }
 .pw-search-icon { position: absolute; left: 10px; opacity: 0.5; pointer-events: none; color: var(--pw-text-main); }
 .pw-search-input { width: 100%; padding-left: 32px !important; padding-right: 30px; border: none; background: transparent; color: var(--pw-text-main); }
 .pw-search-clear { position: absolute; right: 10px; opacity: 0.5; cursor: pointer; z-index: 2; color: var(--pw-text-main); }
@@ -447,14 +447,20 @@
 .pw-context-header { padding: 10px; background: rgba(128,128,128,0.1); cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; user-select: none; }
 .pw-context-header:hover { background: rgba(128,128,128,0.2); }
 
-/* 标签样式：不再区分金色蓝色，统一用粗体+主色 */
-.pw-section-label { font-weight: 900; font-size: 1.05em; padding: 2px 4px; color: var(--pw-text-main) !important; opacity: 0.9; }
-.pw-label-gold { color: inherit !important; }
-.pw-label-blue { color: inherit !important; }
+/* 标签样式 (解决：金色蓝色看不清) */
+.pw-section-label { font-weight: bold; font-size: 1em; padding: 2px 4px; }
+.pw-label-gold { 
+    color: var(--pw-text-main) !important; /* 强制主色 */
+    opacity: 0.9;
+}
+.pw-label-blue { 
+    color: var(--pw-text-main) !important; /* 强制主色 */
+    opacity: 0.7;
+}
 
 /* 预览展开按钮/条 */
 .pw-preview-toggle-bar {
-    background: rgba(128,128,128,0.2); 
+    background: rgba(128,128,128,0.1); 
     color: var(--pw-text-main);
     font-size: 0.85em;
     text-align: center;
@@ -467,12 +473,12 @@
     user-select: none;
     font-weight: bold;
 }
-.pw-preview-toggle-bar:hover { background: rgba(128,128,128,0.3); }
+.pw-preview-toggle-bar:hover { background: rgba(128,128,128,0.2); }
 
 /* 文字预览框 */
 .pw-wi-desc, #pw-greetings-preview {
     display: none;
-    background: rgba(128, 128, 128, 0.1) !important; 
+    background: rgba(128,128,128,0.1) !important; 
     color: var(--pw-text-main) !important; 
     border: 1px solid var(--pw-border);
     border-radius: 4px;
@@ -493,13 +499,13 @@
 }
 
 /* =========================================
-   9. JS 动态元素的样式类 (关键修改：去色)
+   9. JS 动态元素的样式类 (替换 JS 内联样式)
 ========================================= */
 
-/* 1. 世界书 - (已绑定) 文字 */
+/* 1. 世界书 - (已绑定) 文字 (解决：颜色问题) */
 .pw-bound-status {
-    color: var(--pw-text-main); /* 强制主色 */
-    opacity: 0.6; /* 用透明度表示状态 */
+    color: var(--pw-text-main) !important; /* 强制主色 */
+    opacity: 0.6; /* 降低不透明度来区分 */
     font-size: 0.8em;
     margin-left: 5px;
     font-weight: bold;
@@ -507,12 +513,14 @@
 
 /* 2. 世界书 - 移除图标 (X) */
 .pw-remove-book-icon {
-    color: var(--pw-danger); /* 红色 */
+    color: var(--pw-danger); 
     margin-right: 10px;
     cursor: pointer;
     transition: transform 0.2s;
 }
-.pw-remove-book-icon:hover { transform: scale(1.1); }
+.pw-remove-book-icon:hover {
+    transform: scale(1.1);
+}
 
 /* 3. 顶部标题的魔杖图标 */
 .pw-title-icon {
@@ -520,7 +528,7 @@
     margin-right: 5px;
 }
 
-/* 4. 模版编辑状态 */
+/* 4. 模版编辑状态 (用于替换 JS 里的 .css('color', ...)) */
 .pw-tags-edit-toggle.editing {
     color: var(--pw-danger) !important;
 }
