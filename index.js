@@ -134,8 +134,8 @@ const defaultSettings = {
 };
 
 const TEXT = {
-    // 移除了内联样式，改用 class
-    PANEL_TITLE: `<span class="pw-icon-accent"><i class="fa-solid fa-wand-magic-sparkles"></i></span>User人设生成器`,
+    // [修改] 移除了内联 style，改用 class="pw-title-icon"
+    PANEL_TITLE: `<span class="pw-title-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></span>User人设生成器`,
     BTN_TITLE: "打开设定生成器",
     TOAST_SAVE_SUCCESS: (name) => `Persona "${name}" 已保存并覆盖！`,
     TOAST_WI_SUCCESS: (book) => `已写入世界书: ${book}`,
@@ -622,7 +622,7 @@ async function openCreatorPopup() {
                 <div class="pw-tags-container" id="pw-template-chips"></div>
                 
                 <div class="pw-template-editor-area" id="pw-template-editor">
-                    <div class="pw-template-footer pw-template-footer-no-top-border">
+                    <div class="pw-template-footer" style="border-top:none; border-bottom:1px solid var(--SmartThemeBorderColor); border-radius:6px 6px 0 0;">
                         <div class="pw-shortcut-bar">
                             <div class="pw-shortcut-btn" data-key="  "><span>缩进</span><span class="code">Tab</span></div>
                             <div class="pw-shortcut-btn" data-key=": "><span>冒号</span><span class="code">:</span></div>
@@ -638,9 +638,9 @@ async function openCreatorPopup() {
             <textarea id="pw-request" class="pw-textarea pw-auto-height" placeholder="在此输入要求，或点击上方模版块插入...">${savedState.request || ''}</textarea>
             <button id="pw-btn-gen" class="pw-btn gen">生成设定</button>
 
-            <div id="pw-result-area" class="pw-result-area-container">
+            <div id="pw-result-area" style="display:none; margin-top:15px;">
                 <div class="pw-relative-container">
-                    <textarea id="pw-result-text" class="pw-result-textarea pw-result-textarea-default pw-auto-height" placeholder="生成的结果将显示在这里..."></textarea>
+                    <textarea id="pw-result-text" class="pw-result-textarea pw-auto-height" placeholder="生成的结果将显示在这里..." style="min-height: 200px;"></textarea>
                 </div>
                 
                 <div class="pw-refine-toolbar">
@@ -659,7 +659,7 @@ async function openCreatorPopup() {
                 <div class="pw-compact-btn" id="pw-copy-persona" title="复制内容"><i class="fa-solid fa-copy"></i></div>
                 <div class="pw-compact-btn" id="pw-snapshot" title="保存草稿"><i class="fa-solid fa-save"></i></div>
             </div>
-            <div class="pw-footer-group pw-footer-right-group">
+            <div class="pw-footer-group" style="flex:1; justify-content:flex-end; gap: 8px;">
                 <button class="pw-btn wi" id="pw-btn-save-wi">保存至世界书</button>
                 <button class="pw-btn save" id="pw-btn-apply">覆盖当前人设</button>
             </div>
@@ -678,7 +678,7 @@ async function openCreatorPopup() {
         
         <div class="pw-diff-content-area">
             <div id="pw-diff-list-view" class="pw-diff-list-view">
-                <div id="pw-diff-list" class="pw-diff-list"></div>
+                <div id="pw-diff-list" style="display:flex; flex-direction:column; gap:10px;"></div>
             </div>
             <div id="pw-diff-raw-view" class="pw-diff-raw-view">
                 <textarea id="pw-diff-raw-textarea" class="pw-diff-raw-textarea" spellcheck="false"></textarea>
@@ -737,14 +737,14 @@ async function openCreatorPopup() {
         <div class="pw-scroll-area">
             <div class="pw-card-section">
                 <div class="pw-row"><label>API 来源</label><select id="pw-api-source" class="pw-input" style="flex:1;"><option value="main" ${config.apiSource === 'main' ? 'selected' : ''}>主 API</option><option value="independent" ${config.apiSource === 'independent' ? 'selected' : ''}>独立 API</option></select></div>
-                <div id="pw-indep-settings" class="pw-indep-container" style="display:${config.apiSource === 'independent' ? 'flex' : 'none'};">
+                <div id="pw-indep-settings" style="display:${config.apiSource === 'independent' ? 'flex' : 'none'}; flex-direction:column; gap:15px;">
                     <div class="pw-row"><label>URL</label><input type="text" id="pw-api-url" class="pw-input" value="${config.indepApiUrl}" style="flex:1;" placeholder="http://.../v1"></div>
                     <div class="pw-row"><label>Key</label><input type="password" id="pw-api-key" class="pw-input" value="${config.indepApiKey}" style="flex:1;"></div>
                     <div class="pw-row"><label>Model</label>
-                        <div class="pw-api-group">
+                        <div style="flex:1; display:flex; gap:5px; width:100%; min-width: 0;">
                             <select id="pw-api-model-select" class="pw-select" style="flex:1;"><option value="${config.indepApiModel}">${config.indepApiModel}</option></select>
-                            <button id="pw-api-fetch" class="pw-btn primary pw-api-fetch-btn" title="刷新模型列表"><i class="fa-solid fa-sync"></i></button>
-                            <button id="pw-api-test" class="pw-btn primary pw-api-test-btn" title="测试连接"><i class="fa-solid fa-plug"></i></button>
+                            <button id="pw-api-fetch" class="pw-btn primary pw-api-fetch-btn" title="刷新模型列表" style="width:auto;"><i class="fa-solid fa-sync"></i></button>
+                            <button id="pw-api-test" class="pw-btn primary" style="width:auto;" title="测试连接"><i class="fa-solid fa-plug"></i></button>
                         </div>
                     </div>
                 </div>
@@ -756,8 +756,8 @@ async function openCreatorPopup() {
                     <span><i class="fa-solid fa-terminal"></i> Prompt 查看与编辑</span>
                     <i class="fa-solid fa-chevron-down arrow"></i>
                 </div>
-                <div id="pw-prompt-container" class="pw-context-body">
-                    <div class="pw-row"><span class="pw-prompt-label">人设初始生成指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-initial" style="font-size:0.7em;">恢复默认</button></div>
+                <div id="pw-prompt-container" style="display:none; padding-top:10px;">
+                    <div style="display:flex; justify-content:space-between;"><span class="pw-prompt-label">人设初始生成指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-initial" style="font-size:0.7em;">恢复默认</button></div>
                     <div class="pw-var-btns">
                         <div class="pw-var-btn" data-ins="{{user}}"><span>User名</span><span class="code">{{user}}</span></div>
                         <div class="pw-var-btn" data-ins="{{char}}"><span>Char名</span><span class="code">{{char}}</span></div>
@@ -767,10 +767,10 @@ async function openCreatorPopup() {
                         <div class="pw-var-btn" data-ins="{{input}}"><span>用户要求</span><span class="code">{{input}}</span></div>
                         <div class="pw-var-btn" data-ins="{{wi}}"><span>世界书内容</span><span class="code">{{wi}}</span></div>
                     </div>
-                    <textarea id="pw-prompt-initial" class="pw-textarea pw-auto-height pw-prompt-box">${promptsCache.initial}</textarea>
+                    <textarea id="pw-prompt-initial" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;">${promptsCache.initial}</textarea>
                     
-                    <div class="pw-prompt-header-container"><span class="pw-prompt-label">人设润色指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-refine" style="font-size:0.7em;">恢复默认</button></div>
-                    
+                    <div style="display:flex; justify-content:space-between; margin-top:15px;"><span class="pw-prompt-label">人设润色指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-refine" style="font-size:0.7em;">恢复默认</button></div>
+                    <!-- [Updated] Added missing buttons for refine -->
                     <div class="pw-var-btns">
                         <div class="pw-var-btn" data-ins="{{char}}"><span>Char名</span><span class="code">{{char}}</span></div>
                         <div class="pw-var-btn" data-ins="{{charInfo}}"><span>角色设定</span><span class="code">{{charInfo}}</span></div>
@@ -780,8 +780,8 @@ async function openCreatorPopup() {
                         <div class="pw-var-btn" data-ins="{{current}}"><span>当前文本</span><span class="code">{{current}}</span></div>
                         <div class="pw-var-btn" data-ins="{{input}}"><span>润色意见</span><span class="code">{{input}}</span></div>
                     </div>
-                    <textarea id="pw-prompt-refine" class="pw-textarea pw-auto-height pw-prompt-box">${promptsCache.refine}</textarea>
-                    <div class="pw-prompt-actions-right"><button id="pw-api-save" class="pw-btn primary" style="width:100%;">保存 Prompts</button></div>
+                    <textarea id="pw-prompt-refine" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;">${promptsCache.refine}</textarea>
+                    <div style="text-align:right; margin-top:5px;"><button id="pw-api-save" class="pw-btn primary" style="width:100%;">保存 Prompts</button></div>
                 </div>
             </div>
         </div>
@@ -887,18 +887,18 @@ function bindEvents() {
     });
 
     // --- Template Editing ---
+    // [修改] 移除了 .css('color', ...) 改用 .addClass('editing') 和 .removeClass('editing')
     $(document).on('click.pw', '#pw-toggle-edit-template', () => {
         isEditingTemplate = !isEditingTemplate;
         if (isEditingTemplate) {
             $('#pw-template-text').val(currentTemplate);
             $('#pw-template-chips').hide();
             $('#pw-template-editor').css('display', 'flex');
-            // CSS 类名控制颜色
-            $('#pw-toggle-edit-template').text("取消编辑").addClass('is-editing');
+            $('#pw-toggle-edit-template').text("取消编辑").addClass('editing');
         } else {
             $('#pw-template-editor').hide();
             $('#pw-template-chips').css('display', 'flex');
-            $('#pw-toggle-edit-template').text("编辑模版").removeClass('is-editing');
+            $('#pw-toggle-edit-template').text("编辑模版").removeClass('editing');
         }
     });
 
@@ -910,7 +910,7 @@ function bindEvents() {
         isEditingTemplate = false;
         $('#pw-template-editor').hide();
         $('#pw-template-chips').css('display', 'flex');
-        $('#pw-toggle-edit-template').text("编辑模版").removeClass('is-editing');
+        $('#pw-toggle-edit-template').text("编辑模版").removeClass('editing');
         toastr.success("模版已更新");
     });
 
@@ -1374,8 +1374,7 @@ const renderTemplateChips = () => {
     const $container = $('#pw-template-chips').empty();
     const blocks = parseYamlToBlocks(currentTemplate);
     blocks.forEach((content, key) => {
-        // 图标颜色使用 CSS 类控制
-        const $chip = $(`<div class="pw-tag-chip"><i class="fa-solid fa-cube pw-text-muted" style="margin-right:4px;"></i><span>${key}</span></div>`);
+        const $chip = $(`<div class="pw-tag-chip"><i class="fa-solid fa-cube" style="opacity:0.5; margin-right:4px;"></i><span>${key}</span></div>`);
         $chip.on('click', () => {
             const $text = $('#pw-request');
             const cur = $text.val();
@@ -1407,7 +1406,7 @@ const renderHistoryList = () => {
         return title.includes(search) || content.includes(search);
     });
     
-    if (filtered.length === 0) { $list.html('<div class="pw-history-empty">暂无草稿</div>'); return; }
+    if (filtered.length === 0) { $list.html('<div style="text-align:center; opacity:0.6; padding:20px;">暂无草稿</div>'); return; }
 
     filtered.forEach((item, index) => {
         const previewText = item.data.resultText || '无内容';
@@ -1418,7 +1417,7 @@ const renderHistoryList = () => {
             <div class="pw-hist-main">
                 <div class="pw-hist-header">
                     <span class="pw-hist-title-display">${displayTitle}</span>
-                    <input type="text" class="pw-hist-title-input" value="${displayTitle}">
+                    <input type="text" class="pw-hist-title-input" value="${displayTitle}" style="display:none;">
                     <div style="display:flex; gap:5px;">
                         <i class="fa-solid fa-pen pw-hist-action-btn edit" title="编辑标题"></i>
                         <i class="fa-solid fa-trash pw-hist-action-btn del" data-index="${index}" title="删除"></i>
@@ -1454,14 +1453,8 @@ const renderWiBooks = async () => {
     if (allBooks.length === 0) { container.html('<div style="opacity:0.6; padding:10px; text-align:center;">此角色未绑定世界书，请在“世界书”标签页手动添加或在酒馆主界面绑定。</div>'); return; }
     for (const book of allBooks) {
         const isBound = baseBooks.includes(book);
-        const $el = $(`
-        <div class="pw-wi-book">
-            <div class="pw-wi-header">
-                <span><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span class="pw-wi-bound-text">(已绑定)</span>' : ''}</span>
-                <div>${!isBound ? '<i class="fa-solid fa-times remove-book pw-wi-remove-icon" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div>
-            </div>
-            <div class="pw-wi-list" data-book="${book}"></div>
-        </div>`);
+        // [修改] 移除了内联样式，改用 class="pw-bound-status" 和 class="pw-remove-book-icon"
+        const $el = $(`<div class="pw-wi-book"><div class="pw-wi-header"><span><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span class="pw-bound-status">(已绑定)</span>' : ''}</span><div>${!isBound ? '<i class="fa-solid fa-times remove-book pw-remove-book-icon" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div></div><div class="pw-wi-list" data-book="${book}"></div></div>`);
         $el.find('.remove-book').on('click', (e) => { e.stopPropagation(); window.pwExtraBooks = window.pwExtraBooks.filter(b => b !== book); renderWiBooks(); });
         $el.find('.pw-wi-header').on('click', async function () {
             const $list = $el.find('.pw-wi-list');
@@ -1470,20 +1463,20 @@ const renderWiBooks = async () => {
             else {
                 $list.slideDown(); $arrow.addClass('fa-flip-vertical');
                 if (!$list.data('loaded')) {
-                    $list.html('<div class="pw-loading-container"><i class="fas fa-spinner fa-spin"></i></div>');
+                    $list.html('<div style="padding:10px;text-align:center;"><i class="fas fa-spinner fa-spin"></i></div>');
                     const entries = await getWorldBookEntries(book);
                     $list.empty();
                     if (entries.length === 0) $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
                     entries.forEach(entry => {
                         const isChecked = entry.enabled ? 'checked' : '';
                         const $item = $(`<div class="pw-wi-item"><div class="pw-wi-item-row"><input type="checkbox" class="pw-wi-check" ${isChecked} data-content="${encodeURIComponent(entry.content)}"><div style="font-weight:bold; font-size:0.9em; flex:1;">${entry.displayName}</div><i class="fa-solid fa-eye pw-wi-toggle-icon"></i></div><div class="pw-wi-desc">${entry.content}<div class="pw-wi-close-bar"><i class="fa-solid fa-angle-up"></i> 收起</div></div></div>`);
+                        // [修改] 移除了 .css('color', ...) 改用 .addClass('active') 和 .removeClass('active')
                         $item.find('.pw-wi-toggle-icon').on('click', function (e) {
                             e.stopPropagation();
                             const $desc = $(this).closest('.pw-wi-item').find('.pw-wi-desc');
-                            // 使用类名切换颜色状态，而非 css()
-                            if ($desc.is(':visible')) { $desc.slideUp(); $(this).removeClass('pw-color-selected'); } else { $desc.slideDown(); $(this).addClass('pw-color-selected'); }
+                            if ($desc.is(':visible')) { $desc.slideUp(); $(this).removeClass('active'); } else { $desc.slideDown(); $(this).addClass('active'); }
                         });
-                        $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').removeClass('pw-color-selected'); });
+                        $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').removeClass('active'); });
                         $list.append($item);
                     });
                     $list.data('loaded', true);
@@ -1519,5 +1512,5 @@ jQuery(async () => {
     // injectStyles(); // Removed: Style injection handled by style.css file
     addPersonaButton(); // Try once immediately
     bindEvents(); // Standard event binding
-    console.log("[PW] Persona Weaver Loaded (v2.8 Split Files - Cleaned)");
+    console.log("[PW] Persona Weaver Loaded (v2.8 Split Files - CSS Controlled Colors)");
 });
