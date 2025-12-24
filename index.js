@@ -162,7 +162,6 @@ let currentGreetingsList = [];
 const yieldToBrowser = () => new Promise(resolve => requestAnimationFrame(resolve));
 const forcePaint = () => new Promise(resolve => setTimeout(resolve, 50));
 
-// [修复版] 获取角色信息，强制截断以防止 API 报错
 function getCharacterInfoText() {
     const context = getContext();
     const charId = context.characterId;
@@ -173,8 +172,7 @@ function getCharacterInfoText() {
 
     const parts = [];
     
-    // --- [核心修复] 强制长度限制 ---
-    // 每个字段最多读取 1500 字，防止撑爆上下文
+    // 强制截断长度，防止 API 报错
     const MAX_FIELD_LENGTH = 1500; 
 
     if (data.description) {
@@ -315,7 +313,6 @@ async function collectContextData() {
     let wiContent = [];
     let greetingsContent = "";
 
-    // 1. 收集世界书
     try {
         const boundBooks = await getContextWorldBooks();
         const manualBooks = window.pwExtraBooks || [];
@@ -333,7 +330,6 @@ async function collectContextData() {
         }
     } catch (e) { console.warn(e); }
 
-    // 2. 收集开场白
     const selectedIdx = $('#pw-greetings-select').val();
     if (selectedIdx !== "" && selectedIdx !== null && currentGreetingsList[selectedIdx]) {
         greetingsContent = currentGreetingsList[selectedIdx].content;
@@ -507,7 +503,7 @@ async function getWorldBookEntries(bookName) {
     return [];
 }
 
-// [Updated] Generation Logic - 终极健壮版 (截断+User角色+破限+详细报错)
+// [Updated] Generation Logic - 全局破限 & 健壮错误处理
 async function runGeneration(data, apiConfig) {
     const context = getContext();
     const charId = context.characterId;
@@ -516,21 +512,19 @@ async function runGeneration(data, apiConfig) {
 
     if (!promptsCache || !promptsCache.initial) loadData(); 
 
-    // 使用截断版的 getCharacterInfoText
     const charInfoText = getCharacterInfoText();
 
     let systemTemplate = promptsCache.initial;
     if (data.mode === 'refine') systemTemplate = promptsCache.refine;
 
-    // 获取酒馆破限预设 (Main API)
+    // --- [Request 1 Fix] 全局获取酒馆破限预设 (Jailbreak) ---
+    // 不再判断 if (apiSource === 'main')，无论什么源都尝试读取
     let activeJailbreak = "";
     try {
-        if (apiConfig.apiSource === 'main') {
-            const settings = context.chatCompletionSettings;
-            if (settings && settings.jailbreak_toggle && settings.jailbreak_prompt) {
-                activeJailbreak = settings.jailbreak_prompt;
-                console.log("[PW] 已注入酒馆当前破限预设");
-            }
+        const settings = context.chatCompletionSettings;
+        if (settings && settings.jailbreak_toggle && settings.jailbreak_prompt) {
+            activeJailbreak = settings.jailbreak_prompt;
+            console.log("[PW] 已注入酒馆当前破限预设 (Jailbreak Active)");
         }
     } catch (e) { console.warn("[PW] 获取破限失败:", e); }
 
@@ -573,7 +567,6 @@ async function runGeneration(data, apiConfig) {
             let json;
             try { json = JSON.parse(text); } catch (e) { throw new Error(`API 返回非 JSON: ${text.slice(0, 100)}...`); }
             
-            // 优先检查 API 自身返回的错误信息
             if (json.error) {
                 const errMsg = json.error.message || JSON.stringify(json.error);
                 throw new Error(`API 拒绝生成: ${errMsg}`);
@@ -623,7 +616,7 @@ async function runGeneration(data, apiConfig) {
         }
     } catch (e) {
         console.error("[PW] 生成过程中捕获错误:", e);
-        throw e; // 抛出错误以便 UI 显示 Toast
+        throw e;
     } finally { 
         clearTimeout(timeoutId); 
     }
@@ -637,7 +630,7 @@ async function runGeneration(data, apiConfig) {
 }
 
 // ============================================================================
-// 3. UI 渲染 logic
+// 3. UI 渲染 logic (包含 Request 2: CSS 修复 和 Request 3: 新 Tab)
 // ============================================================================
 
 async function openCreatorPopup() {
@@ -671,7 +664,43 @@ async function openCreatorPopup() {
     const charName = getContext().characters[getContext().characterId]?.name || "None";
     const headerTitle = `${TEXT.PANEL_TITLE}<span class="pw-header-subtitle">User: ${currentName} & Char: ${charName}</span>`;
 
+    // [Request 2 Fix] 注入 CSS 强制修复润色对比界面的可见性
+    // 使用 var(--SmartThemeBodyColor) 保证文字颜色正确
+    // 给 .pw-diff-card 加上强制的背景色和边框颜色，确保在深色/浅色模式下都能看到
+    const forcedStyles = `
+    <style>
+        .pw-diff-card {
+            color: var(--SmartThemeBodyColor) !important;
+            border: 1px solid var(--SmartThemeBorderColor) !important;
+        }
+        .pw-diff-card.old {
+            background-color: rgba(180, 50, 50, 0.15) !important;
+            border-left: 3px solid rgba(180, 50, 50, 0.6) !important;
+        }
+        .pw-diff-card.new {
+            background-color: rgba(50, 180, 50, 0.15) !important;
+            border-left: 3px solid rgba(50, 180, 50, 0.6) !important;
+        }
+        .pw-diff-card.selected {
+            box-shadow: 0 0 5px var(--SmartThemeBodyColor) !important;
+            opacity: 1 !important;
+        }
+        .pw-diff-label {
+            color: var(--SmartThemeBodyColor) !important;
+            opacity: 0.7;
+            font-weight: bold;
+        }
+        /* 强制 Textarea 背景透明，文字跟随 */
+        .pw-diff-textarea {
+            background: transparent !important;
+            color: var(--SmartThemeBodyColor) !important;
+            border: none !important;
+        }
+    </style>
+    `;
+
     const html = `
+${forcedStyles}
 <div class="pw-wrapper">
     <div class="pw-header">
         <div class="pw-top-bar"><div class="pw-title">${headerTitle}</div></div>
@@ -744,6 +773,7 @@ async function openCreatorPopup() {
         </div>
     </div>
 
+    <!-- [Request 3 Fix] 增加 "原版原文" Tab -->
     <div id="pw-diff-overlay" class="pw-diff-container" style="display:none;">
         <div class="pw-diff-tabs-bar">
             <div class="pw-diff-tab active" data-view="diff">
@@ -751,6 +781,9 @@ async function openCreatorPopup() {
             </div>
             <div class="pw-diff-tab" data-view="raw">
                 <div>新版原文</div><div class="pw-tab-sub">直接编辑</div>
+            </div>
+            <div class="pw-diff-tab" data-view="old-raw">
+                <div>原版原文</div><div class="pw-tab-sub">查看旧版</div>
             </div>
         </div>
         
@@ -760,6 +793,9 @@ async function openCreatorPopup() {
             </div>
             <div id="pw-diff-raw-view" class="pw-diff-raw-view">
                 <textarea id="pw-diff-raw-textarea" class="pw-diff-raw-textarea" spellcheck="false"></textarea>
+            </div>
+            <div id="pw-diff-old-raw-view" class="pw-diff-raw-view" style="display:none;">
+                <textarea id="pw-diff-old-raw-textarea" class="pw-diff-raw-textarea" spellcheck="false" readonly></textarea>
             </div>
         </div>
 
@@ -771,11 +807,9 @@ async function openCreatorPopup() {
 
     <div id="pw-float-quote-btn" class="pw-float-quote-btn"><i class="fa-solid fa-pen-to-square"></i> 修改此段</div>
 
-    <!-- [Updated] Context View Structure -->
+    <!-- Context View -->
     <div id="pw-view-context" class="pw-view">
         <div class="pw-scroll-area">
-            
-            <!-- Greetings Section (Select Box + Persistent Toggle Bar) -->
             <div class="pw-card-section">
                 <div class="pw-row">
                     <label class="pw-section-label pw-label-gold">角色开场白</label>
@@ -783,22 +817,16 @@ async function openCreatorPopup() {
                         <option value="">(不使用开场白)</option>
                     </select>
                 </div>
-                
-                <!-- Persistent Toggle Button (Initially Hidden) -->
                 <div id="pw-greetings-toggle-bar" class="pw-preview-toggle-bar" style="display:none;">
                     <i class="fa-solid fa-angle-up"></i> 收起预览
                 </div>
-                
-                <!-- Textarea (Hidden/Shown by toggle) -->
                 <textarea id="pw-greetings-preview"></textarea>
             </div>
 
-            <!-- World Info Section -->
             <div class="pw-card-section">
                 <div class="pw-row" style="margin-bottom:5px;">
                     <label class="pw-section-label pw-label-blue">世界书</label>
                 </div>
-                
                 <div id="pw-wi-body" style="display:block; padding-top:5px;">
                     <div class="pw-wi-controls" style="margin-bottom:8px;">
                         <select id="pw-wi-select" class="pw-input pw-wi-select"><option value="">-- 添加参考/目标世界书 --</option>${renderBookOptions()}</select>
@@ -828,7 +856,6 @@ async function openCreatorPopup() {
                 </div>
             </div>
 
-            <!-- [Updated] Prompt Editor Collapsible -->
             <div class="pw-card-section">
                 <div class="pw-context-header" id="pw-prompt-header">
                     <span><i class="fa-solid fa-terminal"></i> Prompt 查看与编辑</span>
@@ -848,7 +875,6 @@ async function openCreatorPopup() {
                     <textarea id="pw-prompt-initial" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;">${promptsCache.initial}</textarea>
                     
                     <div style="display:flex; justify-content:space-between; margin-top:15px;"><span class="pw-prompt-label">人设润色指令 (System Prompt)</span><button class="pw-mini-btn" id="pw-reset-refine" style="font-size:0.7em;">恢复默认</button></div>
-                    <!-- [Updated] Added missing buttons for refine -->
                     <div class="pw-var-btns">
                         <div class="pw-var-btn" data-ins="{{char}}"><span>Char名</span><span class="code">{{char}}</span></div>
                         <div class="pw-var-btn" data-ins="{{charInfo}}"><span>角色设定</span><span class="code">{{charInfo}}</span></div>
@@ -925,10 +951,7 @@ function bindEvents() {
             $toggleBtn.hide();
         } else if (currentGreetingsList[idx]) {
             $preview.val(currentGreetingsList[idx].content).show();
-            // Reset Toggle State to "Expanded"
             $toggleBtn.show().html('<i class="fa-solid fa-angle-up"></i> 收起预览');
-            
-            // Adjust height
             requestAnimationFrame(() => {
                 $preview.height('auto');
                 $preview.height($preview[0].scrollHeight + 'px');
@@ -936,7 +959,6 @@ function bindEvents() {
         }
     });
 
-    // --- Greetings Toggle Button Click ---
     $(document).on('click.pw', '#pw-greetings-toggle-bar', function() {
         const $preview = $('#pw-greetings-preview');
         if ($preview.is(':visible')) {
@@ -948,7 +970,6 @@ function bindEvents() {
         }
     });
 
-    // --- 复制功能 ---
     $(document).on('click.pw', '#pw-copy-persona', function() {
         const text = $('#pw-result-text').val();
         if(!text) return toastr.warning("没有内容可复制");
@@ -965,7 +986,6 @@ function bindEvents() {
     });
 
     // --- Template Editing ---
-    // [修改] 移除了 .css('color', ...) 改用 .addClass('editing') 和 .removeClass('editing')
     $(document).on('click.pw', '#pw-toggle-edit-template', () => {
         isEditingTemplate = !isEditingTemplate;
         if (isEditingTemplate) {
@@ -992,7 +1012,6 @@ function bindEvents() {
         toastr.success("模版已更新");
     });
 
-    // --- Shortcuts ---
     $(document).on('click.pw', '.pw-shortcut-btn', function () {
         const key = $(this).data('key');
         const $text = $('#pw-template-text');
@@ -1020,14 +1039,12 @@ function bindEvents() {
         }
     });
 
-    // --- Float Button Selection Check ---
     let selectionTimeout;
     const checkSelection = () => {
         clearTimeout(selectionTimeout);
         selectionTimeout = setTimeout(() => {
             const activeEl = document.activeElement;
             if (!activeEl || !activeEl.id.startsWith('pw-result-text')) return;
-            
             const hasSelection = activeEl.selectionStart !== activeEl.selectionEnd;
             const $btn = $('#pw-float-quote-btn');
             if (hasSelection) {
@@ -1040,16 +1057,12 @@ function bindEvents() {
     $(document).on('touchend mouseup keyup', '#pw-result-text', checkSelection);
 
     $(document).on('mousedown.pw', '#pw-float-quote-btn', function (e) {
-        e.preventDefault(); 
-        e.stopPropagation();
-        
+        e.preventDefault(); e.stopPropagation();
         const activeEl = document.activeElement;
         if (!activeEl) return;
-
         const start = activeEl.selectionStart;
         const end = activeEl.selectionEnd;
         const selectedText = activeEl.value.substring(start, end).trim();
-        
         if (selectedText) {
             let $input = $('#pw-refine-input');
             if ($input && $input.length) {
@@ -1096,12 +1109,15 @@ function bindEvents() {
         $(this).addClass('active');
         const view = $(this).data('view');
         
+        // Hide all
+        $('#pw-diff-list-view, #pw-diff-raw-view, #pw-diff-old-raw-view').hide();
+
         if (view === 'diff') { 
             $('#pw-diff-list-view').show();
-            $('#pw-diff-raw-view').hide();
-        } else { 
-            $('#pw-diff-list-view').hide();
+        } else if (view === 'raw') { 
             $('#pw-diff-raw-view').show();
+        } else if (view === 'old-raw') {
+            $('#pw-diff-old-raw-view').show();
         }
     });
 
@@ -1143,7 +1159,9 @@ function bindEvents() {
             };
             const responseText = await runGeneration(config, config);
 
+            // 填充新版和旧版 raw view
             $('#pw-diff-raw-textarea').val(lastRawResponse);
+            $('#pw-diff-old-raw-textarea').val(oldText);
 
             const oldMap = parseYamlToBlocks(oldText);
             const newMap = parseYamlToBlocks(responseText);
@@ -1235,6 +1253,10 @@ function bindEvents() {
 
         if (activeTab === 'raw') {
             finalContent = $('#pw-diff-raw-textarea').val();
+        } else if (activeTab === 'old-raw') {
+            // 如果用户在看旧版原文，但点击了确认，通常我们不建议应用旧版，除非用户确实想还原
+            if(!confirm("您当前在查看【旧版原文】，确认要恢复为旧版吗？（通常应使用新版或对比结果）")) return;
+            finalContent = $('#pw-diff-old-raw-textarea').val();
         } else {
             let finalLines = [];
             $('.pw-diff-row').each(function () {
@@ -1346,7 +1368,6 @@ function bindEvents() {
         }
     });
 
-    // Save Draft (Persona)
     $(document).on('click.pw', '#pw-snapshot', function () {
         const text = $('#pw-result-text').val();
         const req = $('#pw-request').val();
@@ -1584,5 +1605,5 @@ function addPersonaButton() {
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
-    console.log("[PW] Persona Weaver Loaded (Ultimate Robust Version)");
+    console.log("[PW] Persona Weaver Loaded (v3.0 - Global Jailbreak, CSS Fixes, 3-Tab Diff)");
 });
