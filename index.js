@@ -73,7 +73,6 @@ NSFW:
   禁忌底线:`;
 
 // --- Prompt 定义 ---
-// [关键修改] 既然 Initial 能过，那我们就只用这一套 Prompt 逻辑
 const defaultSystemPromptInitial =
 `Creating User Persona for {{user}} (Target: {{char}}).
 
@@ -100,9 +99,34 @@ Generate character details strictly in structured YAML format based on the [Trai
 4. Do NOT output status bars, progress bars, or Chain of Thought.
 5. Response: ONLY the YAML content.`;
 
-// [关键修改] Refine Prompt 现在直接复用 Initial 的结构
-// 我们不再告诉模型这是“修改数据”，而是“基于参考资料重新生成”
-const defaultSystemPromptRefine = defaultSystemPromptInitial; 
+// 虽然代码逻辑中我们弃用了 Refine 模版，但为了保留用户设置数据结构完整性，保留此定义
+const defaultSystemPromptRefine =
+`You are an expert Data Converter and Persona Editor.
+Optimizing User Persona for {{char}}.
+
+[Target Character Info]:
+{{charInfo}}
+
+[Opening Context / Greetings]:
+{{greetings}}
+
+[Target Schema / Template]:
+{{tags}}
+
+[Current Data]:
+"""
+{{current}}
+"""
+
+[Instruction]:
+"{{input}}"
+
+[Task]:
+1. Parse [Current Data]. MIGRATE it to fit the [Target Schema].
+2. Apply the [Instruction] to modify or refine the content.
+3. Ensure the persona fits the [Target Character Info].
+4. STRICTLY output in valid YAML format.
+5. Response: ONLY the final YAML content.`;
 
 const defaultSettings = {
     autoSwitchPersona: true, syncToWorldInfo: false,
@@ -155,16 +179,19 @@ function getCharacterInfoText() {
         if (desc.length > MAX_FIELD_LENGTH) desc = desc.substring(0, MAX_FIELD_LENGTH) + "\n...(truncated)...";
         parts.push(`Description:\n${desc}`);
     }
+    
     if (data.personality) {
         let pers = data.personality;
         if (pers.length > MAX_FIELD_LENGTH) pers = pers.substring(0, MAX_FIELD_LENGTH) + "\n...(truncated)...";
         parts.push(`Personality:\n${pers}`);
     }
+    
     if (data.scenario) {
         let scen = data.scenario;
         if (scen.length > MAX_FIELD_LENGTH) scen = scen.substring(0, MAX_FIELD_LENGTH) + "\n...(truncated)...";
         parts.push(`Scenario:\n${scen}`);
     }
+    
     return parts.join('\n\n');
 }
 
@@ -172,10 +199,14 @@ function getCharacterGreetingsList() {
     const context = getContext();
     const charId = context.characterId;
     if (charId === undefined || !context.characters[charId]) return [];
+
     const char = context.characters[charId];
     const data = char.data || char;
+
     const list = [];
-    if (data.first_mes) list.push({ label: "开场白 #0", content: data.first_mes });
+    if (data.first_mes) {
+        list.push({ label: "开场白 #0", content: data.first_mes });
+    }
     if (Array.isArray(data.alternate_greetings)) {
         data.alternate_greetings.forEach((greeting, index) => {
             list.push({ label: `开场白 #${index + 1}`, content: greeting });
@@ -191,9 +222,11 @@ function getCharacterGreetingsList() {
 function parseYamlToBlocks(text) {
     const map = new Map();
     if (!text || typeof text !== 'string') return map;
+
     try {
         const cleanText = text.replace(/^```[a-z]*\n?/im, '').replace(/```$/im, '').trim();
         let lines = cleanText.split('\n');
+
         const topLevelKeyRegex = /^\s*([^:\s\-]+?)\s*[:：]/;
         let topKeysIndices = [];
         for (let i = 0; i < lines.length; i++) {
@@ -202,6 +235,7 @@ function parseYamlToBlocks(text) {
                 topKeysIndices.push(i);
             }
         }
+
         if (topKeysIndices.length === 1 && lines.length > 2) {
             const firstLineIndex = topKeysIndices[0];
             const remainingLines = lines.slice(firstLineIndex + 1);
@@ -218,8 +252,10 @@ function parseYamlToBlocks(text) {
                 lines = remainingLines.map(l => l.length >= minIndent ? l.substring(minIndent) : l);
             }
         }
+
         let currentKey = null;
         let currentBuffer = [];
+
         const flushBuffer = () => {
             if (currentKey && currentBuffer.length > 0) {
                 let valuePart = "";
@@ -237,6 +273,7 @@ function parseYamlToBlocks(text) {
                 map.set(currentKey, valuePart);
             }
         };
+
         lines.forEach((line) => {
             const isTopLevel = (line.length < 200) && topLevelKeyRegex.test(line) && !line.trim().startsWith('-');
             const indentLevel = line.search(/\S|$/);
@@ -265,11 +302,13 @@ function findMatchingKey(targetKey, map) {
 async function collectContextData() {
     let wiContent = [];
     let greetingsContent = "";
+
     try {
         const boundBooks = await getContextWorldBooks();
         const manualBooks = window.pwExtraBooks || [];
         const allBooks = [...new Set([...boundBooks, ...manualBooks])];
         if (allBooks.length > 20) allBooks.length = 20;
+
         for (const bookName of allBooks) {
             await yieldToBrowser();
             try {
@@ -280,10 +319,12 @@ async function collectContextData() {
             } catch (err) { }
         }
     } catch (e) { console.warn(e); }
+
     const selectedIdx = $('#pw-greetings-select').val();
     if (selectedIdx !== "" && selectedIdx !== null && currentGreetingsList[selectedIdx]) {
         greetingsContent = currentGreetingsList[selectedIdx].content;
     }
+
     return {
         wi: wiContent.join('\n\n'),
         greetings: greetingsContent
@@ -317,16 +358,12 @@ function loadData() {
     } catch { currentTemplate = defaultYamlTemplate; }
     try {
         const p = JSON.parse(localStorage.getItem(STORAGE_KEY_PROMPTS));
-        // 强制重置 Refine Prompt 为 Initial Prompt (Total Camouflage)
-        // 如果用户以前保存过自定义的 Refine Prompt，这里会在读取后被逻辑覆盖，
-        // 或者你可以选择在这里清理掉 localStorage 里的 refine key。
-        // 为了安全起见，我们在使用时指向 Initial。
         promptsCache = { 
-            ...{ initial: defaultSystemPromptInitial, refine: defaultSystemPromptInitial }, 
+            ...{ initial: defaultSystemPromptInitial, refine: defaultSystemPromptRefine }, 
             ...p 
         };
     } catch { 
-        promptsCache = { initial: defaultSystemPromptInitial, refine: defaultSystemPromptInitial }; 
+        promptsCache = { initial: defaultSystemPromptInitial, refine: defaultSystemPromptRefine }; 
     }
 }
 
@@ -338,12 +375,14 @@ function saveData() {
 
 function saveHistory(item) {
     const limit = extension_settings[extensionName]?.historyLimit || 50;
+    
     if (!item.title || item.title === "未命名") {
         const context = getContext();
         const userName = $('.persona_name').first().text().trim() || "User";
         const charName = context.characters[context.characterId]?.name || "Char";
         item.title = `${userName} & ${charName}`;
     }
+
     historyCache.unshift(item);
     if (historyCache.length > limit) historyCache = historyCache.slice(0, limit);
     saveData();
@@ -369,21 +408,26 @@ async function forceSavePersona(name, description) {
 
 async function syncToWorldInfoViaHelper(userName, content) {
     if (!window.TavernHelper) return toastr.error(TEXT.TOAST_WI_ERROR);
+
     let targetBook = null;
     try {
         const charBooks = window.TavernHelper.getCharWorldbookNames('current');
         if (charBooks && charBooks.primary) targetBook = charBooks.primary;
         else if (charBooks && charBooks.additional && charBooks.additional.length > 0) targetBook = charBooks.additional[0];
     } catch (e) { }
+    
     if (!targetBook) {
         const boundBooks = await getContextWorldBooks();
         if (boundBooks.length > 0) targetBook = boundBooks[0];
     }
+    
     if (!targetBook) return toastr.warning(TEXT.TOAST_WI_FAIL);
+
     try {
         await window.TavernHelper.updateWorldbookWith(targetBook, (entries) => {
             const entryComment = `User: ${userName}`;
             const existingEntry = entries.find(e => e.comment === entryComment);
+
             if (existingEntry) {
                 existingEntry.content = content;
                 existingEntry.enabled = true;
@@ -449,7 +493,9 @@ async function getWorldBookEntries(bookName) {
     return [];
 }
 
-// [Updated] Generation Logic - v3.8 Total Camouflage (完全伪装模式)
+// [Updated] Generation Logic - v4.1 纯净伪装版
+// 完全信赖头部破限，移除所有本地降敏，移除所有额外破限。
+// 润色时将旧文本直接伪装成 User Instruction，使用 Initial 模版绕过审核。
 async function runGeneration(data, apiConfig) {
     const context = getContext();
     const charId = context.characterId;
@@ -459,13 +505,13 @@ async function runGeneration(data, apiConfig) {
     if (!promptsCache || !promptsCache.initial) loadData(); 
 
     // 1. 获取基础数据
-    let charInfoText = getCharacterInfoText();
-    let currentText = data.currentText || "";
-    let requestText = data.request || "";
+    let charInfoText = getCharacterInfoText(); // 角色卡原文
+    let currentText = data.currentText || "";  // 旧的人设内容 (不做任何处理)
+    let requestText = data.request || "";      // 用户的润色要求
     let wiText = data.wiText || "";
     let greetingsText = data.greetingsText || "";
     
-    // 2. 获取头部破限 (从酒馆设置中读取)
+    // 2. 获取头部破限 (完全依赖这个)
     let headJailbreak = "";
     try {
         const settings = context.chatCompletionSettings;
@@ -474,34 +520,31 @@ async function runGeneration(data, apiConfig) {
         }
     } catch (e) { console.warn(e); }
 
-    // 3. 构建 Prompt (伪装策略)
-    // 无论 Initial 还是 Refine，都使用 Initial 的 System Prompt
-    // 这样模型会始终认为自己是在“创作新内容”，而不是“修改现有敏感数据”
-    const systemTemplate = promptsCache.initial;
-    
-    // 4. 处理 Refine 模式下的输入拼接
-    let finalInput = requestText;
-    
-    if (data.mode === 'refine') {
-        console.log("[PW] Mode: Refine (Disguised as Generation)");
-        // 关键逻辑：把旧文本伪装成“背景草稿”或“参考笔记”
-        // 不要把它们作为需要处理的数据，而是作为创作的灵感来源
-        finalInput = `Create the persona strictly following these requirements:
+    // 3. 核心策略：无论生成还是润色，都使用 Initial 模版
+    // 我们认为 Initial 模版（Creation Task）比 Refine 模版（Processing Task）更不容易触发审核
+    let systemTemplate = promptsCache.initial;
 
-[Reference Draft / Background Notes]:
+    let finalInput = "";
+
+    if (data.mode === 'initial') {
+        // [生成模式]：直接使用用户要求
+        finalInput = requestText;
+    } else {
+        // [润色模式 - 伪装策略]
+        // 将旧内容作为“草稿/参考”直接塞入 {{input}}。
+        // 不做任何降敏处理 (User requested raw input)。
+        finalInput = `
+[Context Note: The following is a rough draft/reference for the persona. Use it as a base.]
 """
 ${currentText}
 """
 
-[Additional Details to Incorporate]:
-"""
+[User Instruction]:
 ${requestText}
-"""`;
-    } else {
-        console.log("[PW] Mode: Initial Generation");
+(Update the persona based on the draft above and this instruction. Keep the YAML format.)`;
     }
 
-    // 5. 替换变量生成最终 Prompt
+    // 4. 构建最终 Prompt
     const corePrompt = systemTemplate
         .replace(/{{user}}/g, currentName)
         .replace(/{{char}}/g, charName)
@@ -509,12 +552,14 @@ ${requestText}
         .replace(/{{greetings}}/g, greetingsText)
         .replace(/{{wi}}/g, wiText)
         .replace(/{{tags}}/g, currentTemplate)
-        .replace(/{{input}}/g, finalInput); // 无论是生成还是润色，都走这个口
+        .replace(/{{input}}/g, finalInput)     // 伪装后的 Input
+        .replace(/{{current}}/g, "");          // 清空原有的 current 插槽
 
-    // 6. 仅拼接头部破限，不加任何尾部干扰
+    // 只拼接头部破限，不添加任何额外的三明治结构
     const finalPrompt = headJailbreak ? `${headJailbreak}\n\n${corePrompt}` : corePrompt;
 
-    // --- 发送请求逻辑 ---
+    console.log(`[PW] Mode: ${data.mode} (Disguised as Initial, No Sanitization)`);
+    
     let responseContent = "";
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000); 
@@ -551,7 +596,7 @@ ${requestText}
             const firstChoice = json.choices[0];
             
             if (firstChoice.finish_reason === 'content_filter') {
-                throw new Error("生成失败: 触发了 API 安全过滤 (请尝试简化要求)。");
+                throw new Error("生成失败: 触发了 API 的安全过滤器。");
             }
 
             if (firstChoice.message && firstChoice.message.content) {
@@ -595,7 +640,7 @@ ${requestText}
 }
 
 // ============================================================================
-// 3. UI 渲染 logic
+// 3. UI 渲染 logic (包含 CSS 修复 和 新 Tab)
 // ============================================================================
 
 async function openCreatorPopup() {
@@ -1431,8 +1476,142 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-history-clear-all', function () { if (confirm("清空?")) { historyCache = []; saveData(); renderHistoryList(); } });
 }
 
+// ... 辅助渲染函数 ...
+const renderTemplateChips = () => {
+    const $container = $('#pw-template-chips').empty();
+    const blocks = parseYamlToBlocks(currentTemplate);
+    blocks.forEach((content, key) => {
+        const $chip = $(`<div class="pw-tag-chip"><i class="fa-solid fa-cube" style="opacity:0.5; margin-right:4px;"></i><span>${key}</span></div>`);
+        $chip.on('click', () => {
+            const $text = $('#pw-request');
+            const cur = $text.val();
+            const prefix = (cur && !cur.endsWith('\n') && cur.length > 0) ? '\n\n' : '';
+            let insertText = key + ":";
+            if (content && content.trim()) {
+                if (content.includes('\n') || content.startsWith(' ')) insertText += "\n" + content;
+                else insertText += " " + content;
+            } else insertText += " ";
+            $text.val(cur + prefix + insertText).focus();
+            $text.scrollTop($text[0].scrollHeight);
+        });
+        $container.append($chip);
+    });
+};
+
+const renderHistoryList = () => {
+    loadData();
+    const $list = $('#pw-history-list').empty();
+    const search = $('#pw-history-search').val().toLowerCase();
+    
+    // [Lite Fix] Filter out opening types
+    const filtered = historyCache.filter(item => {
+        if (item.data && item.data.type === 'opening') return false; 
+        
+        if (!search) return true;
+        const content = (item.data.resultText || "").toLowerCase();
+        const title = (item.title || "").toLowerCase();
+        return title.includes(search) || content.includes(search);
+    });
+    
+    if (filtered.length === 0) { $list.html('<div style="text-align:center; opacity:0.6; padding:20px;">暂无草稿</div>'); return; }
+
+    filtered.forEach((item, index) => {
+        const previewText = item.data.resultText || '无内容';
+        const displayTitle = item.title || "User & Char";
+
+        const $el = $(`
+        <div class="pw-history-item">
+            <div class="pw-hist-main">
+                <div class="pw-hist-header">
+                    <span class="pw-hist-title-display">${displayTitle}</span>
+                    <input type="text" class="pw-hist-title-input" value="${displayTitle}" style="display:none;">
+                    <div style="display:flex; gap:5px;">
+                        <i class="fa-solid fa-pen pw-hist-action-btn edit" title="编辑标题"></i>
+                        <i class="fa-solid fa-trash pw-hist-action-btn del" data-index="${index}" title="删除"></i>
+                    </div>
+                </div>
+                <div class="pw-hist-meta"><span>${item.timestamp || ''}</span></div>
+                <div class="pw-hist-desc">${previewText}</div>
+            </div>
+        </div>
+    `);
+        $el.on('click', function (e) {
+            if ($(e.target).closest('.pw-hist-action-btn, .pw-hist-title-input').length) return;
+            $('#pw-request').val(item.request); $('#pw-result-text').val(previewText); $('#pw-result-area').show();
+            $('#pw-request').addClass('minimized');
+            $('.pw-tab[data-tab="editor"]').click();
+        });
+        $el.find('.pw-hist-action-btn.del').on('click', function (e) {
+            e.stopPropagation();
+            if (confirm("删除?")) {
+                historyCache.splice(historyCache.indexOf(item), 1);
+                saveData(); renderHistoryList();
+            }
+        });
+        $list.append($el);
+    });
+};
+
+window.pwExtraBooks = [];
+const renderWiBooks = async () => {
+    const container = $('#pw-wi-container').empty();
+    const baseBooks = await getContextWorldBooks();
+    const allBooks = [...new Set([...baseBooks, ...(window.pwExtraBooks || [])])];
+    if (allBooks.length === 0) { container.html('<div style="opacity:0.6; padding:10px; text-align:center;">此角色未绑定世界书，请在“世界书”标签页手动添加或在酒馆主界面绑定。</div>'); return; }
+    for (const book of allBooks) {
+        const isBound = baseBooks.includes(book);
+        const $el = $(`<div class="pw-wi-book"><div class="pw-wi-header"><span><i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span class="pw-bound-status">(已绑定)</span>' : ''}</span><div>${!isBound ? '<i class="fa-solid fa-times remove-book pw-remove-book-icon" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div></div><div class="pw-wi-list" data-book="${book}"></div></div>`);
+        $el.find('.remove-book').on('click', (e) => { e.stopPropagation(); window.pwExtraBooks = window.pwExtraBooks.filter(b => b !== book); renderWiBooks(); });
+        $el.find('.pw-wi-header').on('click', async function () {
+            const $list = $el.find('.pw-wi-list');
+            const $arrow = $(this).find('.arrow');
+            if ($list.is(':visible')) { $list.slideUp(); $arrow.removeClass('fa-flip-vertical'); }
+            else {
+                $list.slideDown(); $arrow.addClass('fa-flip-vertical');
+                if (!$list.data('loaded')) {
+                    $list.html('<div style="padding:10px;text-align:center;"><i class="fas fa-spinner fa-spin"></i></div>');
+                    const entries = await getWorldBookEntries(book);
+                    $list.empty();
+                    if (entries.length === 0) $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
+                    entries.forEach(entry => {
+                        const isChecked = entry.enabled ? 'checked' : '';
+                        const $item = $(`<div class="pw-wi-item"><div class="pw-wi-item-row"><input type="checkbox" class="pw-wi-check" ${isChecked} data-content="${encodeURIComponent(entry.content)}"><div style="font-weight:bold; font-size:0.9em; flex:1;">${entry.displayName}</div><i class="fa-solid fa-eye pw-wi-toggle-icon"></i></div><div class="pw-wi-desc">${entry.content}<div class="pw-wi-close-bar"><i class="fa-solid fa-angle-up"></i> 收起</div></div></div>`);
+                        $item.find('.pw-wi-toggle-icon').on('click', function (e) {
+                            e.stopPropagation();
+                            const $desc = $(this).closest('.pw-wi-item').find('.pw-wi-desc');
+                            if ($desc.is(':visible')) { $desc.slideUp(); $(this).removeClass('active'); } else { $desc.slideDown(); $(this).addClass('active'); }
+                        });
+                        $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').removeClass('active'); });
+                        $list.append($item);
+                    });
+                    $list.data('loaded', true);
+                }
+            }
+        });
+        container.append($el);
+    }
+};
+
+const renderGreetingsList = () => {
+    const list = getCharacterGreetingsList();
+    currentGreetingsList = list;
+    const $select = $('#pw-greetings-select').empty();
+    $select.append('<option value="">(不使用开场白)</option>');
+    list.forEach((item, idx) => {
+        $select.append(`<option value="${idx}">${item.label}</option>`);
+    });
+};
+
+function addPersonaButton() {
+    const container = $('.persona_controls_buttons_block');
+    if (container.length === 0 || $(`#${BUTTON_ID}`).length > 0) return;
+    const newButton = $(`<div id="${BUTTON_ID}" class="menu_button fa-solid fa-wand-magic-sparkles interactable" title="${TEXT.BTN_TITLE}" tabindex="0" role="button"></div>`);
+    newButton.on('click', openCreatorPopup);
+    container.prepend(newButton);
+}
+
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
-    console.log("[PW] Persona Weaver Loaded (v3.8 - Total Camouflage Mode)");
+    console.log("[PW] Persona Weaver Loaded (v4.1 - Raw Initial Mode)");
 });
