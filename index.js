@@ -5,7 +5,7 @@ const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v20';
 const STORAGE_KEY_STATE = 'pw_state_v20';
 const STORAGE_KEY_TEMPLATE = 'pw_template_v2';
-const STORAGE_KEY_PROMPTS = 'pw_prompts_v8'; // 升级版本号以防缓存冲突
+const STORAGE_KEY_PROMPTS = 'pw_prompts_v9'; // 更新版本号
 const BUTTON_ID = 'pw_persona_tool_btn';
 
 const defaultYamlTemplate =
@@ -73,9 +73,10 @@ NSFW:
   禁忌底线:`;
 
 // --- Prompt 定义 ---
-// 只保留这一个通用 Prompt
+// 只需要这一个通用 Prompt。
+// 润色时，代码会自动在 [Instruction] 之前插入 [Current Data]。
 const defaultSystemPromptInitial =
-`Creating User Persona for {{user}} (Target: {{char}}).
+`Creating/Refining User Persona for {{user}} (Target: {{char}}).
 
 [Target Character Info]:
 {{charInfo}}
@@ -93,8 +94,8 @@ const defaultSystemPromptInitial =
 {{input}}
 
 [Task]:
-Generate character details strictly in structured YAML format based on the [Traits / Template].
-1. Design a User persona that fits the [Target Character Info] and [Opening Context].
+Generate or Update character details strictly in structured YAML format based on the [Traits / Template].
+1. Design/Refine a User persona that fits the [Target Character Info].
 2. Do NOT wrap the output in a root key like "{{user}}:". Start directly with the first key from the template.
 3. Maintain indentation strictly.
 4. Do NOT output status bars, progress bars, or Chain of Thought.
@@ -119,7 +120,7 @@ const TEXT = {
 
 let historyCache = [];
 let currentTemplate = defaultYamlTemplate;
-// Cache只存一个 initial
+// Cache 只存一个 initial
 let promptsCache = { 
     initial: defaultSystemPromptInitial 
 };
@@ -467,9 +468,11 @@ async function getWorldBookEntries(bookName) {
     return [];
 }
 
-// [Updated] Generation Logic - v4.1 纯净伪装版
-// 完全信赖头部破限，移除所有本地降敏，移除所有额外破限。
-// 润色时将旧文本直接伪装成 User Instruction，使用 Initial 模版绕过审核。
+// [Updated] Generation Logic - v4.3 智能插入模式
+// 逻辑：
+// 1. 使用单一 Prompt (Initial)。
+// 2. 如果是润色模式，代码会自动将旧人设数据格式化后，插入到 [Instruction] 之前。
+// 3. 这样既共用了 Prompt，又保证了结构（数据在指令前），避免模型拒绝。
 async function runGeneration(data, apiConfig) {
     const context = getContext();
     const charId = context.characterId;
@@ -479,13 +482,13 @@ async function runGeneration(data, apiConfig) {
     if (!promptsCache || !promptsCache.initial) loadData(); 
 
     // 1. 获取基础数据
-    let charInfoText = getCharacterInfoText(); // 角色卡原文
-    let currentText = data.currentText || "";  // 旧的人设内容 (不做任何处理)
-    let requestText = data.request || "";      // 用户的润色要求
+    let charInfoText = getCharacterInfoText(); 
+    let currentText = data.currentText || "";  
+    let requestText = data.request || "";      
     let wiText = data.wiText || "";
     let greetingsText = data.greetingsText || "";
     
-    // 2. 获取头部破限 (完全依赖这个)
+    // 2. 获取头部破限
     let headJailbreak = "";
     try {
         const settings = context.chatCompletionSettings;
@@ -494,43 +497,44 @@ async function runGeneration(data, apiConfig) {
         }
     } catch (e) { console.warn(e); }
 
-    // 3. 核心策略：无论生成还是润色，都使用 Initial 模版 (现在是唯一的 Prompt)
-    let systemTemplate = promptsCache.initial;
+    // 3. 准备 System Prompt
+    let finalPromptTemplate = promptsCache.initial;
 
-    let finalInput = "";
-
-    if (data.mode === 'initial') {
-        // [生成模式]：直接使用用户要求
-        finalInput = requestText;
-    } else {
-        // [润色模式 - 伪装策略] - 这里的 Refer 部分是写在代码里的
-        // 将旧内容作为“草稿/参考”直接塞入 {{input}}。
-        finalInput = `
-[Context Note: The following is a rough draft/reference for the persona. Use it as a base.]
+    // 4. 处理润色模式的“引用部分” (The "Refer" part in code)
+    if (data.mode === 'refine') {
+        const referBlock = `
+[Current Data (For Reference & Update)]:
 """
 ${currentText}
 """
-
-[User Instruction]:
-${requestText}
-(Update the persona based on the draft above and this instruction. Keep the YAML format.)`;
+`;
+        // 智能插入：找到 [Instruction] 或 {{input}} 并在其上方插入引用数据
+        // 这样可以保持 “背景 -> 数据 -> 指令” 的顺畅逻辑，模型更听话
+        if (finalPromptTemplate.includes('[Instruction]:')) {
+            finalPromptTemplate = finalPromptTemplate.replace('[Instruction]:', `${referBlock}\n[Instruction]:`);
+        } else if (finalPromptTemplate.includes('{{input}}')) {
+            finalPromptTemplate = finalPromptTemplate.replace('{{input}}', `${referBlock}\n[Instruction]:\n{{input}}`);
+        } else {
+            // 兜底：直接加在最后面
+            finalPromptTemplate += `\n${referBlock}`;
+        }
     }
 
-    // 4. 构建最终 Prompt
-    const corePrompt = systemTemplate
+    // 5. 替换变量
+    const corePrompt = finalPromptTemplate
         .replace(/{{user}}/g, currentName)
         .replace(/{{char}}/g, charName)
         .replace(/{{charInfo}}/g, charInfoText)
         .replace(/{{greetings}}/g, greetingsText)
         .replace(/{{wi}}/g, wiText)
         .replace(/{{tags}}/g, currentTemplate)
-        .replace(/{{input}}/g, finalInput)     // 伪装后的 Input (含 Refer + Instruction)
-        .replace(/{{current}}/g, "");          // 清空原有的 current 插槽 (如果模版里残留了)
+        .replace(/{{input}}/g, requestText) // 这里直接填入用户指令，不再包裹旧数据
+        .replace(/{{current}}/g, "");       // 清理掉可能残留的旧变量
 
-    // 只拼接头部破限，不添加任何额外的三明治结构
+    // 拼接头部破限
     const finalPrompt = headJailbreak ? `${headJailbreak}\n\n${corePrompt}` : corePrompt;
 
-    console.log(`[PW] Mode: ${data.mode} (Disguised as Initial, No Sanitization)`);
+    console.log(`[PW] Mode: ${data.mode}, Auto-Injected Refer Block: ${data.mode === 'refine'}`);
     
     let responseContent = "";
     const controller = new AbortController();
