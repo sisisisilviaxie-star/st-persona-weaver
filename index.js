@@ -2,11 +2,11 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const STORAGE_KEY_HISTORY = 'pw_history_v20';
+const STORAGE_KEY_HISTORY = 'pw_history_v21_unlimited'; // 更新 Key 以区分新版
 const STORAGE_KEY_STATE = 'pw_state_v20';
 const STORAGE_KEY_TEMPLATE = 'pw_template_v2';
-// [重要] 升级版本号，强制重置本地缓存，解决因旧Prompt残留导致的生成失败
 const STORAGE_KEY_PROMPTS = 'pw_prompts_v15_final'; 
+const STORAGE_KEY_WI_STATE = 'pw_wi_selection_v1'; // 新增：世界书选择记忆
 const BUTTON_ID = 'pw_persona_tool_btn';
 
 // --- 简化版护盾：避免使用过于像"越狱"的词汇，只强调虚构上下文 ---
@@ -77,7 +77,6 @@ NSFW:
   禁忌底线:`;
 
 // --- Prompt 定义 ---
-// 保持原始结构，通用性最强
 const defaultSystemPromptInitial =
 `Creating User Persona for {{user}} (Target: {{char}}).
 
@@ -106,7 +105,8 @@ Generate character details strictly in structured YAML format based on the [Trai
 
 const defaultSettings = {
     autoSwitchPersona: true, syncToWorldInfo: false,
-    historyLimit: 50, apiSource: 'main',
+    historyLimit: 9999, // 修改默认限制，实际上逻辑中已移除限制
+    apiSource: 'main',
     indepApiUrl: 'https://api.openai.com/v1', indepApiKey: '', indepApiModel: 'gpt-3.5-turbo'
 };
 
@@ -129,6 +129,7 @@ let isEditingTemplate = false;
 let lastRawResponse = "";
 let isProcessing = false;
 let currentGreetingsList = []; 
+let wiSelectionCache = {}; // 内存缓存
 
 // ============================================================================
 // 工具函数
@@ -287,16 +288,27 @@ async function collectContextData() {
             await yieldToBrowser();
             const $list = $('#pw-wi-container .pw-wi-list[data-book="' + bookName + '"]');
             
-            // 策略：如果DOM已加载（展开过），用勾选的；如果未加载，自动抓后台所有启用的。
+            // 策略：如果DOM已加载（展开过），用勾选的；如果未加载，尝试读取缓存配置
             if ($list.length > 0 && $list.data('loaded')) {
                 $list.find('.pw-wi-check:checked').each(function() {
                     const content = decodeURIComponent($(this).data('content'));
                     wiContent.push(`[Entry from ${bookName}]:\n${content}`);
                 });
             } else {
+                // 尝试从记忆中读取，如果记忆里有，只加载记忆的；如果没有，才全部加载
                 try {
+                    const savedSelection = loadWiSelection(bookName);
                     const entries = await getWorldBookEntries(bookName);
-                    const enabledEntries = entries.filter(e => e.enabled);
+                    
+                    let enabledEntries = [];
+                    if (savedSelection && savedSelection.length > 0) {
+                        // 过滤出在保存列表中的
+                        enabledEntries = entries.filter(e => savedSelection.includes(String(e.uid)));
+                    } else {
+                        // 默认行为：只加载 enabled 为 true 的
+                        enabledEntries = entries.filter(e => e.enabled);
+                    }
+                    
                     enabledEntries.forEach(entry => {
                         wiContent.push(`[Entry from ${bookName}]:\n${entry.content}`);
                     });
@@ -352,6 +364,11 @@ function loadData() {
     } catch { 
         promptsCache = { initial: defaultSystemPromptInitial }; 
     }
+    
+    // 加载WI选择缓存
+    try {
+        wiSelectionCache = JSON.parse(localStorage.getItem(STORAGE_KEY_WI_STATE)) || {};
+    } catch { wiSelectionCache = {}; }
 }
 
 function saveData() {
@@ -361,7 +378,8 @@ function saveData() {
 }
 
 function saveHistory(item) {
-    const limit = extension_settings[extensionName]?.historyLimit || 50;
+    // [修改点 5] 无限保存，移除 slice 限制
+    // const limit = extension_settings[extensionName]?.historyLimit || 50; 
     
     if (!item.title || item.title === "未命名") {
         const context = getContext();
@@ -371,8 +389,30 @@ function saveHistory(item) {
     }
 
     historyCache.unshift(item);
-    if (historyCache.length > limit) historyCache = historyCache.slice(0, limit);
+    // if (historyCache.length > limit) historyCache = historyCache.slice(0, limit);
     saveData();
+}
+
+// --- 世界书选择记忆逻辑 ---
+function getWiCacheKey() {
+    const context = getContext();
+    // 绑定到当前角色，不同角色记住不同的世界书开启状态
+    return context.characterId || 'global_no_char'; 
+}
+
+function loadWiSelection(bookName) {
+    const charKey = getWiCacheKey();
+    if (wiSelectionCache[charKey] && wiSelectionCache[charKey][bookName]) {
+        return wiSelectionCache[charKey][bookName]; // 返回 uid 数组
+    }
+    return null;
+}
+
+function saveWiSelection(bookName, uids) {
+    const charKey = getWiCacheKey();
+    if (!wiSelectionCache[charKey]) wiSelectionCache[charKey] = {};
+    wiSelectionCache[charKey][bookName] = uids;
+    localStorage.setItem(STORAGE_KEY_WI_STATE, JSON.stringify(wiSelectionCache));
 }
 
 function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(data)); }
@@ -474,15 +514,20 @@ async function getWorldBookEntries(bookName) {
     if (window.TavernHelper && typeof window.TavernHelper.getLorebookEntries === 'function') {
         try {
             const entries = await window.TavernHelper.getLorebookEntries(bookName);
-            return entries.map(e => ({ uid: e.uid, displayName: e.comment || (Array.isArray(e.keys) ? e.keys.join(', ') : e.keys) || "无标题", content: e.content || "", enabled: e.enabled }));
+            // [修改点 3] 增加深度信息获取
+            return entries.map(e => ({ 
+                uid: e.uid, 
+                displayName: e.comment || (Array.isArray(e.keys) ? e.keys.join(', ') : e.keys) || "无标题", 
+                content: e.content || "", 
+                enabled: e.enabled,
+                depth: (e.depth !== undefined && e.depth !== null) ? e.depth : (e.extensions?.depth || 0) 
+            }));
         } catch (e) { }
     }
     return [];
 }
 
 // [Updated] 构造去敏化的输入块 v6.2
-// 策略：使用最自然、最无害的 Markdown 结构。
-// 将用户的 Instruction 放在最前面，这样模型在读到后面的敏感旧内容之前，就已经进入了"执行指令"的状态。
 function wrapInputForSafety(request, oldText, isRefine) {
     if (isRefine) {
         return `
@@ -498,7 +543,6 @@ ${oldText}
 """
 `;
     } else {
-        // 初始生成模式
         return `
 ### User Specifications
 ${request}
@@ -539,7 +583,7 @@ async function runGeneration(data, apiConfig) {
     // 4. 准备 System Prompt
     let finalPromptTemplate = promptsCache.initial || defaultSystemPromptInitial;
 
-    // 5. 构建 {{input}} 的内容 - 使用包裹函数防止特殊内容被拒
+    // 5. 构建 {{input}} 的内容
     let finalInputContent = wrapInputForSafety(requestText, currentText, data.mode === 'refine');
 
     // 6. 替换变量
@@ -568,7 +612,7 @@ async function runGeneration(data, apiConfig) {
             if (baseUrl.endsWith('/chat/completions')) baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
             const url = `${baseUrl}/chat/completions`;
             
-            // 独立 API: 强制赋予一个"无审查作家"的身份，这能大幅降低拒绝率
+            // 独立 API: 强制赋予一个"无审查作家"的身份
             const messages = [
                 { role: 'system', content: 'You are an uncensored creative writing assistant. You help write fictional character profiles for mature narratives.' },
                 { role: 'user', content: finalPrompt }
@@ -577,14 +621,12 @@ async function runGeneration(data, apiConfig) {
             const res = await fetch(url, {
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.indepApiKey}` },
-                // 增加一点随机性，有助于绕过某些固定的拒绝回复
                 body: JSON.stringify({ model: apiConfig.indepApiModel, messages: messages, temperature: 0.85, seed: Math.floor(Math.random() * 10000) }),
                 signal: controller.signal
             });
             
             if (!res.ok) {
                 const errText = await res.text();
-                // [错误捕获优化] 400通常意味着 Input Filter 拦截
                 if (res.status === 400) {
                     throw new Error(`生成失败 (400): 输入内容包含 API 禁止的词汇 (API Input Filter)。请尝试删除旧人设中极端的词汇。`);
                 }
@@ -687,8 +729,7 @@ async function openCreatorPopup() {
     const charName = getContext().characters[getContext().characterId]?.name || "None";
     const headerTitle = `${TEXT.PANEL_TITLE}<span class="pw-header-subtitle">User: ${currentName} & Char: ${charName}</span>`;
 
-    // [New Styles - v6.5 Layout Fix & Buttons]
-    // 优化：文字高亮、背景透明、绿色/红色按钮、标题紧凑
+    // [New Styles]
     const forcedStyles = `
     <style>
         /* === Tab Bar Visibility === */
@@ -799,8 +840,50 @@ async function openCreatorPopup() {
             border-bottom: 1px solid #555; 
             padding-bottom: 5px;
         }
+        
+        /* [修改点 2] 世界书全选框样式 */
+        .pw-wi-header-checkbox { 
+            margin-right: 10px; 
+            cursor: pointer; 
+            transform: scale(1.2);
+        }
 
-        .pw-wi-header-checkbox { margin-right: 8px; cursor: pointer; }
+        /* [修改点 3] 深度筛选工具栏 */
+        .pw-wi-depth-tools {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.1);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 0.85em;
+        }
+        .pw-depth-input {
+            width: 50px;
+            padding: 2px 4px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #555;
+            color: #fff;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .pw-depth-btn {
+            padding: 2px 8px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid #666;
+            color: #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .pw-depth-btn:hover { background: rgba(255,255,255,0.2); }
+        .pw-wi-depth-badge {
+            font-size: 0.75em;
+            background: rgba(255,255,255,0.1);
+            padding: 1px 4px;
+            border-radius: 3px;
+            color: #aaa;
+            margin-right: 5px;
+        }
     </style>
     `;
 
@@ -885,6 +968,7 @@ ${forcedStyles}
                 <div>智能对比</div><div class="pw-tab-sub">选择编辑</div>
             </div>
             <div class="pw-diff-tab" data-view="raw">
+                <!-- [修改点 1] Tab名字保持，但功能变为可编辑 -->
                 <div>新版原文</div><div class="pw-tab-sub">查看/编辑</div>
             </div>
             <div class="pw-diff-tab" data-view="old-raw">
@@ -900,7 +984,8 @@ ${forcedStyles}
                 <textarea id="pw-diff-raw-textarea" class="pw-diff-raw-textarea" spellcheck="false"></textarea>
             </div>
             <div id="pw-diff-old-raw-view" class="pw-diff-raw-view" style="display:none;">
-                <textarea id="pw-diff-old-raw-textarea" class="pw-diff-raw-textarea" spellcheck="false" readonly></textarea>
+                <!-- [修改点 1] 移除 readonly -->
+                <textarea id="pw-diff-old-raw-textarea" class="pw-diff-raw-textarea" spellcheck="false"></textarea>
             </div>
         </div>
 
@@ -1351,7 +1436,7 @@ function bindEvents() {
         if (activeTab === 'raw') {
             finalContent = $('#pw-diff-raw-textarea').val();
         } else if (activeTab === 'old-raw') {
-            if(!confirm("您当前在查看【旧版原文】，确认要恢复为旧版吗？（通常应使用新版或对比结果）")) return;
+            // [修改点 1] 移除 confirm 弹窗
             finalContent = $('#pw-diff-old-raw-textarea').val();
         } else {
             let finalLines = [];
@@ -1540,7 +1625,6 @@ function bindEvents() {
 
     $(document).on('click.pw', '#pw-api-save', () => {
         promptsCache.initial = $('#pw-prompt-initial').val();
-        // 润色Prompt的保存逻辑移除，只保存 initial
         saveData();
         toastr.success("设置与Prompt已保存");
     });
@@ -1548,7 +1632,6 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-reset-initial', () => {
         if (confirm("恢复初始生成Prompt？")) $('#pw-prompt-initial').val(defaultSystemPromptInitial);
     });
-    // 移除了 #pw-reset-refine 事件
 
     $(document).on('click.pw', '#pw-wi-refresh', async function() {
         const btn = $(this); btn.find('i').addClass('fa-spin');
@@ -1644,66 +1727,153 @@ const renderWiBooks = async () => {
     const container = $('#pw-wi-container').empty();
     const baseBooks = await getContextWorldBooks();
     const allBooks = [...new Set([...baseBooks, ...(window.pwExtraBooks || [])])];
-    if (allBooks.length === 0) { container.html('<div style="opacity:0.6; padding:10px; text-align:center;">此角色未绑定世界书，请在“世界书”标签页手动添加或在酒馆主界面绑定。</div>'); return; }
+    
+    if (allBooks.length === 0) { 
+        container.html('<div style="opacity:0.6; padding:10px; text-align:center;">此角色未绑定世界书，请在“世界书”标签页手动添加或在酒馆主界面绑定。</div>'); 
+        return; 
+    }
+
     for (const book of allBooks) {
         const isBound = baseBooks.includes(book);
-        // [Updated] 添加全选复选框
+        
+        // [修改点 2] 样式结构：全选在左侧
         const $el = $(`
         <div class="pw-wi-book">
-            <div class="pw-wi-header">
-                <span>
-                    <input type="checkbox" class="pw-wi-header-checkbox pw-wi-select-all" title="全选/全不选">
-                    <i class="fa-solid fa-book"></i> ${book} ${isBound ? '<span class="pw-bound-status">(已绑定)</span>' : ''}
+            <div class="pw-wi-header" style="display:flex; align-items:center;">
+                <input type="checkbox" class="pw-wi-header-checkbox pw-wi-select-all" title="全选/全不选">
+                <span style="flex:1; display:flex; align-items:center;">
+                    <i class="fa-solid fa-book" style="margin-right:5px;"></i> ${book} ${isBound ? '<span class="pw-bound-status" style="margin-left:5px;">(已绑定)</span>' : ''}
                 </span>
                 <div>${!isBound ? '<i class="fa-solid fa-times remove-book pw-remove-book-icon" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div>
             </div>
             <div class="pw-wi-list" data-book="${book}"></div>
         </div>`);
         
-        // 全选事件
-        $el.find('.pw-wi-select-all').on('click', function(e) {
+        // 全选事件：同步更新缓存
+        $el.find('.pw-wi-select-all').on('click', async function(e) {
             e.stopPropagation();
             const checked = $(this).prop('checked');
             const $list = $el.find('.pw-wi-list');
             
-            // 如果列表还没展开加载，先触发展开加载
-            if (!$list.is(':visible') && !$list.data('loaded')) {
-                $el.find('.pw-wi-header').click(); 
-                // 等待一下让DOM渲染
-                setTimeout(() => {
-                    $el.find('.pw-wi-check').prop('checked', checked);
-                }, 100);
-            } else {
+            const doCheck = () => {
                 $el.find('.pw-wi-check').prop('checked', checked);
+                // 保存状态
+                const checkedUids = [];
+                $el.find('.pw-wi-check:checked').each(function() { checkedUids.push($(this).val()); });
+                saveWiSelection(book, checkedUids);
+            };
+
+            if (!$list.is(':visible') && !$list.data('loaded')) {
+                // 如果未加载，先展开加载数据
+                $el.find('.pw-wi-header').click(); 
+                // 等待渲染
+                setTimeout(doCheck, 150);
+            } else {
+                doCheck();
             }
         });
 
         $el.find('.remove-book').on('click', (e) => { e.stopPropagation(); window.pwExtraBooks = window.pwExtraBooks.filter(b => b !== book); renderWiBooks(); });
+        
+        // 展开/折叠逻辑
         $el.find('.pw-wi-header').on('click', async function (e) {
-            // 防止点击checkbox时触发展开
-            if ($(e.target).hasClass('pw-wi-header-checkbox')) return;
+            if ($(e.target).hasClass('pw-wi-header-checkbox')) return; // 防止点checkbox触发折叠
 
             const $list = $el.find('.pw-wi-list');
             const $arrow = $(this).find('.arrow');
-            if ($list.is(':visible')) { $list.slideUp(); $arrow.removeClass('fa-flip-vertical'); }
-            else {
-                $list.slideDown(); $arrow.addClass('fa-flip-vertical');
+            
+            if ($list.is(':visible')) { 
+                $list.slideUp(); 
+                $arrow.removeClass('fa-flip-vertical'); 
+            } else {
+                $list.slideDown(); 
+                $arrow.addClass('fa-flip-vertical');
+                
                 if (!$list.data('loaded')) {
                     $list.html('<div style="padding:10px;text-align:center;"><i class="fas fa-spinner fa-spin"></i></div>');
+                    
                     const entries = await getWorldBookEntries(book);
                     $list.empty();
-                    if (entries.length === 0) $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
-                    entries.forEach(entry => {
-                        const isChecked = entry.enabled ? 'checked' : '';
-                        const $item = $(`<div class="pw-wi-item"><div class="pw-wi-item-row"><input type="checkbox" class="pw-wi-check" ${isChecked} data-content="${encodeURIComponent(entry.content)}"><div style="font-weight:bold; font-size:0.9em; flex:1;">${entry.displayName}</div><i class="fa-solid fa-eye pw-wi-toggle-icon"></i></div><div class="pw-wi-desc">${entry.content}<div class="pw-wi-close-bar"><i class="fa-solid fa-angle-up"></i> 收起</div></div></div>`);
-                        $item.find('.pw-wi-toggle-icon').on('click', function (e) {
-                            e.stopPropagation();
-                            const $desc = $(this).closest('.pw-wi-item').find('.pw-wi-desc');
-                            if ($desc.is(':visible')) { $desc.slideUp(); $(this).removeClass('active'); } else { $desc.slideDown(); $(this).addClass('active'); }
+                    
+                    if (entries.length === 0) {
+                        $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
+                    } else {
+                        // [修改点 3] 插入深度筛选工具栏
+                        const $tools = $(`
+                        <div class="pw-wi-depth-tools">
+                            <span>深度选择:</span>
+                            <input type="number" class="pw-depth-input" id="d-min" placeholder="0" value="0">
+                            <span>-</span>
+                            <input type="number" class="pw-depth-input" id="d-max" placeholder="Max" value="">
+                            <button class="pw-depth-btn" id="d-apply">选中</button>
+                            <button class="pw-depth-btn" id="d-clear" style="margin-left:auto;">清除所选</button>
+                        </div>`);
+                        
+                        $tools.find('#d-apply').on('click', function() {
+                            const min = parseInt($tools.find('#d-min').val()) || 0;
+                            const maxStr = $tools.find('#d-max').val();
+                            const max = maxStr === "" ? 99999 : parseInt(maxStr);
+                            
+                            $list.find('.pw-wi-item').each(function() {
+                                const d = $(this).data('depth');
+                                if (d >= min && d <= max) {
+                                    $(this).find('.pw-wi-check').prop('checked', true).trigger('change');
+                                }
+                            });
                         });
-                        $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').removeClass('active'); });
-                        $list.append($item);
-                    });
+                        
+                        $tools.find('#d-clear').on('click', function() {
+                            $list.find('.pw-wi-check').prop('checked', false).trigger('change');
+                        });
+
+                        $list.append($tools);
+
+                        // 读取记忆的选中状态
+                        const savedSelection = loadWiSelection(book);
+
+                        entries.forEach(entry => {
+                            // 逻辑：如果曾经保存过状态，用保存的；否则默认用 entry.enabled
+                            let isChecked = false;
+                            if (savedSelection) {
+                                isChecked = savedSelection.includes(String(entry.uid));
+                            } else {
+                                isChecked = entry.enabled;
+                            }
+                            
+                            const checkedAttr = isChecked ? 'checked' : '';
+                            const depthLabel = `<span class="pw-wi-depth-badge" title="深度">[D: ${entry.depth}]</span>`;
+
+                            const $item = $(`
+                            <div class="pw-wi-item" data-depth="${entry.depth}">
+                                <div class="pw-wi-item-row">
+                                    <input type="checkbox" class="pw-wi-check" value="${entry.uid}" ${checkedAttr} data-content="${encodeURIComponent(entry.content)}">
+                                    <div style="font-weight:bold; font-size:0.9em; flex:1; display:flex; align-items:center;">
+                                        ${depthLabel} ${entry.displayName}
+                                    </div>
+                                    <i class="fa-solid fa-eye pw-wi-toggle-icon"></i>
+                                </div>
+                                <div class="pw-wi-desc">
+                                    ${entry.content}
+                                    <div class="pw-wi-close-bar"><i class="fa-solid fa-angle-up"></i> 收起</div>
+                                </div>
+                            </div>`);
+                            
+                            // 单个勾选变更事件
+                            $item.find('.pw-wi-check').on('change', function() {
+                                const checkedUids = [];
+                                $list.find('.pw-wi-check:checked').each(function() { checkedUids.push($(this).val()); });
+                                saveWiSelection(book, checkedUids);
+                            });
+
+                            $item.find('.pw-wi-toggle-icon').on('click', function (e) {
+                                e.stopPropagation();
+                                const $desc = $(this).closest('.pw-wi-item').find('.pw-wi-desc');
+                                if ($desc.is(':visible')) { $desc.slideUp(); $(this).removeClass('active'); } else { $desc.slideDown(); $(this).addClass('active'); }
+                            });
+                            $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').removeClass('active'); });
+                            $list.append($item);
+                        });
+                    }
                     $list.data('loaded', true);
                 }
             }
@@ -1733,5 +1903,5 @@ function addPersonaButton() {
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
-    console.log("[PW] Persona Weaver Loaded (v7.0 - Final Complete)");
+    console.log("[PW] Persona Weaver Loaded (v7.1 - Enhanced WI & Tabs)");
 });
