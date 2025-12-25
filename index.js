@@ -691,9 +691,7 @@ async function openCreatorPopup() {
     const charName = getContext().characters[getContext().characterId]?.name || "None";
     const headerTitle = `${TEXT.PANEL_TITLE}<span class="pw-header-subtitle">User: ${currentName} & Char: ${charName}</span>`;
 
-    // [New Styles] 
-    // 强制样式：透明背景，只保留边框。
-    // 文字颜色：新版跟随主题亮色，旧版灰色。
+    // [New Styles - v6.3 High Contrast Fix]
     const forcedStyles = `
     <style>
         /* 容器：透明背景，有外边距 */
@@ -706,7 +704,7 @@ async function openCreatorPopup() {
             position: relative;
         }
 
-        /* 通用文本框样式 */
+        /* 通用文本框样式：强制白色文字！ */
         .pw-diff-textarea {
             background: transparent !important;
             border: none !important;
@@ -717,6 +715,13 @@ async function openCreatorPopup() {
             line-height: 1.6;
             font-size: 1em;
             display: block;
+            color: #ffffff !important; /* 核心修复：强制白色 */
+        }
+
+        /* 修复 Raw 视图的输入框文字颜色 */
+        .pw-diff-raw-textarea {
+            color: #ffffff !important;
+            background: rgba(0,0,0,0.2) !important;
         }
 
         /* 标签通用样式 */
@@ -729,42 +734,34 @@ async function openCreatorPopup() {
         }
 
         /* === [新版本 / 无变更] 样式 === */
-        /* 绿色边框 */
         .pw-diff-card.new {
-            border-color: #83c168 !important; 
+            border-color: #83c168 !important; /* 绿色边框 */
         }
-        /* 绿色标题 */
         .pw-diff-card.new .pw-diff-label {
             color: #83c168 !important;
         }
-        /* 亮色文字 (跟随主题，通常是白色) */
         .pw-diff-card.new .pw-diff-textarea {
-            color: var(--SmartThemeBodyColor) !important;
-            opacity: 1;
+            color: #ffffff !important; /* 纯白文字 */
+            font-weight: 500;
         }
 
         /* === [原版本] 样式 === */
-        /* 灰色边框 */
         .pw-diff-card.old {
-            border-color: #666 !important;
-            opacity: 0.8;
+            border-color: #666 !important; /* 灰色边框 */
+            opacity: 0.9;
         }
-        /* 灰色标题 */
         .pw-diff-card.old .pw-diff-label {
             color: #888 !important;
         }
-        /* 灰色文字 (强制变灰，防止看不清) */
         .pw-diff-card.old .pw-diff-textarea {
-            color: #aaa !important;
+            color: #aaaaaa !important; /* 银灰文字，保证可见度但做区分 */
         }
 
         /* === 交互 === */
-        /* 选中时的光晕效果 */
         .pw-diff-card.selected {
             opacity: 1 !important;
-            box-shadow: 0 0 12px rgba(0, 0, 0, 0.3); 
+            box-shadow: 0 0 10px rgba(131, 193, 104, 0.2); 
         }
-        /* 全选框 */
         .pw-wi-header-checkbox { margin-right: 8px; cursor: pointer; }
     </style>
     `;
@@ -1696,5 +1693,5 @@ function addPersonaButton() {
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
-    console.log("[PW] Persona Weaver Loaded (v6.2 - UI Transparency Fix)");
+    console.log("[PW] Persona Weaver Loaded (v6.3 - High Contrast Text)");
 });
