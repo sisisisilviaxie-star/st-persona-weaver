@@ -5,8 +5,8 @@ const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v20';
 const STORAGE_KEY_STATE = 'pw_state_v20';
 const STORAGE_KEY_TEMPLATE = 'pw_template_v2';
-// [重要] 升级版本号，强制重置本地 Prompt 缓存
-const STORAGE_KEY_PROMPTS = 'pw_prompts_v12'; 
+// [重要] 保持版本号，或者升级为 v13 以确保样式更新生效（主要影响 CSS 注入）
+const STORAGE_KEY_PROMPTS = 'pw_prompts_v13'; 
 const BUTTON_ID = 'pw_persona_tool_btn';
 
 // --- 2. 简化版护盾：避免使用过于像"越狱"的词汇 ---
@@ -685,38 +685,120 @@ async function openCreatorPopup() {
     const charName = getContext().characters[getContext().characterId]?.name || "None";
     const headerTitle = `${TEXT.PANEL_TITLE}<span class="pw-header-subtitle">User: ${currentName} & Char: ${charName}</span>`;
 
+    // [New Styles - v6.5 Layout Fix & Buttons]
+    // 优化：文字高亮、背景透明、绿色/红色按钮、标题紧凑
     const forcedStyles = `
     <style>
-        .pw-diff-card {
-            color: var(--SmartThemeBodyColor) !important;
-            border: 1px solid var(--SmartThemeBorderColor) !important;
+        /* === Tab Bar Visibility === */
+        .pw-diff-tabs-bar {
+            border-bottom: 1px solid #444;
         }
-        .pw-diff-card.old {
-            background-color: rgba(180, 50, 50, 0.15) !important;
-            border-left: 3px solid rgba(180, 50, 50, 0.6) !important;
+        .pw-diff-tab {
+            color: #ccc !important;
+            background: rgba(0,0,0,0.3) !important;
         }
-        .pw-diff-card.new {
-            background-color: rgba(50, 180, 50, 0.15) !important;
-            border-left: 3px solid rgba(50, 180, 50, 0.6) !important;
+        .pw-diff-tab.active {
+            color: #fff !important;
+            border-bottom: 2px solid #83c168; 
+            background: rgba(0,0,0,0.5) !important;
         }
-        .pw-diff-card.selected {
-            box-shadow: 0 0 5px var(--SmartThemeBodyColor) !important;
+        .pw-tab-sub {
+            color: #999 !important; 
+        }
+
+        /* === Buttons Visibility === */
+        #pw-diff-confirm {
+            background: transparent !important;
+            border: 1px solid #83c168 !important;
+            color: #83c168 !important;
+            text-shadow: none !important;
             opacity: 1 !important;
         }
-        .pw-diff-label {
-            color: var(--SmartThemeBodyColor) !important;
-            opacity: 0.7;
-            font-weight: bold;
+        #pw-diff-confirm:hover {
+            background: rgba(131, 193, 104, 0.1) !important;
         }
+
+        #pw-diff-cancel {
+            background: transparent !important;
+            border: 1px solid #ff6b6b !important;
+            color: #ff6b6b !important;
+            text-shadow: none !important;
+            opacity: 1 !important;
+        }
+        #pw-diff-cancel:hover {
+            background: rgba(255, 107, 107, 0.1) !important;
+        }
+
+        /* === List View Styles === */
+        .pw-diff-card {
+            background-color: transparent !important;
+            border-radius: 8px;
+            padding: 0 !important;
+            margin-bottom: 12px;
+            border: 1px solid #666 !important;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.2s ease;
+        }
+
+        .pw-diff-card.selected {
+            border-color: #83c168 !important;
+            box-shadow: 0 0 10px rgba(131, 193, 104, 0.2); 
+        }
+
+        .pw-diff-label {
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.9em;
+            letter-spacing: 1px;
+            padding: 5px 0;
+            margin: 0 !important;
+            width: 100%;
+            background-color: rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .pw-diff-card.selected .pw-diff-label {
+            color: #83c168 !important;
+            background-color: rgba(131, 193, 104, 0.1) !important;
+            border-bottom: 1px solid rgba(131, 193, 104, 0.2);
+        }
+        .pw-diff-card .pw-diff-label {
+            color: #aaa !important;
+        }
+
         .pw-diff-textarea {
             background: transparent !important;
-            color: var(--SmartThemeBodyColor) !important;
             border: none !important;
+            width: 100%;
+            resize: none;
+            outline: none;
+            font-family: inherit;
+            line-height: 1.6;
+            font-size: 1em;
+            display: block;
+            color: #ffffff !important; /* 强制白色文字 */
+            padding: 10px;
         }
-        .pw-wi-header-checkbox {
-            margin-right: 8px;
-            cursor: pointer;
+
+        .pw-diff-raw-textarea {
+            color: #ffffff !important;
+            background: rgba(0,0,0,0.2) !important;
         }
+
+        .pw-diff-attr-name {
+            color: #ffffff !important;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin: 15px 0 10px 0;
+            border-bottom: 1px solid #555; 
+            padding-bottom: 5px;
+        }
+
+        .pw-wi-header-checkbox { margin-right: 8px; cursor: pointer; }
     </style>
     `;
 
@@ -801,10 +883,10 @@ ${forcedStyles}
                 <div>智能对比</div><div class="pw-tab-sub">选择编辑</div>
             </div>
             <div class="pw-diff-tab" data-view="raw">
-                <div>新版原文</div><div class="pw-tab-sub">直接编辑</div>
+                <div>新版原文</div><div class="pw-tab-sub">查看/编辑</div>
             </div>
             <div class="pw-diff-tab" data-view="old-raw">
-                <div>原版原文</div><div class="pw-tab-sub">查看旧版</div>
+                <div>原版原文</div><div class="pw-tab-sub">查看/编辑</div>
             </div>
         </div>
         
@@ -1647,5 +1729,5 @@ function addPersonaButton() {
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
-    console.log("[PW] Persona Weaver Loaded (v6.2 - Anti-Refusal Logic)");
+    console.log("[PW] Persona Weaver Loaded (v6.5 - UI Beautified)");
 });
