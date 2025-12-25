@@ -557,7 +557,9 @@ ${requestText}
 
     // 只拼接头部破限，不添加任何额外的三明治结构
     const finalPrompt = headJailbreak ? `${headJailbreak}\n\n${corePrompt}` : corePrompt;
-
+    console.log("%c [PW] 正在发送的完整 Prompt:", "color: #00ff00; font-weight: bold; font-size: 14px;");
+    console.log(finalPrompt);
+    console.log("%c =========================================", "color: #00ff00;");
     console.log(`[PW] Mode: ${data.mode} (Disguised as Initial, No Sanitization)`);
     
     let responseContent = "";
