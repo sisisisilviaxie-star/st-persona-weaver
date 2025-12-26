@@ -5,7 +5,7 @@ const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v21_unlimited';
 const STORAGE_KEY_STATE = 'pw_state_v20';
 const STORAGE_KEY_TEMPLATE = 'pw_template_v4_refined'; 
-const STORAGE_KEY_PROMPTS = 'pw_prompts_v16_xita_deep'; // 升级版本号
+const STORAGE_KEY_PROMPTS = 'pw_prompts_v16_xita_deep'; 
 const STORAGE_KEY_WI_STATE = 'pw_wi_selection_v1';
 const STORAGE_KEY_UI_STATE = 'pw_ui_state_v1';
 const BUTTON_ID = 'pw_persona_tool_btn';
@@ -81,8 +81,7 @@ NSFW:
   性癖好:
   禁忌底线:`;
 
-// [重写 1] 人设生成/润色 Prompt - 全链路西塔模式
-// 所有的 {{variable}} 都已经被包裹在"资料引用"的语境中，所以这里不需要再写 [Context] 这种标题了
+// 人设生成/润色 Prompt - 西塔模式
 const defaultSystemPromptInitial =
 `[SCENE: Xi Ta's Private Studio. Midnight. The air is filled with the scent of old books and coffee.]
 [IDENTITY: Xi Ta (西塔)]
@@ -121,7 +120,7 @@ Xi Ta lights a cigarette, adjusts glasses, and starts typing the YAML profile on
 </action>
 [Xi Ta's Draft]:`;
 
-// [重写 2] 模版生成 Prompt - 全链路西塔模式
+// 模版生成 Prompt - 西塔模式
 const defaultTemplateGenPrompt = 
 `[SCENE: Xi Ta's Private Studio. Brainstorming Session.]
 [IDENTITY: Xi Ta (西塔)]
@@ -195,8 +194,7 @@ const getPosFilterCode = (pos) => {
     return pos;
 };
 
-// [新增] 西塔语境包裹函数
-// 将所有素材都包装成“小说家的参考资料”，降低模型的戒心
+// 西塔语境包裹函数
 function wrapAsXiTaReference(content, title) {
     if (!content || !content.trim()) return "";
     return `
@@ -470,21 +468,34 @@ function saveState(data) { localStorage.setItem(STORAGE_KEY_STATE, JSON.stringif
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
 
 async function forceSavePersona(name, description) {
-    const context = getContext();
-    if (!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
-    context.powerUserSettings.personas[name] = description;
-    context.powerUserSettings.persona_selected = name;
-    const $nameInput = $('#your_name');
-    const $descInput = $('#persona_description');
-    if ($nameInput.length) $nameInput.val(name).trigger('input').trigger('change');
-    if ($descInput.length) $descInput.val(description).trigger('input').trigger('change');
-    const $h5Name = $('h5#your_name');
-    if ($h5Name.length) $h5Name.text(name);
-    await saveSettingsDebounced();
-    return true;
+    try {
+        const context = getContext();
+        if (!context || !context.powerUserSettings) {
+            throw new Error("酒馆上下文未就绪，请刷新页面重试");
+        }
+        
+        // 确保 personas 对象存在
+        if (!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
+        
+        context.powerUserSettings.personas[name] = description;
+        context.powerUserSettings.persona_selected = name;
+        
+        const $nameInput = $('#your_name');
+        const $descInput = $('#persona_description');
+        if ($nameInput.length) $nameInput.val(name).trigger('input').trigger('change');
+        if ($descInput.length) $descInput.val(description).trigger('input').trigger('change');
+        const $h5Name = $('h5#your_name');
+        if ($h5Name.length) $h5Name.text(name);
+        
+        await saveSettingsDebounced();
+        return true;
+    } catch (e) {
+        console.error("[PW] Save Persona Error:", e);
+        throw e;
+    }
 }
 
-// [修改] 需求3：确保写入世界书时 Title 正确 (USER:用户名)
+// [修复 1 & 3] 确保写入世界书时 Title 正确 (USER:用户名)
 async function syncToWorldInfoViaHelper(userName, content) {
     if (!window.TavernHelper) return toastr.error(TEXT.TOAST_WI_ERROR);
 
@@ -503,7 +514,8 @@ async function syncToWorldInfoViaHelper(userName, content) {
     if (!targetBook) return toastr.warning(TEXT.TOAST_WI_FAIL);
 
     const safeUserName = userName || "User";
-    const entryTitle = `USER:${safeUserName}`; // 修改为 USER:用户名 格式
+    // [关键修复] 明确指定 Title 格式
+    const entryTitle = `USER: ${safeUserName}`;
 
     try {
         await window.TavernHelper.updateWorldbookWith(targetBook, (entries) => {
@@ -515,7 +527,7 @@ async function syncToWorldInfoViaHelper(userName, content) {
                 existingEntry.enabled = true;
             } else {
                 entries.push({ 
-                    comment: entryTitle, // 确保设置了 Title
+                    comment: entryTitle, // [关键修复] 确保设置了 Title (在ST中对应comment字段)
                     keys: [safeUserName, "User"], 
                     content: content, 
                     enabled: true, 
@@ -527,6 +539,7 @@ async function syncToWorldInfoViaHelper(userName, content) {
             return entries;
         });
         toastr.success(TEXT.TOAST_WI_SUCCESS(targetBook));
+        console.log(`[PW] Saved to WorldBook [${targetBook}] with Title: [${entryTitle}]`);
     } catch (e) { 
         console.error("[PW] World Info Sync Error:", e);
         toastr.error("写入世界书失败: " + (e.message || "未知错误")); 
@@ -602,7 +615,6 @@ ${oldText}
     }
 }
 
-// [修改] 运行逻辑：应用全链路西塔包装
 async function runGeneration(data, apiConfig, overridePrompt = null) {
     const context = getContext();
     const charId = context.characterId;
@@ -618,8 +630,7 @@ async function runGeneration(data, apiConfig, overridePrompt = null) {
     const currentText = data.currentText || "";
     const requestText = data.request || "";
 
-    // [新增] 2. 使用西塔风格包装所有素材
-    // 无论是生成人设还是模版，都将素材视为“小说家参考资料”
+    // 2. 使用西塔风格包装所有素材
     const wrappedCharInfo = wrapAsXiTaReference(rawCharInfo, `Character: ${charName}`);
     const wrappedWi = wrapAsXiTaReference(rawWi, "World Setting");
     const wrappedGreetings = wrapAsXiTaReference(rawGreetings, "Opening Scene");
@@ -1037,7 +1048,7 @@ async function openCreatorPopup() {
         }
         .pw-wi-filter-toggle:hover { opacity: 1; background: rgba(255,255,255,0.1); }
         
-        /* [修改] 需求4：调整模版编辑器布局 */
+        /* [修改] 需求4：新的编辑器布局样式 */
         .pw-template-editor-area {
             display: none;
             flex-direction: column;
@@ -1045,6 +1056,17 @@ async function openCreatorPopup() {
             border-radius: 6px;
             margin-bottom: 10px;
         }
+        /* [修改] 顶部 Header (放置快捷键) */
+        .pw-template-header {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.1);
+            border-bottom: 1px solid var(--SmartThemeBorderColor);
+            border-radius: 6px 6px 0 0;
+        }
+        /* [修改] 文本框去除圆角 (中间层) */
         .pw-template-textarea {
             width: 100%;
             min-height: 200px;
@@ -1054,11 +1076,12 @@ async function openCreatorPopup() {
             padding: 10px;
             font-family: monospace;
             resize: vertical;
-            border-radius: 6px 6px 0 0;
+            border-radius: 0; 
         }
+        /* [修改] 底部 Footer (放置按钮) */
         .pw-template-footer {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-end; /* 按钮靠右 */
             align-items: center;
             padding: 5px 10px;
             background: rgba(0,0,0,0.1);
@@ -1068,7 +1091,7 @@ async function openCreatorPopup() {
     </style>
     `;
 
-    // [修改] 需求4：调整 HTML 结构，将按钮移动到底部
+    // [修改] 需求4：调整 HTML 结构
     const html = `
 ${forcedStyles}
 <div class="pw-wrapper">
@@ -1101,16 +1124,21 @@ ${forcedStyles}
                 </div>
                 <div class="pw-tags-container" id="pw-template-chips" style="display:${chipsDisplay};"></div>
                 
-                <!-- [修改] 需求4：HTML结构调整，TextArea在上，Footer在下 -->
+                <!-- [修改] 需求4：新的编辑器结构 Header/Textarea/Footer -->
                 <div class="pw-template-editor-area" id="pw-template-editor">
-                    <textarea id="pw-template-text" class="pw-template-textarea">${currentTemplate}</textarea>
-                    <div class="pw-template-footer">
+                    <!-- 顶部：快捷键 -->
+                    <div class="pw-template-header">
                         <div class="pw-shortcut-bar">
                             <div class="pw-shortcut-btn" data-key="  "><span>缩进</span><span class="code">Tab</span></div>
                             <div class="pw-shortcut-btn" data-key=": "><span>冒号</span><span class="code">:</span></div>
                             <div class="pw-shortcut-btn" data-key="- "><span>列表</span><span class="code">-</span></div>
                             <div class="pw-shortcut-btn" data-key="\n"><span>换行</span><span class="code">Enter</span></div>
                         </div>
+                    </div>
+                    <!-- 中间：文本框 -->
+                    <textarea id="pw-template-text" class="pw-template-textarea">${currentTemplate}</textarea>
+                    <!-- 底部：功能按钮 -->
+                    <div class="pw-template-footer">
                         <div style="display:flex; gap:5px;">
                             <button class="pw-mini-btn" id="pw-gen-template-smart" title="根据当前世界书和设定，生成定制化模版">生成模板</button>
                             <button class="pw-mini-btn" id="pw-save-template">保存模版</button>
@@ -1383,7 +1411,7 @@ function bindEvents() {
         saveData(); 
     });
 
-    // 智能生成模版事件 - 空数据检测
+    // [修改] 智能生成模版事件 - 增加空数据检测逻辑
     $(document).on('click.pw', '#pw-gen-template-smart', async function() {
         if (isProcessing) return;
         isProcessing = true;
@@ -1393,29 +1421,20 @@ function bindEvents() {
         
         try {
             const contextData = await collectContextData();
-            // 手动获取角色描述文本，用于判断是否为空
             const charInfoText = getCharacterInfoText(); 
-            
-            // 简单的非空检查阈值
             const hasCharInfo = charInfoText && charInfoText.length > 50; 
             const hasWi = contextData.wi && contextData.wi.length > 10;
 
-            // 如果都没有，弹出确认框
             if (!hasCharInfo && !hasWi) {
-                // True (确定) -> 恢复默认
-                // False (取消) -> 强制 AI 生成
                 const userChoice = confirm("未检测到角色卡或世界书信息。\n\n点击【确定】恢复默认内置模板（推荐）。\n点击【取消】尝试让AI生成一份新的通用模板。");
-                
                 if (userChoice) {
-                    // 恢复默认
                     $('#pw-template-text').val(defaultYamlTemplate);
                     currentTemplate = defaultYamlTemplate;
                     renderTemplateChips();
                     toastr.success("已恢复默认模板");
-                    
                     isProcessing = false;
                     $btn.html(originalText);
-                    return; // 终止后续 API 调用
+                    return; 
                 }
             }
 
@@ -1428,18 +1447,12 @@ function bindEvents() {
                 indepApiModel: modelVal
             };
             
-            // 使用特殊参数 overridePrompt 调用 runGeneration
             const generatedTemplate = await runGeneration(config, config, defaultTemplateGenPrompt);
             
             if (generatedTemplate) {
-                // 更新模版显示
                 $('#pw-template-text').val(generatedTemplate);
-                // 不自动保存到草稿，等待用户手动点击保存
-                // 但为了体验，先更新 currentTemplate 变量以便预览
                 currentTemplate = generatedTemplate; 
                 renderTemplateChips();
-                
-                // 自动切换到模版编辑模式，让用户查看生成结果
                 if (!isEditingTemplate) {
                     $('#pw-toggle-edit-template').click();
                 }
@@ -1454,30 +1467,35 @@ function bindEvents() {
         }
     });
 
-    // [修改] 需求2：修复保存模版按钮
+    // [修改] 保存模版按钮修复 - 增加 try/catch 和 成功提示
     $(document).on('click.pw', '#pw-save-template', () => {
-        const val = $('#pw-template-text').val();
-        currentTemplate = val;
-        
-        saveData();
-        
-        saveHistory({ 
-            request: "模版手动保存", 
-            timestamp: new Date().toLocaleString(), 
-            title: "", 
-            data: { 
-                resultText: val, 
-                type: 'template'
-            } 
-        });
+        try {
+            const val = $('#pw-template-text').val();
+            currentTemplate = val;
+            
+            saveData();
+            
+            saveHistory({ 
+                request: "模版手动保存", 
+                timestamp: new Date().toLocaleString(), 
+                title: "", 
+                data: { 
+                    resultText: val, 
+                    type: 'template'
+                } 
+            });
 
-        renderTemplateChips();
-        isEditingTemplate = false;
-        $('#pw-template-editor').hide();
-        $('#pw-template-chips').css('display', 'flex');
-        $('#pw-toggle-edit-template').text("编辑模版").removeClass('editing');
-        $('#pw-toggle-chips-vis').show();
-        toastr.success("模版已更新并保存至记录");
+            renderTemplateChips();
+            isEditingTemplate = false;
+            $('#pw-template-editor').hide();
+            $('#pw-template-chips').css('display', 'flex');
+            $('#pw-toggle-edit-template').text("编辑模版").removeClass('editing');
+            $('#pw-toggle-chips-vis').show();
+            toastr.success("模版已更新并保存至记录");
+        } catch(e) {
+            console.error("Save Template Error:", e);
+            toastr.error("保存失败: " + e.message);
+        }
     });
 
     $(document).on('click.pw', '.pw-shortcut-btn', function () {
@@ -1811,22 +1829,32 @@ function bindEvents() {
         }
     });
 
-    // [修改] 需求2：修复“保存至世界书”按钮
+    // [修复] 修复保存至世界书按钮
     $(document).on('click.pw', '#pw-btn-save-wi', async function () {
-        const content = $('#pw-result-text').val();
-        if (!content) return toastr.warning("内容为空，无法保存");
-        const name = $('.persona_name').first().text().trim() || $('h5#your_name').text().trim() || "User";
-        await syncToWorldInfoViaHelper(name, content);
+        try {
+            const content = $('#pw-result-text').val();
+            if (!content) return toastr.warning("内容为空，无法保存");
+            const name = $('.persona_name').first().text().trim() || $('h5#your_name').text().trim() || "User";
+            await syncToWorldInfoViaHelper(name, content);
+        } catch(e) {
+            console.error("Save WI Error:", e);
+            toastr.error("保存失败: " + e.message);
+        }
     });
 
-    // [修改] 需求2：修复“覆盖当前人设”按钮
+    // [修复] 修复覆盖当前人设按钮
     $(document).on('click.pw', '#pw-btn-apply', async function () {
-        const content = $('#pw-result-text').val();
-        if (!content) return toastr.warning("内容为空");
-        const name = $('.persona_name').first().text().trim() || $('h5#your_name').text().trim() || "User";
-        await forceSavePersona(name, content);
-        toastr.success(TEXT.TOAST_SAVE_SUCCESS(name));
-        $('.popup_close').click();
+        try {
+            const content = $('#pw-result-text').val();
+            if (!content) return toastr.warning("内容为空");
+            const name = $('.persona_name').first().text().trim() || $('h5#your_name').text().trim() || "User";
+            await forceSavePersona(name, content);
+            toastr.success(TEXT.TOAST_SAVE_SUCCESS(name));
+            $('.popup_close').click();
+        } catch(e) {
+            console.error("Apply Persona Error:", e);
+            toastr.error("保存失败: " + e.message);
+        }
     });
 
     $(document).on('click.pw', '#pw-clear', function () {
@@ -1838,22 +1866,27 @@ function bindEvents() {
         }
     });
 
-    // [修改] 需求2：修复“保存至记录”按钮
+    // [修复] 修复保存至记录按钮
     $(document).on('click.pw', '#pw-snapshot', function () {
-        const text = $('#pw-result-text').val();
-        const req = $('#pw-request').val();
-        if (!text && !req) return toastr.warning("没有任何内容可保存");
-        saveHistory({ 
-            request: req || "无", 
-            timestamp: new Date().toLocaleString(), 
-            title: "", 
-            data: { 
-                name: "Persona", 
-                resultText: text || "(无)", 
-                type: 'persona'
-            } 
-        });
-        toastr.success(TEXT.TOAST_SNAPSHOT);
+        try {
+            const text = $('#pw-result-text').val();
+            const req = $('#pw-request').val();
+            if (!text && !req) return toastr.warning("没有任何内容可保存");
+            saveHistory({ 
+                request: req || "无", 
+                timestamp: new Date().toLocaleString(), 
+                title: "", 
+                data: { 
+                    name: "Persona", 
+                    resultText: text || "(无)", 
+                    type: 'persona'
+                } 
+            });
+            toastr.success(TEXT.TOAST_SNAPSHOT);
+        } catch(e) {
+            console.error("Save Snapshot Error:", e);
+            toastr.error("保存失败: " + e.message);
+        }
     });
 
     $(document).on('click.pw', '.pw-hist-action-btn.edit', function (e) {
