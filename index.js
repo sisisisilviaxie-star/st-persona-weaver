@@ -109,7 +109,6 @@ Generate character details strictly in structured YAML format based on the [Trai
 4. Do NOT output status bars, progress bars, or Chain of Thought.
 5. Response: ONLY the YAML content.`;
 
-// [新增] 模版生成专用 Prompt
 const defaultTemplateGenPrompt = 
 `You are an expert narrative designer.
 Task: Create a blank User Persona Template (YAML format) tailored for a roleplay with the character "{{char}}".
@@ -588,7 +587,6 @@ ${request}
     }
 }
 
-// [Updated] 支持 overridePrompt 用于模版生成
 async function runGeneration(data, apiConfig, overridePrompt = null) {
     const context = getContext();
     const charId = context.characterId;
@@ -600,23 +598,19 @@ async function runGeneration(data, apiConfig, overridePrompt = null) {
     let charInfoText = getCharacterInfoText(); 
     let wiText = data.wiText || "";
     
-    // 如果没有世界书，提供护盾
     if (!wiText || !wiText.trim()) {
         wiText = FICTION_SHIELD;
     }
 
-    // 构建 Prompt
     let finalPrompt = "";
 
     if (overridePrompt) {
-        // [新增] 模版生成模式
         finalPrompt = overridePrompt
             .replace(/{{user}}/g, currentName)
             .replace(/{{char}}/g, charName)
             .replace(/{{charInfo}}/g, charInfoText)
             .replace(/{{wi}}/g, wiText);
     } else {
-        // [原有] 人设生成模式
         let greetingsText = data.greetingsText || "";
         let currentText = data.currentText || "";  
         let requestText = data.request || "";
@@ -871,7 +865,7 @@ async function openCreatorPopup() {
             padding: 10px;
         }
 
-        /* [需求 2] 润色对比弹窗自适应高度 */
+        /* 润色对比弹窗自适应高度 */
         .pw-diff-content-area {
             flex: 1;
             display: flex;
@@ -909,7 +903,7 @@ async function openCreatorPopup() {
             transform: scale(1.2);
         }
 
-        /* [需求 1] 世界书筛选UI重构 */
+        /* 世界书筛选UI */
         .pw-wi-depth-tools {
             display: none; 
             flex-direction: column;
@@ -968,14 +962,19 @@ async function openCreatorPopup() {
             background: rgba(131, 193, 104, 0.1);
         }
 
-        /* [新增] 魔法按钮样式 */
-        .pw-mini-btn.magic {
-            color: #d8b4fe !important;
-            border-color: #d8b4fe !important;
+        /* [修改] 顶部保存按钮样式 */
+        .pw-tags-action-btn {
+            cursor: pointer;
+            opacity: 0.8;
+            font-size: 0.9em;
+            padding: 2px 6px;
+            margin-right: 8px;
+            border: 1px solid var(--SmartThemeBorderColor);
+            border-radius: 4px;
+            background: var(--SmartThemeBtnBg);
+            color: var(--SmartThemeBtnText);
         }
-        .pw-mini-btn.magic:hover {
-            background: rgba(216, 180, 254, 0.1) !important;
-        }
+        .pw-tags-action-btn:hover { opacity: 1; filter: brightness(1.1); }
 
         .pw-wi-info-badge {
             font-size: 0.75em;
@@ -987,7 +986,6 @@ async function openCreatorPopup() {
             white-space: nowrap;
         }
         
-        /* 仅显示图标 */
         .pw-wi-filter-toggle {
             cursor: pointer;
             margin-left: auto;
@@ -1002,6 +1000,48 @@ async function openCreatorPopup() {
             border-radius: 4px;
         }
         .pw-wi-filter-toggle:hover { opacity: 1; background: rgba(255,255,255,0.1); }
+
+        /* [新增] 移动端底部自适应 */
+        .pw-template-footer {
+            border-top:none; 
+            border-bottom:1px solid var(--SmartThemeBorderColor); 
+            border-radius:6px 6px 0 0;
+            display: flex;
+            flex-wrap: wrap; /* 允许换行 */
+            gap: 5px;
+            align-items: center;
+            padding: 5px;
+        }
+        .pw-shortcut-bar {
+            flex: 1 1 auto;
+            display: flex;
+            gap: 5px;
+            overflow-x: auto;
+        }
+        .pw-template-actions {
+            flex: 0 0 auto;
+            display: flex;
+            gap: 5px;
+        }
+        @media (max-width: 500px) {
+            .pw-template-footer {
+                justify-content: center;
+            }
+            .pw-shortcut-bar {
+                width: 100%;
+                justify-content: center;
+                margin-bottom: 5px;
+                border-bottom: 1px dashed rgba(128,128,128,0.3);
+                padding-bottom: 5px;
+            }
+            .pw-template-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+            .pw-template-actions button {
+                flex: 1;
+            }
+        }
     </style>
     `;
 
@@ -1032,25 +1072,25 @@ ${forcedStyles}
                         <i class="fa-solid ${chipsIcon}" id="pw-toggle-chips-vis" style="margin-left:5px; cursor:pointer;" title="折叠/展开"></i>
                     </span>
                     <div class="pw-tags-actions">
+                        <!-- [修改] 顶部保存按钮，默认隐藏 -->
+                        <span class="pw-tags-action-btn" id="pw-save-template-header" style="display:none;"><i class="fa-solid fa-save"></i> 保存模版</span>
                         <span class="pw-tags-edit-toggle" id="pw-toggle-edit-template">编辑模版</span>
                     </div>
                 </div>
                 <div class="pw-tags-container" id="pw-template-chips" style="display:${chipsDisplay};"></div>
                 
                 <div class="pw-template-editor-area" id="pw-template-editor">
-                    <div class="pw-template-footer" style="border-top:none; border-bottom:1px solid var(--SmartThemeBorderColor); border-radius:6px 6px 0 0;">
+                    <div class="pw-template-footer">
                         <div class="pw-shortcut-bar">
                             <div class="pw-shortcut-btn" data-key="  "><span>缩进</span><span class="code">Tab</span></div>
                             <div class="pw-shortcut-btn" data-key=": "><span>冒号</span><span class="code">:</span></div>
                             <div class="pw-shortcut-btn" data-key="- "><span>列表</span><span class="code">-</span></div>
                             <div class="pw-shortcut-btn" data-key="\n"><span>换行</span><span class="code">Enter</span></div>
                         </div>
-                        <div style="display:flex; gap:5px;">
-                            <!-- [新增] 智能生成模版按钮 -->
-                            <button class="pw-mini-btn magic" id="pw-gen-template-smart" title="根据当前世界书和设定，生成定制化模版"><i class="fa-solid fa-wand-sparkles"></i> 智能生成模版</button>
-                            <!-- [需求 3] 修改提示文字 -->
-                            <button class="pw-mini-btn" id="pw-restore-template" title="恢复默认模版">恢复默认</button>
-                            <button class="pw-mini-btn" id="pw-save-template">保存模版</button>
+                        <div class="pw-template-actions">
+                            <!-- [修改] 底部按钮重组，样式自适应 -->
+                            <button class="pw-mini-btn" id="pw-gen-template-smart">生成模版</button>
+                            <button class="pw-mini-btn" id="pw-restore-template">恢复默认</button>
                         </div>
                     </div>
                     <textarea id="pw-template-text" class="pw-template-textarea">${currentTemplate}</textarea>
@@ -1298,12 +1338,16 @@ function bindEvents() {
             $('#pw-template-chips').hide();
             $('#pw-template-editor').css('display', 'flex');
             $('#pw-toggle-edit-template').text("取消编辑").addClass('editing');
-            $('#pw-toggle-chips-vis').hide(); // Hide toggle when editing
+            $('#pw-toggle-chips-vis').hide(); 
+            // [修改] 进入编辑时显示保存按钮
+            $('#pw-save-template-header').fadeIn();
         } else {
             $('#pw-template-editor').hide();
             $('#pw-template-chips').css('display', 'flex');
             $('#pw-toggle-edit-template').text("编辑模版").removeClass('editing');
             $('#pw-toggle-chips-vis').show();
+            // [修改] 退出编辑时隐藏保存按钮
+            $('#pw-save-template-header').fadeOut();
         }
     });
 
@@ -1341,7 +1385,6 @@ function bindEvents() {
                 indepApiModel: modelVal
             };
             
-            // 使用特殊参数 overridePrompt 调用 runGeneration
             const generatedTemplate = await runGeneration(config, config, defaultTemplateGenPrompt);
             
             if (generatedTemplate) {
@@ -1373,7 +1416,8 @@ function bindEvents() {
         }
     });
 
-    $(document).on('click.pw', '#pw-save-template', () => {
+    // [修改] 顶部的保存模版按钮事件
+    $(document).on('click.pw', '#pw-save-template, #pw-save-template-header', () => {
         const val = $('#pw-template-text').val();
         currentTemplate = val;
         saveData();
@@ -1383,6 +1427,7 @@ function bindEvents() {
         $('#pw-template-chips').css('display', 'flex');
         $('#pw-toggle-edit-template').text("编辑模版").removeClass('editing');
         $('#pw-toggle-chips-vis').show();
+        $('#pw-save-template-header').fadeOut(); // 保存后隐藏
         toastr.success("模版已更新");
     });
 
@@ -2176,5 +2221,5 @@ function addPersonaButton() {
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
-    console.log("[PW] Persona Weaver Loaded (v7.7 - Filter UI Revamp)");
+    console.log("[PW] Persona Weaver Loaded (v7.8 - Mobile Layout Fix)");
 });
