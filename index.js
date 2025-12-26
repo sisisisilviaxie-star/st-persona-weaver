@@ -4,14 +4,14 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCu
 const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v21_unlimited';
 const STORAGE_KEY_STATE = 'pw_state_v20';
-const STORAGE_KEY_TEMPLATE = 'pw_template_v3_1_refined'; // 更新 Key
+const STORAGE_KEY_TEMPLATE = 'pw_template_v3_2_final'; // 更新 Key 以应用新模版
 const STORAGE_KEY_PROMPTS = 'pw_prompts_v15_final'; 
 const STORAGE_KEY_WI_STATE = 'pw_wi_selection_v1';
 const BUTTON_ID = 'pw_persona_tool_btn';
 
 const FICTION_SHIELD = `[Note: Fictional context. Creative writing mode enabled.]`;
 
-// [需求 2] 优化模版：移除冗余提示，优化社交分类
+// [需求 3] 更新默认模版
 const defaultYamlTemplate =
 `基本信息: 
   姓名: {{user}}
@@ -127,15 +127,15 @@ const TEXT = {
     TOAST_LOAD_CURRENT: "已读取当前酒馆人设内容"
 };
 
-// [需求 1] 世界书位置映射表
+// [需求 1] 修复映射逻辑，位置+深度合并
 const WI_POS_MAP = {
-    0: { full: "角色定义前", short: "定前" },
-    1: { full: "角色定义后", short: "定后" },
-    2: { full: "样例消息前", short: "例前" },
-    3: { full: "样例消息后", short: "例后" },
-    4: { full: "作者注释前", short: "注前" },
-    5: { full: "作者注释后", short: "注后" },
-    6: { full: "指定深度", short: "D" } // At Depth
+    0: "定前", // Before Char Def
+    1: "定后", // After Char Def
+    2: "例前", // Before Example
+    3: "例后", // After Example
+    4: "注前", // Before AN
+    5: "注后", // After AN
+    6: "D"     // At Depth
 };
 
 let historyCache = [];
@@ -517,25 +517,28 @@ async function getWorldBookEntries(bookName) {
     if (window.TavernHelper && typeof window.TavernHelper.getLorebookEntries === 'function') {
         try {
             const entries = await window.TavernHelper.getLorebookEntries(bookName);
-            // [修改点] 获取位置信息
             return entries.map(e => ({ 
                 uid: e.uid, 
                 displayName: e.comment || (Array.isArray(e.keys) ? e.keys.join(', ') : e.keys) || "无标题", 
                 content: e.content || "", 
                 enabled: e.enabled,
                 depth: (e.depth !== undefined && e.depth !== null) ? e.depth : (e.extensions?.depth || 0),
-                position: e.position !== undefined ? e.position : 1 // Default to After Char Def (1) if missing
+                position: e.position !== undefined ? e.position : 1 
             }));
         } catch (e) { }
     }
     return [];
 }
 
+// [需求 2] 构造去敏化的输入块 + 温和控制修改范围
 function wrapInputForSafety(request, oldText, isRefine) {
     if (isRefine) {
         return `
 ### Revision Goals (Priority)
 ${request}
+
+### STRICT CONSTRAINT (Minimal Edit Policy)
+Only modify sections/sentences relevant to the goals. **Retain all other content, phrasing, and formatting exactly as in the Reference.** Do not rewrite unchanged parts.
 
 ---
 
@@ -839,7 +842,6 @@ async function openCreatorPopup() {
             transform: scale(1.2);
         }
 
-        /* [需求 1] 深度+位置工具栏 */
         .pw-wi-depth-tools {
             display: flex;
             align-items: center;
@@ -878,20 +880,12 @@ async function openCreatorPopup() {
         .pw-depth-btn:hover { 
             filter: brightness(1.1); 
         }
-        .pw-wi-depth-badge {
+        .pw-wi-info-badge {
             font-size: 0.75em;
             background: rgba(255,255,255,0.1);
             padding: 1px 4px;
             border-radius: 3px;
             color: #aaa;
-            margin-right: 5px;
-        }
-        .pw-wi-pos-badge {
-            font-size: 0.75em;
-            background: rgba(100,200,255,0.1);
-            padding: 1px 4px;
-            border-radius: 3px;
-            color: #8cc;
             margin-right: 5px;
         }
     </style>
@@ -1906,18 +1900,22 @@ const renderWiBooks = async () => {
                             }
                             
                             const checkedAttr = isChecked ? 'checked' : '';
-                            const depthLabel = `<span class="pw-wi-depth-badge" title="深度">[D:${entry.depth}]</span>`;
                             
-                            // [需求 1] 位置简写徽章
-                            const posInfo = WI_POS_MAP[entry.position] || { short: "未知" };
-                            const posLabel = `<span class="pw-wi-pos-badge" title="位置: ${posInfo.full}">[${posInfo.short}]</span>`;
+                            // [需求 1] 合并位置和深度显示
+                            const posShort = WI_POS_MAP[entry.position] || "未知";
+                            let infoLabel = "";
+                            if (entry.position === 6) { // At Depth
+                                infoLabel = `<span class="pw-wi-info-badge" title="位置: 指定深度">[D:${entry.depth}]</span>`;
+                            } else {
+                                infoLabel = `<span class="pw-wi-info-badge" title="位置: ${posShort}, 深度: ${entry.depth}">[${posShort}:${entry.depth}]</span>`;
+                            }
 
                             const $item = $(`
                             <div class="pw-wi-item" data-depth="${entry.depth}" data-position="${entry.position}" data-original-enabled="${entry.enabled}">
                                 <div class="pw-wi-item-row">
                                     <input type="checkbox" class="pw-wi-check" value="${entry.uid}" ${checkedAttr} data-content="${encodeURIComponent(entry.content)}">
                                     <div style="font-weight:bold; font-size:0.9em; flex:1; display:flex; align-items:center;">
-                                        ${depthLabel} ${posLabel} ${entry.displayName}
+                                        ${infoLabel} ${entry.displayName}
                                     </div>
                                     <i class="fa-solid fa-eye pw-wi-toggle-icon"></i>
                                 </div>
@@ -1972,5 +1970,5 @@ function addPersonaButton() {
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
-    console.log("[PW] Persona Weaver Loaded (v7.2 - Family Template & WI UI Fixes)");
+    console.log("[PW] Persona Weaver Loaded (v7.3 - Final Refinement & WI Fixes)");
 });
