@@ -136,7 +136,7 @@ let lastRawResponse = "";
 let isProcessing = false;
 let currentGreetingsList = []; 
 let wiSelectionCache = {};
-let uiStateCache = { templateExpanded: true };
+let uiStateCache = { templateExpanded: true }; 
 
 // ============================================================================
 // 工具函数与映射表
@@ -153,7 +153,7 @@ const getPosAbbr = (pos) => {
         'after_example_messages': '↓EM',
         'before_author_note': '↑AN',
         'after_author_note': '↓AN',
-        'at_depth_as_system': '@D⚙',
+        'at_depth_as_system': '@D⚙', 
         'at_depth_as_assistant': '@D🤖',
         'at_depth_as_user': '@D👤'
     };
@@ -547,7 +547,7 @@ async function getWorldBookEntries(bookName) {
     return [];
 }
 
-// [Updated] 构造去敏化的输入块 v6.3 - 增加温和的修改限制
+// [Updated] 构造去敏化的输入块 v6.3
 function wrapInputForSafety(request, oldText, isRefine) {
     if (isRefine) {
         return `
@@ -740,7 +740,6 @@ async function openCreatorPopup() {
     const charName = getContext().characters[getContext().characterId]?.name || "None";
     const headerTitle = `${TEXT.PANEL_TITLE}<span class="pw-header-subtitle">User: ${currentName} & Char: ${charName}</span>`;
 
-    // [需求 3] 应用模版块显示状态
     const chipsDisplay = uiStateCache.templateExpanded ? 'flex' : 'none';
     const chipsIcon = uiStateCache.templateExpanded ? 'fa-angle-up' : 'fa-angle-down';
 
@@ -786,50 +785,38 @@ async function openCreatorPopup() {
             background: rgba(255, 107, 107, 0.1) !important;
         }
 
-        /* === [修改] 润色弹窗布局优化 === */
-        /* 确保内容区域占满高度 */
-        .pw-diff-container {
-            display: flex;
-            flex-direction: column;
-        }
-        
+        /* === Diff View Layout (Fix for Height) === */
         .pw-diff-content-area {
             flex: 1;
             display: flex;
             flex-direction: column;
-            overflow: hidden; 
-            min-height: 0; /* Flexbox nested scroll fix */
+            overflow: hidden;
+            min-height: 0; /* Critical for flex child scrolling */
         }
-
-        /* 列表视图保持原样 */
-        .pw-diff-list-view {
-            overflow-y: auto;
-            flex: 1;
-            padding-right: 5px;
-        }
-
-        /* [修改] 强制原文视图占满父容器 */
         .pw-diff-raw-view {
             flex: 1;
             display: flex;
             flex-direction: column;
             height: 100%;
         }
-
-        /* [修改] 文本框占满 raw-view */
         .pw-diff-raw-textarea {
+            flex: 1;
+            height: 100%;
+            resize: none !important;
             color: #ffffff !important;
             background: rgba(0,0,0,0.2) !important;
-            flex: 1;
-            height: 100% !important;
-            width: 100%;
-            resize: none; 
-            border: none;
+            border: 1px solid #555 !important;
             padding: 10px;
-            font-family: monospace;
+            font-family: inherit;
+            line-height: 1.5;
         }
 
-        /* === List View Card Styles === */
+        /* === List View Styles === */
+        .pw-diff-list-view {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
         .pw-diff-card {
             background-color: transparent !important;
             border-radius: 8px;
@@ -899,60 +886,66 @@ async function openCreatorPopup() {
             transform: scale(1.2);
         }
 
-        /* [需求 1] 世界书工具栏：双排布局 + 中文 */
+        /* [需求 1] 世界书筛选工具栏 */
         .pw-wi-depth-tools {
             display: none; 
-            flex-direction: column; /* 垂直排列两行 */
-            gap: 5px;
-            padding: 8px 10px;
-            background: rgba(0,0,0,0.1);
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px;
+            background: rgba(0,0,0,0.15);
             border-bottom: 1px solid var(--SmartThemeBorderColor);
             font-size: 0.85em;
         }
-        .pw-wi-filter-row {
+        .pw-filter-row {
             display: flex;
             align-items: center;
-            gap: 5px;
-            width: 100%;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         .pw-depth-input {
-            width: 40px;
-            padding: 2px 4px;
+            width: 50px;
+            padding: 3px 5px;
             background: var(--SmartThemeInputBg);
             border: 1px solid var(--SmartThemeBorderColor);
             color: var(--SmartThemeInputColor);
             border-radius: 4px;
             text-align: center;
         }
-        /* 关键词搜索框 */
-        .pw-wi-search-input {
+        .pw-keyword-input {
             flex: 1;
-            padding: 2px 6px;
+            padding: 3px 5px;
             background: var(--SmartThemeInputBg);
             border: 1px solid var(--SmartThemeBorderColor);
             color: var(--SmartThemeInputColor);
             border-radius: 4px;
         }
         .pw-pos-select {
-            padding: 2px 4px;
+            padding: 3px 5px;
             background: var(--SmartThemeInputBg);
             border: 1px solid var(--SmartThemeBorderColor);
             color: var(--SmartThemeInputColor);
             border-radius: 4px;
-            flex: 1; /* 自适应宽度 */
+            flex: 1;
+            max-width: 200px;
         }
         .pw-depth-btn {
-            padding: 2px 8px;
+            padding: 3px 10px;
             background: var(--SmartThemeBtnBg);
             border: 1px solid var(--SmartThemeBorderColor);
             color: var(--SmartThemeBtnText);
             border-radius: 4px;
             cursor: pointer;
-            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
-        .pw-depth-btn:hover { 
-            filter: brightness(1.1); 
+        .pw-depth-btn:hover { filter: brightness(1.1); }
+        .pw-depth-btn.active {
+            background: var(--SmartThemeQuoteColor, #83c168);
+            color: #fff;
+            border-color: var(--SmartThemeQuoteColor, #83c168);
         }
+
         .pw-wi-info-badge {
             font-size: 0.75em;
             background: rgba(255,255,255,0.1);
@@ -962,9 +955,8 @@ async function openCreatorPopup() {
             margin-right: 5px;
             white-space: nowrap;
         }
-        /* [需求 1] 仅显示筛选图标 */
         .pw-wi-filter-toggle {
-            font-size: 0.9em;
+            font-size: 1.1em;
             cursor: pointer;
             margin-left: auto;
             margin-right: 10px;
@@ -999,14 +991,12 @@ ${forcedStyles}
                 <div class="pw-tags-header">
                     <span class="pw-tags-label">
                         模版块 (点击填入) 
-                        <!-- [需求 3] 使用记忆的状态图标 -->
                         <i class="fa-solid ${chipsIcon}" id="pw-toggle-chips-vis" style="margin-left:5px; cursor:pointer;" title="折叠/展开"></i>
                     </span>
                     <div class="pw-tags-actions">
                         <span class="pw-tags-edit-toggle" id="pw-toggle-edit-template">编辑模版</span>
                     </div>
                 </div>
-                <!-- [需求 3] 使用记忆的显示状态 -->
                 <div class="pw-tags-container" id="pw-template-chips" style="display:${chipsDisplay};"></div>
                 
                 <div class="pw-template-editor-area" id="pw-template-editor">
@@ -1765,82 +1755,6 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-history-clear-all', function () { if (confirm("清空?")) { historyCache = []; saveData(); renderHistoryList(); } });
 }
 
-// ... 辅助渲染函数 ...
-const renderTemplateChips = () => {
-    const $container = $('#pw-template-chips').empty();
-    const blocks = parseYamlToBlocks(currentTemplate);
-    blocks.forEach((content, key) => {
-        const $chip = $(`<div class="pw-tag-chip"><i class="fa-solid fa-cube" style="opacity:0.5; margin-right:4px;"></i><span>${key}</span></div>`);
-        $chip.on('click', () => {
-            const $text = $('#pw-request');
-            const cur = $text.val();
-            const prefix = (cur && !cur.endsWith('\n') && cur.length > 0) ? '\n\n' : '';
-            let insertText = key + ":";
-            if (content && content.trim()) {
-                if (content.includes('\n') || content.startsWith(' ')) insertText += "\n" + content;
-                else insertText += " " + content;
-            } else insertText += " ";
-            $text.val(cur + prefix + insertText).focus();
-            $text.scrollTop($text[0].scrollHeight);
-        });
-        $container.append($chip);
-    });
-};
-
-const renderHistoryList = () => {
-    loadData();
-    const $list = $('#pw-history-list').empty();
-    const search = $('#pw-history-search').val().toLowerCase();
-    
-    // [Lite Fix] Filter out opening types
-    const filtered = historyCache.filter(item => {
-        if (item.data && item.data.type === 'opening') return false; 
-        
-        if (!search) return true;
-        const content = (item.data.resultText || "").toLowerCase();
-        const title = (item.title || "").toLowerCase();
-        return title.includes(search) || content.includes(search);
-    });
-    
-    if (filtered.length === 0) { $list.html('<div style="text-align:center; opacity:0.6; padding:20px;">暂无草稿</div>'); return; }
-
-    filtered.forEach((item, index) => {
-        const previewText = item.data.resultText || '无内容';
-        const displayTitle = item.title || "User & Char";
-
-        const $el = $(`
-        <div class="pw-history-item">
-            <div class="pw-hist-main">
-                <div class="pw-hist-header">
-                    <span class="pw-hist-title-display">${displayTitle}</span>
-                    <input type="text" class="pw-hist-title-input" value="${displayTitle}" style="display:none;">
-                    <div style="display:flex; gap:5px;">
-                        <i class="fa-solid fa-pen pw-hist-action-btn edit" title="编辑标题"></i>
-                        <i class="fa-solid fa-trash pw-hist-action-btn del" data-index="${index}" title="删除"></i>
-                    </div>
-                </div>
-                <div class="pw-hist-meta"><span>${item.timestamp || ''}</span></div>
-                <div class="pw-hist-desc">${previewText}</div>
-            </div>
-        </div>
-    `);
-        $el.on('click', function (e) {
-            if ($(e.target).closest('.pw-hist-action-btn, .pw-hist-title-input').length) return;
-            $('#pw-request').val(item.request); $('#pw-result-text').val(previewText); $('#pw-result-area').show();
-            $('#pw-request').addClass('minimized');
-            $('.pw-tab[data-tab="editor"]').click();
-        });
-        $el.find('.pw-hist-action-btn.del').on('click', function (e) {
-            e.stopPropagation();
-            if (confirm("删除?")) {
-                historyCache.splice(historyCache.indexOf(item), 1);
-                saveData(); renderHistoryList();
-            }
-        });
-        $list.append($el);
-    });
-};
-
 window.pwExtraBooks = [];
 const renderWiBooks = async () => {
     const container = $('#pw-wi-container').empty();
@@ -1862,23 +1776,24 @@ const renderWiBooks = async () => {
                 <span style="flex:1; display:flex; align-items:center;">
                     <i class="fa-solid fa-book" style="margin-right:5px;"></i> ${book} ${isBound ? '<span class="pw-bound-status" style="margin-left:5px;">(已绑定)</span>' : ''}
                 </span>
-                <i class="fa-solid fa-filter pw-wi-filter-toggle" title="展开/收起筛选工具"></i>
+                <i class="fa-solid fa-filter pw-wi-filter-toggle" title="展开/收起筛选"></i>
                 <div>${!isBound ? '<i class="fa-solid fa-times remove-book pw-remove-book-icon" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div>
             </div>
             <div class="pw-wi-list" data-book="${book}"></div>
         </div>`);
         
-        // [修改逻辑 1] 全选逻辑：只勾选可见（filtered）的条目
+        // 全选事件：仅作用于当前 visible 的 checkbox
         $el.find('.pw-wi-select-all').on('click', async function(e) {
             e.stopPropagation();
             const checked = $(this).prop('checked');
             const $list = $el.find('.pw-wi-list');
             
             const doCheck = () => {
-                // 关键修改：增加 :visible 选择器
-                $list.find('.pw-wi-item:visible .pw-wi-check').prop('checked', checked);
+                // 关键修改：只选中可见的
+                const targets = $list.find('.pw-wi-item:visible .pw-wi-check');
+                targets.prop('checked', checked);
                 
-                // 保存状态 (保存所有被勾选的，包括隐藏但之前被勾选的)
+                // 保存状态 (遍历所有checkbox来更新状态)
                 const checkedUids = [];
                 $list.find('.pw-wi-check:checked').each(function() { checkedUids.push($(this).val()); });
                 saveWiSelection(book, checkedUids);
@@ -1894,7 +1809,6 @@ const renderWiBooks = async () => {
 
         $el.find('.remove-book').on('click', (e) => { e.stopPropagation(); window.pwExtraBooks = window.pwExtraBooks.filter(b => b !== book); renderWiBooks(); });
         
-        // 筛选折叠事件
         $el.find('.pw-wi-filter-toggle').on('click', function(e) {
             e.stopPropagation();
             const $list = $el.find('.pw-wi-list');
@@ -1903,13 +1817,10 @@ const renderWiBooks = async () => {
             }
             setTimeout(() => {
                 const $tools = $list.find('.pw-wi-depth-tools');
-                if($tools.length) {
-                    $tools.slideToggle();
-                }
+                if($tools.length) $tools.slideToggle();
             }, 50);
         });
 
-        // 展开/折叠逻辑
         $el.find('.pw-wi-header').on('click', async function (e) {
             if ($(e.target).hasClass('pw-wi-header-checkbox') || $(e.target).hasClass('pw-wi-filter-toggle')) return; 
 
@@ -1932,68 +1843,84 @@ const renderWiBooks = async () => {
                     if (entries.length === 0) {
                         $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
                     } else {
-                        // [需求 1] 新版筛选工具栏 UI
+                        // [UI 重构] 筛选工具栏
                         const $tools = $(`
                         <div class="pw-wi-depth-tools">
-                            <div class="pw-wi-filter-row">
-                                <input type="text" class="pw-wi-search-input" id="search-key" placeholder="关键词查找...">
-                                <button class="pw-depth-btn" id="d-apply" title="执行筛选 (隐藏不符合的条目)">筛选</button>
+                            <div class="pw-filter-row">
+                                <input type="text" class="pw-keyword-input" id="kw-input" placeholder="搜索关键词 (标题/内容)...">
+                                <button class="pw-depth-btn" id="d-apply" title="应用筛选"><i class="fa-solid fa-filter"></i></button>
                             </div>
-                            
-                            <div class="pw-wi-filter-row">
+                            <div class="pw-filter-row">
                                 <select id="p-select" class="pw-pos-select">
                                     <option value="unknown">全部位置</option>
-                                    <option value="before_character_definition">角色定义前 (Before Char)</option>
-                                    <option value="after_character_definition">角色定义后 (After Char)</option>
-                                    <option value="before_author_note">AN前 (Before AN)</option>
-                                    <option value="after_author_note">AN后 (After AN)</option>
-                                    <option value="before_example_messages">样例前 (Before EM)</option>
-                                    <option value="after_example_messages">样例后 (After EM)</option>
+                                    <option value="before_character_definition">角色定义前</option>
+                                    <option value="after_character_definition">角色定义后</option>
+                                    <option value="before_author_note">作者注释前</option>
+                                    <option value="after_author_note">作者注释后</option>
+                                    <option value="before_example_messages">样例消息前</option>
+                                    <option value="after_example_messages">样例消息后</option>
                                     <option value="at_depth_as_system">@深度 (System)</option>
                                     <option value="at_depth_as_assistant">@深度 (Assistant)</option>
                                     <option value="at_depth_as_user">@深度 (User)</option>
                                 </select>
-                                
-                                <input type="number" class="pw-depth-input" id="d-min" placeholder="0" value="0">
-                                <span style="opacity:0.5">-</span>
-                                <input type="number" class="pw-depth-input" id="d-max" placeholder="Max" value="">
-
-                                <button class="pw-depth-btn" id="d-reset" title="取消筛选，显示所有">重置</button>
+                                <div style="display:flex; align-items:center; gap:5px;">
+                                    <span style="font-size:0.8em; opacity:0.6;">深度</span>
+                                    <input type="number" class="pw-depth-input" id="d-min" placeholder="0">
+                                    <span>-</span>
+                                    <input type="number" class="pw-depth-input" id="d-max" placeholder="Max">
+                                </div>
+                                <button class="pw-depth-btn" id="d-reset" title="恢复为世界书原始状态" style="margin-left:auto;"><i class="fa-solid fa-rotate-left"></i></button>
                             </div>
                         </div>`);
                         
-                        // [修改逻辑 1] 筛选点击：执行 hide/show 逻辑
+                        // 筛选逻辑：不勾选，只隐藏
                         $tools.find('#d-apply').on('click', function() {
-                            const keyword = $tools.find('#search-key').val().toLowerCase();
+                            const btn = $(this);
+                            const isActive = btn.hasClass('active');
+                            
+                            if (isActive) {
+                                // 取消筛选，显示全部
+                                btn.removeClass('active');
+                                $list.find('.pw-wi-item').show();
+                                return;
+                            }
+
+                            // 应用筛选
+                            btn.addClass('active');
+                            const keyword = $tools.find('#kw-input').val().toLowerCase();
                             const dMin = parseInt($tools.find('#d-min').val()) || 0;
                             const dMaxStr = $tools.find('#d-max').val();
                             const dMax = dMaxStr === "" ? 99999 : parseInt(dMaxStr);
                             const pVal = $tools.find('#p-select').val();
 
                             $list.find('.pw-wi-item').each(function() {
-                                const d = $(this).data('depth');
-                                const code = $(this).data('code'); 
-                                const content = $(this).data('search-content') || "";
-                                
-                                let matchPos = (pVal === 'unknown') || (code === pVal);
-                                let matchDepth = (d >= dMin && d <= dMax);
-                                let matchKey = !keyword || content.includes(keyword);
+                                const $row = $(this);
+                                const d = $row.data('depth');
+                                const code = $row.data('code'); 
+                                const contentText = decodeURIComponent($row.find('.pw-wi-check').data('content')).toLowerCase();
+                                const titleText = $row.find('.pw-item-title').text().toLowerCase();
 
-                                if (matchPos && matchDepth && matchKey) {
-                                    $(this).show();
-                                } else {
-                                    $(this).hide();
-                                }
+                                let match = true;
+                                
+                                // 位置筛选
+                                if (pVal !== 'unknown' && code !== pVal) match = false;
+                                
+                                // 深度筛选
+                                if (d < dMin || d > dMax) match = false;
+
+                                // 关键词筛选
+                                if (keyword && !titleText.includes(keyword) && !contentText.includes(keyword)) match = false;
+
+                                if (match) $row.show(); else $row.hide();
                             });
                         });
-                        
-                        // 重置按钮：显示所有
+
                         $tools.find('#d-reset').on('click', function() {
-                             $tools.find('#search-key').val('');
-                             $tools.find('#p-select').val('unknown');
-                             $tools.find('#d-min').val(0);
-                             $tools.find('#d-max').val('');
-                             $list.find('.pw-wi-item').show();
+                             $list.find('.pw-wi-item').each(function() {
+                                 const originalEnabled = $(this).data('original-enabled');
+                                 $(this).find('.pw-wi-check').prop('checked', originalEnabled).trigger('change');
+                             });
+                             toastr.info("已重置为世界书原始状态");
                         });
 
                         $list.append($tools);
@@ -2011,15 +1938,12 @@ const renderWiBooks = async () => {
                             const checkedAttr = isChecked ? 'checked' : '';
                             const posAbbr = getPosAbbr(entry.position);
                             const infoLabel = `<span class="pw-wi-info-badge" title="位置:深度">[${posAbbr}:${entry.depth}]</span>`;
-                            
-                            // 构造搜索内容 (显示名+内容)
-                            const searchContent = (entry.displayName + " " + entry.content).toLowerCase();
 
                             const $item = $(`
-                            <div class="pw-wi-item" data-depth="${entry.depth}" data-code="${getPosFilterCode(entry.position)}" data-search-content="${encodeURIComponent(searchContent)}">
+                            <div class="pw-wi-item" data-depth="${entry.depth}" data-code="${getPosFilterCode(entry.position)}" data-original-enabled="${entry.enabled}">
                                 <div class="pw-wi-item-row">
                                     <input type="checkbox" class="pw-wi-check" value="${entry.uid}" ${checkedAttr} data-content="${encodeURIComponent(entry.content)}">
-                                    <div style="font-weight:bold; font-size:0.9em; flex:1; display:flex; align-items:center;">
+                                    <div class="pw-item-title" style="font-weight:bold; font-size:0.9em; flex:1; display:flex; align-items:center;">
                                         ${infoLabel} ${entry.displayName}
                                     </div>
                                     <i class="fa-solid fa-eye pw-wi-toggle-icon"></i>
@@ -2074,5 +1998,5 @@ function addPersonaButton() {
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
-    console.log("[PW] Persona Weaver Loaded (v7.6 - Final WI Refactor)");
+    console.log("[PW] Persona Weaver Loaded (v7.6 - Final UI Polish)");
 });
