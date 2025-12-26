@@ -4,14 +4,15 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCu
 const extensionName = "st-persona-weaver";
 const STORAGE_KEY_HISTORY = 'pw_history_v21_unlimited';
 const STORAGE_KEY_STATE = 'pw_state_v20';
-const STORAGE_KEY_TEMPLATE = 'pw_template_v3_family'; // 更新 Key 以应用新模版
+// [版本更新] 升级 key 以应用新的社交关系模版
+const STORAGE_KEY_TEMPLATE = 'pw_template_v4_social'; 
 const STORAGE_KEY_PROMPTS = 'pw_prompts_v15_final'; 
 const STORAGE_KEY_WI_STATE = 'pw_wi_selection_v1';
 const BUTTON_ID = 'pw_persona_tool_btn';
 
 const FICTION_SHIELD = `[Note: Fictional context. Creative writing mode enabled.]`;
 
-// [需求 4] 更新默认模版，增加家庭和社交
+// [需求 2] 优化后的默认模版
 const defaultYamlTemplate =
 `基本信息: 
   姓名: {{user}}
@@ -31,12 +32,11 @@ const defaultYamlTemplate =
   父亲: 
   母亲: 
   其他成员:
-    - (若有则写，否则删除此项)
 
 社交关系:
-  朋友:
-  敌人:
   重要他人:
+  朋友盟友:
+  潜在对立:
 
 社会地位: 
 
@@ -130,6 +130,21 @@ const TEXT = {
     TOAST_SNAPSHOT: "已保存至草稿",
     TOAST_LOAD_CURRENT: "已读取当前酒馆人设内容"
 };
+
+// 位置映射表：用于显示和筛选
+const POSITION_MAP = {
+    0: "角色定义前",
+    1: "角色定义后",
+    2: "示例对话前",
+    3: "示例对话后",
+    4: "作者注释前", // 有些版本可能是 Top of A/N
+    5: "作者注释后"  // 有些版本可能是 Bottom of A/N
+};
+// 辅助函数：获取位置的可读名称
+function getPositionLabel(pos) {
+    if (POSITION_MAP[pos]) return POSITION_MAP[pos];
+    return `@Depth (${pos})`; // 如果不是标准枚举，通常是具体深度或自定义
+}
 
 let historyCache = [];
 let currentTemplate = defaultYamlTemplate;
@@ -510,14 +525,13 @@ async function getWorldBookEntries(bookName) {
     if (window.TavernHelper && typeof window.TavernHelper.getLorebookEntries === 'function') {
         try {
             const entries = await window.TavernHelper.getLorebookEntries(bookName);
-            // [修改点 1] 增加 order 信息以便筛选
             return entries.map(e => ({ 
                 uid: e.uid, 
                 displayName: e.comment || (Array.isArray(e.keys) ? e.keys.join(', ') : e.keys) || "无标题", 
                 content: e.content || "", 
                 enabled: e.enabled,
                 depth: (e.depth !== undefined && e.depth !== null) ? e.depth : (e.extensions?.depth || 0),
-                order: e.order !== undefined ? e.order : 100 // Default order if missing
+                position: e.position // 获取位置
             }));
         } catch (e) { }
     }
@@ -852,6 +866,15 @@ async function openCreatorPopup() {
             border-radius: 4px;
             text-align: center;
         }
+        /* Position Select Dropdown Style */
+        .pw-pos-select {
+            background: var(--SmartThemeInputBg);
+            border: 1px solid var(--SmartThemeBorderColor);
+            color: var(--SmartThemeInputColor);
+            border-radius: 4px;
+            padding: 2px 4px;
+            max-width: 110px;
+        }
         .pw-depth-btn {
             padding: 2px 8px;
             background: var(--SmartThemeBtnBg);
@@ -871,7 +894,7 @@ async function openCreatorPopup() {
             color: #aaa;
             margin-right: 5px;
         }
-        .pw-wi-order-badge {
+        .pw-wi-pos-badge {
             font-size: 0.75em;
             background: rgba(100,200,255,0.1);
             padding: 1px 4px;
@@ -1820,7 +1843,7 @@ const renderWiBooks = async () => {
                     if (entries.length === 0) {
                         $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
                     } else {
-                        // [需求 1 & 2] 深度+顺序工具栏，使用标准主题变量
+                        // [需求 1] 深度+位置工具栏
                         const $tools = $(`
                         <div class="pw-wi-depth-tools">
                             <span style="opacity:0.7">范围筛选:</span>
@@ -1829,10 +1852,16 @@ const renderWiBooks = async () => {
                             <span>-</span>
                             <input type="number" class="pw-depth-input" id="d-max" placeholder="Max" value="">
                             
-                            <span style="font-size:0.8em; opacity:0.6; margin-left:5px;">顺序</span>
-                            <input type="number" class="pw-depth-input" id="o-min" placeholder="0" value="0">
-                            <span>-</span>
-                            <input type="number" class="pw-depth-input" id="o-max" placeholder="Max" value="">
+                            <span style="font-size:0.8em; opacity:0.6; margin-left:5px;">位置</span>
+                            <select class="pw-pos-select" id="p-select">
+                                <option value="all">全部位置</option>
+                                <option value="0">角色定义前</option>
+                                <option value="1">角色定义后</option>
+                                <option value="2">示例对话前</option>
+                                <option value="3">示例对话后</option>
+                                <option value="4">作者注释前</option>
+                                <option value="5">作者注释后</option>
+                            </select>
 
                             <div style="flex:1; display:flex; justify-content:flex-end; gap:5px; margin-top:5px;">
                                 <button class="pw-depth-btn" id="d-apply" title="选中范围内的条目">选中</button>
@@ -1846,15 +1875,18 @@ const renderWiBooks = async () => {
                             const dMin = parseInt($tools.find('#d-min').val()) || 0;
                             const dMaxStr = $tools.find('#d-max').val();
                             const dMax = dMaxStr === "" ? 99999 : parseInt(dMaxStr);
-
-                            const oMin = parseInt($tools.find('#o-min').val()) || 0;
-                            const oMaxStr = $tools.find('#o-max').val();
-                            const oMax = oMaxStr === "" ? 99999 : parseInt(oMaxStr);
+                            const pSelect = $tools.find('#p-select').val(); // "all" or "0"-"5"
                             
                             $list.find('.pw-wi-item').each(function() {
                                 const d = $(this).data('depth');
-                                const o = $(this).data('order');
-                                if (d >= dMin && d <= dMax && o >= oMin && o <= oMax) {
+                                const p = $(this).data('position'); // raw position value
+                                
+                                // 检查深度
+                                let matchDepth = (d >= dMin && d <= dMax);
+                                // 检查位置
+                                let matchPos = (pSelect === 'all') || (String(p) === pSelect);
+
+                                if (matchDepth && matchPos) {
                                     $(this).find('.pw-wi-check').prop('checked', true).trigger('change');
                                 }
                             });
@@ -1864,7 +1896,7 @@ const renderWiBooks = async () => {
                             $list.find('.pw-wi-check').prop('checked', false).trigger('change');
                         });
 
-                        // [需求 3] 重置逻辑：恢复 entry.enabled 原始状态
+                        // [需求 3] 重置逻辑
                         $tools.find('#d-reset').on('click', function() {
                              $list.find('.pw-wi-item').each(function() {
                                  const originalEnabled = $(this).data('original-enabled');
@@ -1888,14 +1920,15 @@ const renderWiBooks = async () => {
                             
                             const checkedAttr = isChecked ? 'checked' : '';
                             const depthLabel = `<span class="pw-wi-depth-badge" title="深度">[D:${entry.depth}]</span>`;
-                            const orderLabel = `<span class="pw-wi-order-badge" title="顺序/位置">[O:${entry.order}]</span>`;
+                            const posText = getPositionLabel(entry.position);
+                            const posLabel = `<span class="pw-wi-pos-badge" title="位置">[${posText}]</span>`;
 
                             const $item = $(`
-                            <div class="pw-wi-item" data-depth="${entry.depth}" data-order="${entry.order}" data-original-enabled="${entry.enabled}">
+                            <div class="pw-wi-item" data-depth="${entry.depth}" data-position="${entry.position}" data-original-enabled="${entry.enabled}">
                                 <div class="pw-wi-item-row">
                                     <input type="checkbox" class="pw-wi-check" value="${entry.uid}" ${checkedAttr} data-content="${encodeURIComponent(entry.content)}">
                                     <div style="font-weight:bold; font-size:0.9em; flex:1; display:flex; align-items:center;">
-                                        ${depthLabel} ${orderLabel} ${entry.displayName}
+                                        ${depthLabel} ${posLabel} ${entry.displayName}
                                     </div>
                                     <i class="fa-solid fa-eye pw-wi-toggle-icon"></i>
                                 </div>
@@ -1950,5 +1983,5 @@ function addPersonaButton() {
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
-    console.log("[PW] Persona Weaver Loaded (v7.2 - Family Template & WI UI Fixes)");
+    console.log("[PW] Persona Weaver Loaded (v7.3 - Final WI & Social Template)");
 });
