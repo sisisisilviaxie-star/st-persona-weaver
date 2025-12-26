@@ -109,6 +109,25 @@ Generate character details strictly in structured YAML format based on the [Trai
 4. Do NOT output status bars, progress bars, or Chain of Thought.
 5. Response: ONLY the YAML content.`;
 
+// [新增] 模版生成专用 Prompt
+const defaultTemplateGenPrompt = 
+`You are an expert narrative designer.
+Task: Create a blank User Persona Template (YAML format) tailored for a roleplay with the character "{{char}}".
+
+[Target Character Info]:
+{{charInfo}}
+
+[World Info / Context]:
+{{wi}}
+
+[Requirements]:
+1. Analyze the genre, setting, and themes (e.g., Fantasy, Sci-Fi, Office, ABO, Cultivation).
+2. Design a YAML structure with keys relevant to this specific world (e.g., if Magic exists, include "Magic Ability"; if ABO, include "Dynamic/Scent").
+3. Include standard fields (Name, Age, Appearance, Personality, Background).
+4. Leave values BLANK or use brief hints (e.g., "Age: "). Do NOT fill in specific character details yet.
+5. Keep it hierarchical and organized.
+6. Output ONLY valid YAML.`;
+
 const defaultSettings = {
     autoSwitchPersona: true, syncToWorldInfo: false,
     historyLimit: 9999,
@@ -569,7 +588,8 @@ ${request}
     }
 }
 
-async function runGeneration(data, apiConfig) {
+// [Updated] 支持 overridePrompt 用于模版生成
+async function runGeneration(data, apiConfig, overridePrompt = null) {
     const context = getContext();
     const charId = context.characterId;
     const charName = (charId !== undefined) ? context.characters[charId].name : "None";
@@ -578,38 +598,52 @@ async function runGeneration(data, apiConfig) {
     if (!promptsCache || !promptsCache.initial) loadData(); 
 
     let charInfoText = getCharacterInfoText(); 
-    let currentText = data.currentText || "";  
-    let requestText = data.request || "";      
     let wiText = data.wiText || "";
-    let greetingsText = data.greetingsText || "";
     
+    // 如果没有世界书，提供护盾
     if (!wiText || !wiText.trim()) {
-        console.log("[PW] No World Info detected. Injecting Fiction Shield.");
         wiText = FICTION_SHIELD;
     }
 
-    let headJailbreak = "";
-    try {
-        const settings = context.chatCompletionSettings;
-        if (settings && settings.jailbreak_toggle && settings.jailbreak_prompt) {
-            headJailbreak = settings.jailbreak_prompt;
-        }
-    } catch (e) { console.warn(e); }
+    // 构建 Prompt
+    let finalPrompt = "";
 
-    let finalPromptTemplate = promptsCache.initial || defaultSystemPromptInitial;
-    let finalInputContent = wrapInputForSafety(requestText, currentText, data.mode === 'refine');
+    if (overridePrompt) {
+        // [新增] 模版生成模式
+        finalPrompt = overridePrompt
+            .replace(/{{user}}/g, currentName)
+            .replace(/{{char}}/g, charName)
+            .replace(/{{charInfo}}/g, charInfoText)
+            .replace(/{{wi}}/g, wiText);
+    } else {
+        // [原有] 人设生成模式
+        let greetingsText = data.greetingsText || "";
+        let currentText = data.currentText || "";  
+        let requestText = data.request || "";
+        
+        let headJailbreak = "";
+        try {
+            const settings = context.chatCompletionSettings;
+            if (settings && settings.jailbreak_toggle && settings.jailbreak_prompt) {
+                headJailbreak = settings.jailbreak_prompt;
+            }
+        } catch (e) { console.warn(e); }
 
-    const corePrompt = finalPromptTemplate
-        .replace(/{{user}}/g, currentName)
-        .replace(/{{char}}/g, charName)
-        .replace(/{{charInfo}}/g, charInfoText)
-        .replace(/{{greetings}}/g, greetingsText)
-        .replace(/{{wi}}/g, wiText)
-        .replace(/{{tags}}/g, currentTemplate)
-        .replace(/{{input}}/g, finalInputContent)
-        .replace(/{{current}}/g, "");
+        let finalPromptTemplate = promptsCache.initial || defaultSystemPromptInitial;
+        let finalInputContent = wrapInputForSafety(requestText, currentText, data.mode === 'refine');
 
-    const finalPrompt = headJailbreak ? `${headJailbreak}\n\n${corePrompt}` : corePrompt;
+        const corePrompt = finalPromptTemplate
+            .replace(/{{user}}/g, currentName)
+            .replace(/{{char}}/g, charName)
+            .replace(/{{charInfo}}/g, charInfoText)
+            .replace(/{{greetings}}/g, greetingsText)
+            .replace(/{{wi}}/g, wiText)
+            .replace(/{{tags}}/g, currentTemplate)
+            .replace(/{{input}}/g, finalInputContent)
+            .replace(/{{current}}/g, "");
+
+        finalPrompt = headJailbreak ? `${headJailbreak}\n\n${corePrompt}` : corePrompt;
+    }
 
     console.log(`[PW] Sending Prompt:\n`, finalPrompt);
     
@@ -934,6 +968,15 @@ async function openCreatorPopup() {
             background: rgba(131, 193, 104, 0.1);
         }
 
+        /* [新增] 魔法按钮样式 */
+        .pw-mini-btn.magic {
+            color: #d8b4fe !important;
+            border-color: #d8b4fe !important;
+        }
+        .pw-mini-btn.magic:hover {
+            background: rgba(216, 180, 254, 0.1) !important;
+        }
+
         .pw-wi-info-badge {
             font-size: 0.75em;
             background: rgba(255,255,255,0.1);
@@ -1003,6 +1046,8 @@ ${forcedStyles}
                             <div class="pw-shortcut-btn" data-key="\n"><span>换行</span><span class="code">Enter</span></div>
                         </div>
                         <div style="display:flex; gap:5px;">
+                            <!-- [新增] 智能生成模版按钮 -->
+                            <button class="pw-mini-btn magic" id="pw-gen-template-smart" title="根据当前世界书和设定，生成定制化模版"><i class="fa-solid fa-wand-sparkles"></i> 智能生成模版</button>
                             <!-- [需求 3] 修改提示文字 -->
                             <button class="pw-mini-btn" id="pw-restore-template" title="恢复默认模版">恢复默认</button>
                             <button class="pw-mini-btn" id="pw-save-template">保存模版</button>
@@ -1275,6 +1320,49 @@ function bindEvents() {
             uiStateCache.templateExpanded = true;
         }
         saveData(); // Save state immediately
+    });
+
+    // [新增] 智能生成模版事件
+    $(document).on('click.pw', '#pw-gen-template-smart', async function() {
+        if (isProcessing) return;
+        isProcessing = true;
+        const $btn = $(this);
+        const originalText = $btn.html();
+        $btn.html('<i class="fas fa-spinner fa-spin"></i> 生成中...');
+        
+        try {
+            const contextData = await collectContextData();
+            const modelVal = $('#pw-api-source').val() === 'independent' ? $('#pw-api-model-select').val() : null;
+            const config = {
+                wiText: contextData.wi,
+                apiSource: $('#pw-api-source').val(), 
+                indepApiUrl: $('#pw-api-url').val(),
+                indepApiKey: $('#pw-api-key').val(), 
+                indepApiModel: modelVal
+            };
+            
+            // 使用特殊参数 overridePrompt 调用 runGeneration
+            const generatedTemplate = await runGeneration(config, config, defaultTemplateGenPrompt);
+            
+            if (generatedTemplate) {
+                // 更新模版
+                $('#pw-template-text').val(generatedTemplate);
+                currentTemplate = generatedTemplate;
+                saveData();
+                renderTemplateChips();
+                // 自动切换到模版查看模式
+                if (isEditingTemplate) {
+                    $('#pw-toggle-edit-template').click();
+                }
+                toastr.success("模版生成成功！");
+            }
+        } catch (e) {
+            console.error(e);
+            toastr.error("模版生成失败: " + e.message);
+        } finally {
+            $btn.html(originalText);
+            isProcessing = false;
+        }
     });
 
     // [需求 4] 恢复默认模版事件
@@ -1887,6 +1975,7 @@ const renderWiBooks = async () => {
             e.stopPropagation();
             const $list = $el.find('.pw-wi-list');
             
+            // 如果列表未展开，先展开
             if (!$list.is(':visible')) {
                 $el.find('.pw-wi-header').click();
             }
@@ -2087,5 +2176,5 @@ function addPersonaButton() {
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
-    console.log("[PW] Persona Weaver Loaded (v7.6 - Filter Logic Refined & Flexbox Fix)");
+    console.log("[PW] Persona Weaver Loaded (v7.7 - Filter UI Revamp)");
 });
