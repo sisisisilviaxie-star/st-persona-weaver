@@ -1,3 +1,4 @@
+
 import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
@@ -865,100 +866,6 @@ async function openCreatorPopup() {
     const chipsDisplay = uiStateCache.templateExpanded ? 'flex' : 'none';
     const chipsIcon = uiStateCache.templateExpanded ? 'fa-angle-up' : 'fa-angle-down';
 
-    const forcedStyles = `
-    <style>
-        .swal2-actions { flex-wrap: nowrap !important; }
-        .swal2-styled { 
-            white-space: nowrap !important;
-            width: auto !important; 
-            max-width: none !important; 
-            flex-shrink: 0 !important;
-        }
-
-        .pw-badge {
-            display: inline-block;
-            padding: 2px 5px;
-            border-radius: 3px;
-            font-size: 0.7em;
-            margin-right: 5px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        .pw-badge.persona { background-color: rgba(65, 150, 255, 0.2); color: #88c0ff; border: 1px solid rgba(65, 150, 255, 0.4); }
-        .pw-badge.template { background-color: rgba(255, 165, 0, 0.2); color: #ffbc42; border: 1px solid rgba(255, 165, 0, 0.4); }
-
-        .pw-diff-tabs-bar { border-bottom: 1px solid #444; }
-        .pw-diff-tab { color: #ccc !important; background: rgba(0,0,0,0.3) !important; }
-        .pw-diff-tab.active { color: #fff !important; border-bottom: 2px solid #83c168; background: rgba(0,0,0,0.5) !important; }
-        .pw-tab-sub { color: #999 !important; }
-
-        #pw-diff-confirm { background: transparent !important; border: 1px solid #83c168 !important; color: #83c168 !important; text-shadow: none !important; opacity: 1 !important; }
-        #pw-diff-confirm:hover { background: rgba(131, 193, 104, 0.1) !important; }
-        #pw-diff-cancel { background: transparent !important; border: 1px solid #ff6b6b !important; color: #ff6b6b !important; text-shadow: none !important; opacity: 1 !important; }
-        #pw-diff-cancel:hover { background: rgba(255, 107, 107, 0.1) !important; }
-
-        .pw-diff-card { background-color: transparent !important; border-radius: 8px; padding: 0 !important; margin-bottom: 12px; border: 1px solid #666 !important; position: relative; overflow: hidden; display: flex; flex-direction: column; transition: all 0.2s ease; }
-        .pw-diff-card.selected { border-color: #83c168 !important; box-shadow: 0 0 10px rgba(131, 193, 104, 0.2); }
-        .pw-diff-label { text-align: center; font-weight: bold; font-size: 0.9em; letter-spacing: 1px; padding: 5px 0; margin: 0 !important; width: 100%; background-color: rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .pw-diff-card.selected .pw-diff-label { color: #83c168 !important; background-color: rgba(131, 193, 104, 0.1) !important; border-bottom: 1px solid rgba(131, 193, 104, 0.2); }
-        .pw-diff-card .pw-diff-label { color: #aaa !important; }
-        .pw-diff-textarea { background: transparent !important; border: none !important; width: 100%; resize: none; outline: none; font-family: inherit; line-height: 1.6; font-size: 1em; display: block; color: #ffffff !important; padding: 10px; }
-        .pw-diff-content-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
-        .pw-diff-raw-view { display: flex; flex-direction: column; flex: 1; height: 100%; }
-        .pw-diff-raw-textarea { flex: 1; height: 100% !important; resize: none; color: #ffffff !important; background: rgba(0,0,0,0.2) !important; }
-        .pw-diff-attr-name { color: #ffffff !important; text-align: center; font-weight: bold; font-size: 1.1em; margin: 15px 0 10px 0; border-bottom: 1px solid #555; padding-bottom: 5px; }
-        
-        .pw-wi-header-checkbox { margin-right: 10px; cursor: pointer; transform: scale(1.2); }
-        
-        .pw-wi-depth-tools { display: none; flex-direction: column; gap: 8px; padding: 10px; background: rgba(0,0,0,0.1); border-bottom: 1px solid var(--SmartThemeBorderColor); font-size: 0.85em; }
-        .pw-wi-filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .pw-keyword-input { flex: 1; padding: 4px 8px; background: var(--SmartThemeInputBg); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeInputColor); border-radius: 4px; min-width: 0; }
-        .pw-pos-select { flex: 1; padding: 4px; background: var(--SmartThemeInputBg); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeInputColor); border-radius: 4px; max-width: 200px; }
-        
-        .pw-depth-input { width: 40px; padding: 4px; background: var(--SmartThemeInputBg); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeInputColor); border-radius: 4px; text-align: center; }
-        .pw-depth-btn { padding: 4px 10px; background: var(--SmartThemeBtnBg); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeBtnText); border-radius: 4px; cursor: pointer; white-space: nowrap; }
-        .pw-depth-btn:hover { filter: brightness(1.1); }
-        
-        /* [修改] active 状态改为红色，更醒目 */
-        .pw-depth-btn.active { border-color: #ff6b6b; color: #ff6b6b; background: rgba(255, 107, 107, 0.1); }
-        
-        .pw-wi-info-badge { font-size: 0.75em; background: rgba(255,255,255,0.1); padding: 1px 4px; border-radius: 3px; color: #aaa; margin-right: 5px; white-space: nowrap; }
-        .pw-wi-filter-toggle { cursor: pointer; margin-left: auto; margin-right: 10px; opacity: 0.7; font-size: 1em; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
-        .pw-wi-filter-toggle:hover { opacity: 1; background: rgba(255,255,255,0.1); }
-        
-        .pw-template-editor-area { display: none; flex-direction: column; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; margin-bottom: 10px; }
-        .pw-template-textarea { width: 100%; min-height: 200px; background: var(--SmartThemeInputBg); color: var(--SmartThemeBodyColor); border: none; padding: 10px; font-family: monospace; resize: vertical; border-radius: 0; }
-        .pw-template-toolbar { display: flex; justify-content: flex-start; align-items: center; padding: 5px 10px; background: rgba(0,0,0,0.1); border-bottom: 1px solid var(--SmartThemeBorderColor); border-radius: 6px 6px 0 0; }
-        .pw-template-footer { display: flex; justify-content: flex-end; align-items: center; padding: 5px 10px; background: rgba(0,0,0,0.1); border-top: 1px solid var(--SmartThemeBorderColor); border-radius: 0 0 6px 6px; gap: 8px; }
-
-        .pw-context-header {
-            background-color: var(--SmartThemeBtnBg);
-            color: var(--SmartThemeBtnText);
-            border: 1px solid var(--SmartThemeBorderColor);
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: all 0.2s;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .pw-context-header:hover {
-            background-color: var(--SmartThemeBtnHoverBg);
-            filter: brightness(1.1);
-        }
-        .pw-context-header i { margin-right: 6px; }
-
-        @media screen and (max-width: 600px) {
-            .pw-row { flex-wrap: wrap; }
-            .pw-row label { width: 100%; margin-bottom: 4px; }
-            .pw-input, .pw-select, #pw-api-url, #pw-api-key { min-width: 0 !important; width: 100% !important; flex: 1 1 auto; }
-        }
-    </style>
-    `;
-
     // 更新 UI 块
     const updateUiHtml = hasNewVersion 
     ? `
@@ -974,8 +881,8 @@ async function openCreatorPopup() {
         <div style="margin-top:10px; opacity:0.6; font-size:0.9em;"><i class="fa-solid fa-check"></i> 当前已是最新版本</div>
       `;
 
+    // 移除内联 CSS，现在由外部文件控制
     const html = `
-${forcedStyles}
 <div class="pw-wrapper">
     <div class="pw-header">
         <div class="pw-top-bar"><div class="pw-title">${headerTitle}</div></div>
@@ -1933,6 +1840,18 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-history-clear-all', function () { if (confirm("清空?")) { historyCache = []; saveData(); renderHistoryList(); } });
 }
 
+// 动态加载外部 CSS 文件
+function loadThemeCSS(fileName) {
+    if ($('#pw-style-link').length) return;
+    const cssUrl = `scripts/extensions/third-party/${extensionName}/${fileName}`;
+    $('<link>')
+        .attr('rel', 'stylesheet')
+        .attr('type', 'text/css')
+        .attr('href', cssUrl)
+        .attr('id', 'pw-style-link')
+        .appendTo('head');
+}
+
 const renderTemplateChips = () => {
     const $container = $('#pw-template-chips').empty();
     const blocks = parseYamlToBlocks(currentTemplate);
@@ -2274,5 +2193,7 @@ function addPersonaButton() {
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
+    loadThemeCSS('style.css'); // 默认加载
     console.log("[PW] Persona Weaver Loaded (v11.4 - Restore Editor)");
 });
+
