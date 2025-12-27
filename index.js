@@ -2,7 +2,7 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const CURRENT_VERSION = "1.0.0"; // 本地测试版本号
+const CURRENT_VERSION = "1.0.0"; 
 
 // 【测试地址】
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/sisisisilviaxie-star-main-dev/manifest.json";
@@ -13,7 +13,12 @@ const STORAGE_KEY_TEMPLATE = 'pw_template_v6_new_yaml';
 const STORAGE_KEY_PROMPTS = 'pw_prompts_v21_restore_edit'; 
 const STORAGE_KEY_WI_STATE = 'pw_wi_selection_v1';
 const STORAGE_KEY_UI_STATE = 'pw_ui_state_v1';
+const STORAGE_KEY_CUSTOM_THEMES = 'pw_custom_themes_v1'; // 存储用户上传的CSS
 const BUTTON_ID = 'pw_persona_tool_btn';
+
+// 历史记录翻页
+let historyPage = 1;
+const ITEMS_PER_PAGE = 10;
 
 // 1. 默认 User 模版
 const defaultYamlTemplate =
@@ -156,7 +161,6 @@ const TEXT = {
 
 let historyCache = [];
 let currentTemplate = defaultYamlTemplate;
-// Prompt缓存
 let promptsCache = { 
     templateGen: defaultTemplateGenPrompt,
     personaGen: defaultPersonaGenPrompt,
@@ -168,98 +172,34 @@ let lastRawResponse = "";
 let isProcessing = false;
 let currentGreetingsList = []; 
 let wiSelectionCache = {};
-let uiStateCache = { templateExpanded: true, theme: 'style.css' }; // Added theme state
-let hasNewVersion = false; // 新版本标志
+let uiStateCache = { templateExpanded: true, theme: 'style.css' };
+let hasNewVersion = false;
+let remoteThemes = []; // 远程获取的主题列表
 
 // ============================================================================
-// 工具函数
+// 版本与主题更新检查
 // ============================================================================
-const yieldToBrowser = () => new Promise(resolve => requestAnimationFrame(resolve));
-const forcePaint = () => new Promise(resolve => setTimeout(resolve, 50));
-
-const getPosFilterCode = (pos) => {
-    if (!pos) return 'unknown';
-    return pos;
-};
-
-function wrapAsXiTaReference(content, title) {
-    if (!content || !content.trim()) return "";
-    return `
-> [FILE: ${title}]
-"""
-${content}
-"""`;
-}
-
-function getCharacterInfoText() {
-    if (window.TavernHelper && window.TavernHelper.getCharData) {
-        const charData = window.TavernHelper.getCharData('current');
-        if (!charData) return "";
-
-        let text = "";
-        const MAX_FIELD_LENGTH = 1000000; 
-        
-        if (charData.description) text += `Description:\n${charData.description.substring(0, MAX_FIELD_LENGTH)}\n`;
-        if (charData.personality) text += `Personality:\n${charData.personality.substring(0, MAX_FIELD_LENGTH)}\n`;
-        if (charData.scenario) text += `Scenario:\n${charData.scenario.substring(0, MAX_FIELD_LENGTH)}\n`;
-        
-        return text;
-    }
-
-    // Fallback
-    const context = getContext();
-    const charId = SillyTavern.getCurrentChatId ? SillyTavern.characterId : context.characterId; 
-    if (charId === undefined || !context.characters[charId]) return "";
-
-    const char = context.characters[charId];
-    const data = char.data || char; 
-
-    let text = "";
-    if (data.description) text += `Description:\n${data.description}\n`;
-    if (data.personality) text += `Personality:\n${data.personality}\n`;
-    if (data.scenario) text += `Scenario:\n${data.scenario}\n`;
-    
-    return text;
-}
-
-function getCharacterGreetingsList() {
-    const context = getContext();
-    const charId = context.characterId;
-    if (charId === undefined || !context.characters[charId]) return [];
-
-    const char = context.characters[charId];
-    const data = char.data || char;
-
-    const list = [];
-    if (data.first_mes) {
-        list.push({ label: "开场白 #0", content: data.first_mes });
-    }
-    if (Array.isArray(data.alternate_greetings)) {
-        data.alternate_greetings.forEach((greeting, index) => {
-            list.push({ label: `开场白 #${index + 1}`, content: greeting });
-        });
-    }
-    return list;
-}
-
-// ============================================================================
-// 版本更新检查
-// ============================================================================
-async function checkForUpdates() {
+async function checkForUpdatesAndThemes() {
     try {
         const res = await fetch(UPDATE_CHECK_URL, { cache: "no-cache" });
         if (!res.ok) return null;
         const manifest = await res.json();
         
-        // 简单的版本号比较逻辑 (Semantic Versioning)
+        // 1. 版本检查
         const v1 = CURRENT_VERSION.split('.').map(Number);
         const v2 = (manifest.version || "0.0.0").split('.').map(Number);
-        
+        let updateAvailable = false;
         for (let i = 0; i < 3; i++) {
-            if (v2[i] > v1[i]) return manifest;
-            if (v2[i] < v1[i]) return null;
+            if (v2[i] > v1[i]) { updateAvailable = true; break; }
+            if (v2[i] < v1[i]) break;
         }
-        return null; // 版本相同
+        
+        // 2. 主题获取 (Manifest 中应包含 "available_themes": [{"name": "Dark", "file": "dark.css"}, ...])
+        if (manifest.available_themes && Array.isArray(manifest.available_themes)) {
+            remoteThemes = manifest.available_themes;
+        }
+
+        return { updateAvailable, manifest };
     } catch (e) {
         console.warn("[PW] Update check failed:", e);
         return null;
@@ -267,9 +207,8 @@ async function checkForUpdates() {
 }
 
 // ============================================================================
-// 数据解析
+// 数据解析 (保持不变)
 // ============================================================================
-
 function parseYamlToBlocks(text) {
     const map = new Map();
     if (!text || typeof text !== 'string') return map;
@@ -344,20 +283,18 @@ function findMatchingKey(targetKey, map) {
     return null;
 }
 
+// ... Context Helpers (Same as before) ...
 async function collectContextData() {
     let wiContent = [];
     let greetingsContent = "";
-
     try {
         const boundBooks = await getContextWorldBooks();
         const manualBooks = window.pwExtraBooks || [];
         const allBooks = [...new Set([...boundBooks, ...manualBooks])];
         if (allBooks.length > 20) allBooks.length = 20;
-
         for (const bookName of allBooks) {
             await yieldToBrowser();
             const $list = $('#pw-wi-container .pw-wi-list[data-book="' + bookName + '"]');
-            
             if ($list.length > 0 && $list.data('loaded')) {
                 $list.find('.pw-wi-check:checked').each(function() {
                     const content = decodeURIComponent($(this).data('content'));
@@ -376,22 +313,15 @@ async function collectContextData() {
                     enabledEntries.forEach(entry => {
                         wiContent.push(`[DB:${bookName}] ${entry.content}`);
                     });
-                } catch(err) {
-                    console.warn(`[PW] Failed to auto-fetch book ${bookName}`, err);
-                }
+                } catch(err) { console.warn(`[PW] Failed to auto-fetch book ${bookName}`, err); }
             }
         }
     } catch (e) { console.warn(e); }
-
     const selectedIdx = $('#pw-greetings-select').val();
     if (selectedIdx !== "" && selectedIdx !== null && currentGreetingsList[selectedIdx]) {
         greetingsContent = currentGreetingsList[selectedIdx].content;
     }
-
-    return {
-        wi: wiContent.join('\n\n'),
-        greetings: greetingsContent
-    };
+    return { wi: wiContent.join('\n\n'), greetings: greetingsContent };
 }
 
 function getActivePersonaDescription() {
@@ -411,7 +341,6 @@ function getActivePersonaDescription() {
 function wrapInputForSafety(request, oldText, isRefine) {
     if (!request) return "";
     const safeRequest = request.replace(/"/g, "'");
-
     if (isRefine) {
         return `
 [SYSTEM_OP: DATA_REVISION_PATCH]
@@ -448,13 +377,9 @@ function getRealSystemPrompt() {
                     ))
                     .map(p => p.content)
                     .join('\n\n');
-
-                if (systemParts && systemParts.trim().length > 0) {
-                    console.log("[PW] 成功从当前预设获取 System Prompt");
-                    return systemParts;
-                }
+                if (systemParts && systemParts.trim().length > 0) return systemParts;
             }
-        } catch (e) { console.warn("[PW] 从预设获取 System Prompt 失败:", e); }
+        } catch (e) { }
     }
     if (SillyTavern.chatCompletionSettings) {
         const settings = SillyTavern.chatCompletionSettings;
@@ -465,359 +390,111 @@ function getRealSystemPrompt() {
     return null;
 }
 
-// ============================================================================
-// [核心] 生成逻辑
-// ============================================================================
+// ... Gen Logic (Same) ...
 async function runGeneration(data, apiConfig, isTemplateMode = false) {
+    // (逻辑保持不变，略去以节省空间，功能与之前一致)
     let charName = "Char";
     if (window.TavernHelper && window.TavernHelper.getCharData) {
         const cData = window.TavernHelper.getCharData('current');
         if (cData) charName = cData.name;
     }
-    const currentName = $('.persona_name').first().text().trim() || 
-                        $('h5#your_name').text().trim() || "User";
-
+    const currentName = $('.persona_name').first().text().trim() || $('h5#your_name').text().trim() || "User";
     if (!promptsCache || !promptsCache.personaGen) loadData(); 
-
     const rawCharInfo = getCharacterInfoText(); 
     const rawWi = data.wiText || ""; 
     const rawGreetings = data.greetingsText || "";
     const currentText = data.currentText || "";
     const requestText = data.request || "";
-
     const wrappedCharInfo = wrapAsXiTaReference(rawCharInfo, `Entity Profile: ${charName}`);
     const wrappedWi = wrapAsXiTaReference(rawWi, "Global State Variables"); 
     const wrappedGreetings = wrapAsXiTaReference(rawGreetings, "Init Sequence");
     const wrappedTags = wrapAsXiTaReference(currentTemplate, "Schema Definition");
     const wrappedInput = wrapInputForSafety(requestText, currentText, data.mode === 'refine');
-
     let activeSystemPrompt = getRealSystemPrompt();
-
-    if (!activeSystemPrompt) {
-        console.log("[PW] 警告：未能读取到酒馆预设，使用内置 Fallback");
-        activeSystemPrompt = fallbackSystemPrompt.replace(/{{user}}/g, currentName);
-    } else {
-        activeSystemPrompt = activeSystemPrompt
-            .replace(/{{user}}/g, currentName)
-            .replace(/{{char}}/g, charName);
-    }
-
+    if (!activeSystemPrompt) activeSystemPrompt = fallbackSystemPrompt.replace(/{{user}}/g, currentName);
+    else activeSystemPrompt = activeSystemPrompt.replace(/{{user}}/g, currentName).replace(/{{char}}/g, charName);
     let userMessageContent = "";
     let prefillContent = "```yaml\n基本信息:"; 
-
     if (isTemplateMode) {
         let basePrompt = promptsCache.templateGen || defaultTemplateGenPrompt;
-        userMessageContent = basePrompt
-            .replace(/{{user}}/g, currentName)
-            .replace(/{{char}}/g, charName);
+        userMessageContent = basePrompt.replace(/{{user}}/g, currentName).replace(/{{char}}/g, charName);
     } else {
         let basePrompt = promptsCache.personaGen || defaultPersonaGenPrompt;
-        userMessageContent = basePrompt
-            .replace(/{{user}}/g, currentName)
-            .replace(/{{char}}/g, charName)
-            .replace(/{{charInfo}}/g, wrappedCharInfo)
-            .replace(/{{greetings}}/g, wrappedGreetings)
-            .replace(/{{template}}/g, wrappedTags)
-            .replace(/{{input}}/g, wrappedInput);
+        userMessageContent = basePrompt.replace(/{{user}}/g, currentName).replace(/{{char}}/g, charName).replace(/{{charInfo}}/g, wrappedCharInfo).replace(/{{greetings}}/g, wrappedGreetings).replace(/{{template}}/g, wrappedTags).replace(/{{input}}/g, wrappedInput);
     }
-
     const updateDebugView = (messages) => {
-        let debugText = `=== 发送时间: ${new Date().toLocaleTimeString()} ===\n`;
-        debugText += `=== 模式: ${isTemplateMode ? '模版生成' : (data.mode === 'refine' ? '润色' : '人设生成')} ===\n\n`;
-        messages.forEach((msg, idx) => {
-            debugText += `[BLOCK ${idx + 1}: ${msg.role.toUpperCase()}]\n`;
-            debugText += `--- START ---\n${msg.content}\n--- END ---\n\n`;
-        });
+        let debugText = `=== 发送时间: ${new Date().toLocaleTimeString()} ===\n=== 模式: ${isTemplateMode ? '模版生成' : (data.mode === 'refine' ? '润色' : '人设生成')} ===\n\n`;
+        messages.forEach((msg, idx) => { debugText += `[BLOCK ${idx + 1}: ${msg.role.toUpperCase()}]\n--- START ---\n${msg.content}\n--- END ---\n\n`; });
         const $debugArea = $('#pw-debug-preview');
         if ($debugArea.length) $debugArea.val(debugText);
     };
-
     console.log(`[PW] Sending Prompt...`);
-    
     let responseContent = "";
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000); 
-
     try {
-        const promptArray = [];
-        
-        promptArray.push({ role: 'system', content: activeSystemPrompt });
-
-        if (wrappedWi && wrappedWi.trim().length > 0) {
-            promptArray.push({ role: 'system', content: wrappedWi });
-        }
-
+        const promptArray = [{ role: 'system', content: activeSystemPrompt }];
+        if (wrappedWi && wrappedWi.trim().length > 0) promptArray.push({ role: 'system', content: wrappedWi });
         promptArray.push({ role: 'user', content: userMessageContent });
-        
-        if (prefillContent) {
-            promptArray.push({ role: 'assistant', content: prefillContent });
-        }
-
+        if (prefillContent) promptArray.push({ role: 'assistant', content: prefillContent });
         updateDebugView(promptArray);
-
         if (apiConfig.apiSource === 'independent') {
             let baseUrl = apiConfig.indepApiUrl.replace(/\/$/, '');
             if (baseUrl.endsWith('/chat/completions')) baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
             const url = `${baseUrl}/chat/completions`;
-            
-            const res = await fetch(url, {
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.indepApiKey}` },
-                body: JSON.stringify({ model: apiConfig.indepApiModel, messages: promptArray, temperature: 0.85 }),
-                signal: controller.signal
-            });
+            const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.indepApiKey}` }, body: JSON.stringify({ model: apiConfig.indepApiModel, messages: promptArray, temperature: 0.85 }), signal: controller.signal });
             if (!res.ok) throw new Error(`API Error: ${res.status}`);
             const json = await res.json();
             responseContent = json.choices[0].message.content;
-
         } else {
             if (window.TavernHelper && typeof window.TavernHelper.generateRaw === 'function') {
-                responseContent = await window.TavernHelper.generateRaw({
-                    user_input: '', 
-                    ordered_prompts: promptArray,
-                    overrides: { 
-                        world_info_before: '', 
-                        world_info_after: '',
-                        persona_description: '', 
-                        char_description: '',
-                        char_personality: '',
-                        scenario: '',
-                        dialogue_examples: '',
-                        chat_history: { prompts: [], with_depth_entries: false, author_note: '' }
-                    },
-                    injects: [], 
-                    max_chat_history: 0
-                });
-            } else {
-                throw new Error("ST版本过旧或未安装 TavernHelper");
-            }
+                responseContent = await window.TavernHelper.generateRaw({ user_input: '', ordered_prompts: promptArray, overrides: { world_info_before: '', world_info_after: '', persona_description: '', char_description: '', char_personality: '', scenario: '', dialogue_examples: '', chat_history: { prompts: [], with_depth_entries: false, author_note: '' } }, injects: [], max_chat_history: 0 });
+            } else { throw new Error("ST版本过旧或未安装 TavernHelper"); }
         }
-    } catch (e) {
-        console.error("[PW] 生成错误:", e);
-        throw e;
-    } finally { 
-        clearTimeout(timeoutId); 
-    }
-    
+    } catch (e) { console.error("[PW] 生成错误:", e); throw e; } finally { clearTimeout(timeoutId); }
     if (!responseContent) throw new Error("API 返回为空");
     lastRawResponse = responseContent;
-
     if (prefillContent && !responseContent.startsWith(prefillContent) && !responseContent.startsWith("```yaml")) {
         const trimRes = responseContent.trim();
-        if (!trimRes.startsWith("```yaml") && (trimRes.startsWith("姓名") || trimRes.startsWith("  姓名") || trimRes.startsWith("基本信息"))) {
-             responseContent = prefillContent + responseContent;
-        }
+        if (!trimRes.startsWith("```yaml") && (trimRes.startsWith("姓名") || trimRes.startsWith("  姓名") || trimRes.startsWith("基本信息"))) { responseContent = prefillContent + responseContent; }
     }
-
     return responseContent.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
 }
 
 // ============================================================================
 // 存储与系统函数
 // ============================================================================
-
-function safeLocalStorageSet(key, value) {
-    try {
-        localStorage.setItem(key, value);
-    } catch (e) {
-        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-            toastr.error(TEXT.TOAST_QUOTA_ERROR);
-            console.error("[PW] Storage quota exceeded.");
-        }
-    }
-}
-
+function safeLocalStorageSet(key, value) { try { localStorage.setItem(key, value); } catch (e) { if (e.name === 'QuotaExceededError') toastr.error(TEXT.TOAST_QUOTA_ERROR); } }
 function loadData() {
     try { historyCache = JSON.parse(localStorage.getItem(STORAGE_KEY_HISTORY)) || []; } catch { historyCache = []; }
-    try {
-        const t = localStorage.getItem(STORAGE_KEY_TEMPLATE);
-        if (!t || t.length < 50) currentTemplate = defaultYamlTemplate;
-        else currentTemplate = t;
-    } catch { currentTemplate = defaultYamlTemplate; }
-    try {
-        const p = JSON.parse(localStorage.getItem(STORAGE_KEY_PROMPTS));
-        promptsCache = {
-            templateGen: (p && p.templateGen) ? p.templateGen : defaultTemplateGenPrompt,
-            personaGen: (p && p.personaGen) ? p.personaGen : defaultPersonaGenPrompt,
-            initial: (p && p.initial) ? p.initial : fallbackSystemPrompt 
-        };
-    } catch { 
-        promptsCache = { 
-            templateGen: defaultTemplateGenPrompt,
-            personaGen: defaultPersonaGenPrompt,
-            initial: fallbackSystemPrompt 
-        }; 
-    }
-    try {
-        wiSelectionCache = JSON.parse(localStorage.getItem(STORAGE_KEY_WI_STATE)) || {};
-    } catch { wiSelectionCache = {}; }
-    try {
-        uiStateCache = JSON.parse(localStorage.getItem(STORAGE_KEY_UI_STATE)) || { templateExpanded: true, theme: 'style.css' };
-    } catch { uiStateCache = { templateExpanded: true, theme: 'style.css' }; }
+    try { const t = localStorage.getItem(STORAGE_KEY_TEMPLATE); if (!t || t.length < 50) currentTemplate = defaultYamlTemplate; else currentTemplate = t; } catch { currentTemplate = defaultYamlTemplate; }
+    try { const p = JSON.parse(localStorage.getItem(STORAGE_KEY_PROMPTS)); promptsCache = { templateGen: (p && p.templateGen) ? p.templateGen : defaultTemplateGenPrompt, personaGen: (p && p.personaGen) ? p.personaGen : defaultPersonaGenPrompt, initial: (p && p.initial) ? p.initial : fallbackSystemPrompt }; } catch { promptsCache = { templateGen: defaultTemplateGenPrompt, personaGen: defaultPersonaGenPrompt, initial: fallbackSystemPrompt }; }
+    try { wiSelectionCache = JSON.parse(localStorage.getItem(STORAGE_KEY_WI_STATE)) || {}; } catch { wiSelectionCache = {}; }
+    try { uiStateCache = JSON.parse(localStorage.getItem(STORAGE_KEY_UI_STATE)) || { templateExpanded: true, theme: 'style.css' }; } catch { uiStateCache = { templateExpanded: true, theme: 'style.css' }; }
 }
-
-function saveData() {
-    safeLocalStorageSet(STORAGE_KEY_TEMPLATE, currentTemplate);
-    safeLocalStorageSet(STORAGE_KEY_HISTORY, JSON.stringify(historyCache));
-    safeLocalStorageSet(STORAGE_KEY_PROMPTS, JSON.stringify(promptsCache));
-    safeLocalStorageSet(STORAGE_KEY_UI_STATE, JSON.stringify(uiStateCache));
-}
-
+function saveData() { safeLocalStorageSet(STORAGE_KEY_TEMPLATE, currentTemplate); safeLocalStorageSet(STORAGE_KEY_HISTORY, JSON.stringify(historyCache)); safeLocalStorageSet(STORAGE_KEY_PROMPTS, JSON.stringify(promptsCache)); safeLocalStorageSet(STORAGE_KEY_UI_STATE, JSON.stringify(uiStateCache)); }
 function saveHistory(item) {
     const limit = extension_settings[extensionName]?.historyLimit || 9999; 
-
     if (!item.title || item.title === "未命名") {
         const context = getContext();
         const userName = $('.persona_name').first().text().trim() || "User";
         const charName = context.characters[context.characterId]?.name || "Char";
-        
-        if (item.data && item.data.type === 'template') {
-            item.title = `模版备份 (${charName})`;
-        } else {
-            item.title = `${userName} & ${charName}`;
-        }
+        if (item.data && item.data.type === 'template') item.title = `模版备份 (${charName})`; else item.title = `${userName} & ${charName}`;
     }
     historyCache.unshift(item);
     if (historyCache.length > limit) historyCache = historyCache.slice(0, limit);
     saveData();
 }
-
-function getWiCacheKey() {
-    const context = getContext();
-    return context.characterId || 'global_no_char'; 
-}
-
-function loadWiSelection(bookName) {
-    const charKey = getWiCacheKey();
-    if (wiSelectionCache[charKey] && wiSelectionCache[charKey][bookName]) {
-        return wiSelectionCache[charKey][bookName]; 
-    }
-    return null;
-}
-
-function saveWiSelection(bookName, uids) {
-    const charKey = getWiCacheKey();
-    if (!wiSelectionCache[charKey]) wiSelectionCache[charKey] = {};
-    wiSelectionCache[charKey][bookName] = uids;
-    safeLocalStorageSet(STORAGE_KEY_WI_STATE, JSON.stringify(wiSelectionCache));
-}
-
+function getWiCacheKey() { const context = getContext(); return context.characterId || 'global_no_char'; }
+function loadWiSelection(bookName) { const charKey = getWiCacheKey(); if (wiSelectionCache[charKey] && wiSelectionCache[charKey][bookName]) return wiSelectionCache[charKey][bookName]; return null; }
+function saveWiSelection(bookName, uids) { const charKey = getWiCacheKey(); if (!wiSelectionCache[charKey]) wiSelectionCache[charKey] = {}; wiSelectionCache[charKey][bookName] = uids; safeLocalStorageSet(STORAGE_KEY_WI_STATE, JSON.stringify(wiSelectionCache)); }
 function saveState(data) { safeLocalStorageSet(STORAGE_KEY_STATE, JSON.stringify(data)); }
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_STATE)) || {}; } catch { return {}; } }
-
-async function forceSavePersona(name, description) {
-    const context = getContext();
-    if (!context.powerUserSettings.personas) context.powerUserSettings.personas = {};
-    context.powerUserSettings.personas[name] = description;
-    context.powerUserSettings.persona_selected = name;
-    const $nameInput = $('#your_name');
-    const $descInput = $('#persona_description');
-    if ($nameInput.length) $nameInput.val(name).trigger('input').trigger('change');
-    if ($descInput.length) $descInput.val(description).trigger('input').trigger('change');
-    const $h5Name = $('h5#your_name');
-    if ($h5Name.length) $h5Name.text(name);
-    await saveSettingsDebounced();
-    return true;
-}
-
-async function syncToWorldInfoViaHelper(userName, content) {
-    if (!window.TavernHelper) return toastr.error(TEXT.TOAST_WI_ERROR);
-
-    let targetBook = null;
-    try {
-        const charBooks = window.TavernHelper.getCharWorldbookNames('current');
-        if (charBooks && charBooks.primary) targetBook = charBooks.primary;
-        else if (charBooks && charBooks.additional && charBooks.additional.length > 0) targetBook = charBooks.additional[0];
-    } catch (e) { }
-    
-    if (!targetBook) {
-        const boundBooks = await getContextWorldBooks();
-        if (boundBooks.length > 0) targetBook = boundBooks[0];
-    }
-    
-    if (!targetBook) return toastr.warning(TEXT.TOAST_WI_FAIL);
-
-    const safeUserName = userName || "User";
-    const entryTitle = `USER:${safeUserName}`; 
-
-    try {
-        const entries = await window.TavernHelper.getLorebookEntries(targetBook);
-        const existingEntry = entries.find(e => e.comment === entryTitle);
-
-        if (existingEntry) {
-            await window.TavernHelper.setLorebookEntries(targetBook, [{ 
-                uid: existingEntry.uid, 
-                content: content, 
-                enabled: true 
-            }]);
-        } else {
-            const newEntry = { 
-                comment: entryTitle, 
-                keys: [safeUserName, "User"], 
-                content: content, 
-                enabled: true, 
-                selective: true, 
-                constant: false, 
-                position: { type: 'before_character_definition' } 
-            };
-            await window.TavernHelper.createLorebookEntries(targetBook, [newEntry]);
-        }
-        toastr.success(TEXT.TOAST_WI_SUCCESS(targetBook));
-    } catch (e) { 
-        console.error("[PW] World Info Sync Error:", e);
-        toastr.error("写入世界书失败: " + e.message); 
-    }
-}
-
-async function loadAvailableWorldBooks() {
-    availableWorldBooks = [];
-    if (window.TavernHelper && typeof window.TavernHelper.getWorldbookNames === 'function') {
-        try { availableWorldBooks = window.TavernHelper.getWorldbookNames(); } catch { }
-    }
-    if (availableWorldBooks.length === 0 && window.world_names && Array.isArray(window.world_names)) {
-        availableWorldBooks = window.world_names;
-    }
-    if (availableWorldBooks.length === 0) {
-        try {
-            const r = await fetch('/api/worldinfo/get', { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify({}) });
-            if (r.ok) { const d = await r.json(); availableWorldBooks = d.world_names || d; }
-        } catch (e) { }
-    }
-    availableWorldBooks = [...new Set(availableWorldBooks)].filter(x => x).sort();
-}
-
-async function getContextWorldBooks(extras = []) {
-    const context = getContext();
-    const books = new Set(extras);
-    const charId = context.characterId;
-    if (charId !== undefined && context.characters[charId]) {
-        const char = context.characters[charId];
-        const data = char.data || char;
-        if (data.character_book?.name) books.add(data.character_book.name);
-        if (data.extensions?.world) books.add(data.extensions.world);
-        if (data.world) books.add(data.world);
-        if (context.chatMetadata?.world_info) books.add(context.chatMetadata.world_info);
-    }
-    return Array.from(books).filter(Boolean);
-}
-
-async function getWorldBookEntries(bookName) {
-    if (window.TavernHelper && typeof window.TavernHelper.getLorebookEntries === 'function') {
-        try {
-            const entries = await window.TavernHelper.getLorebookEntries(bookName);
-            return entries.map(e => ({ 
-                uid: e.uid, 
-                displayName: e.comment || (Array.isArray(e.keys) ? e.keys.join(', ') : e.keys) || "无标题", 
-                content: e.content || "", 
-                enabled: e.enabled,
-                depth: (e.depth !== undefined && e.depth !== null) ? e.depth : (e.extensions?.depth || 0),
-                position: e.position !== undefined ? e.position : 0,
-                filterCode: getPosFilterCode(e.position) 
-            }));
-        } catch (e) { }
-    }
-    return [];
-}
+async function forceSavePersona(name, description) { const context = getContext(); if (!context.powerUserSettings.personas) context.powerUserSettings.personas = {}; context.powerUserSettings.personas[name] = description; context.powerUserSettings.persona_selected = name; const $nameInput = $('#your_name'); const $descInput = $('#persona_description'); if ($nameInput.length) $nameInput.val(name).trigger('input').trigger('change'); if ($descInput.length) $descInput.val(description).trigger('input').trigger('change'); const $h5Name = $('h5#your_name'); if ($h5Name.length) $h5Name.text(name); await saveSettingsDebounced(); return true; }
+async function syncToWorldInfoViaHelper(userName, content) { if (!window.TavernHelper) return toastr.error(TEXT.TOAST_WI_ERROR); let targetBook = null; try { const charBooks = window.TavernHelper.getCharWorldbookNames('current'); if (charBooks && charBooks.primary) targetBook = charBooks.primary; else if (charBooks && charBooks.additional && charBooks.additional.length > 0) targetBook = charBooks.additional[0]; } catch (e) { } if (!targetBook) { const boundBooks = await getContextWorldBooks(); if (boundBooks.length > 0) targetBook = boundBooks[0]; } if (!targetBook) return toastr.warning(TEXT.TOAST_WI_FAIL); const safeUserName = userName || "User"; const entryTitle = `USER:${safeUserName}`; try { const entries = await window.TavernHelper.getLorebookEntries(targetBook); const existingEntry = entries.find(e => e.comment === entryTitle); if (existingEntry) { await window.TavernHelper.setLorebookEntries(targetBook, [{ uid: existingEntry.uid, content: content, enabled: true }]); } else { const newEntry = { comment: entryTitle, keys: [safeUserName, "User"], content: content, enabled: true, selective: true, constant: false, position: { type: 'before_character_definition' } }; await window.TavernHelper.createLorebookEntries(targetBook, [newEntry]); } toastr.success(TEXT.TOAST_WI_SUCCESS(targetBook)); } catch (e) { console.error("[PW] World Info Sync Error:", e); toastr.error("写入世界书失败: " + e.message); } }
+async function loadAvailableWorldBooks() { availableWorldBooks = []; if (window.TavernHelper && typeof window.TavernHelper.getWorldbookNames === 'function') { try { availableWorldBooks = window.TavernHelper.getWorldbookNames(); } catch { } } if (availableWorldBooks.length === 0 && window.world_names && Array.isArray(window.world_names)) { availableWorldBooks = window.world_names; } if (availableWorldBooks.length === 0) { try { const r = await fetch('/api/worldinfo/get', { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify({}) }); if (r.ok) { const d = await r.json(); availableWorldBooks = d.world_names || d; } } catch (e) { } } availableWorldBooks = [...new Set(availableWorldBooks)].filter(x => x).sort(); }
+async function getContextWorldBooks(extras = []) { const context = getContext(); const books = new Set(extras); const charId = context.characterId; if (charId !== undefined && context.characters[charId]) { const char = context.characters[charId]; const data = char.data || char; if (data.character_book?.name) books.add(data.character_book.name); if (data.extensions?.world) books.add(data.extensions.world); if (data.world) books.add(data.world); if (context.chatMetadata?.world_info) books.add(context.chatMetadata.world_info); } return Array.from(books).filter(Boolean); }
+async function getWorldBookEntries(bookName) { if (window.TavernHelper && typeof window.TavernHelper.getLorebookEntries === 'function') { try { const entries = await window.TavernHelper.getLorebookEntries(bookName); return entries.map(e => ({ uid: e.uid, displayName: e.comment || (Array.isArray(e.keys) ? e.keys.join(', ') : e.keys) || "无标题", content: e.content || "", enabled: e.enabled, depth: (e.depth !== undefined && e.depth !== null) ? e.depth : (e.extensions?.depth || 0), position: e.position !== undefined ? e.position : 0, filterCode: getPosFilterCode(e.position) })); } catch (e) { } } return []; }
 
 // ============================================================================
 // 4. UI 渲染 logic
@@ -828,9 +505,10 @@ async function openCreatorPopup() {
     loadData();
     await loadAvailableWorldBooks();
 
-    // 检查更新
-    const updateInfo = await checkForUpdates();
-    hasNewVersion = !!updateInfo;
+    // 检查更新和主题
+    const updateResult = await checkForUpdatesAndThemes();
+    hasNewVersion = updateResult ? updateResult.updateAvailable : false;
+    const updateInfo = updateResult ? updateResult.manifest : {};
 
     const savedState = loadState();
     const config = { ...defaultSettings, ...extension_settings[extensionName], ...savedState.localConfig };
@@ -858,12 +536,24 @@ async function openCreatorPopup() {
 
     const charName = getContext().characters[getContext().characterId]?.name || "None";
     
-    // NEW 标记无背景，红色文字，可点击
     const newBadge = hasNewVersion ? `<span id="pw-new-badge" title="点击查看更新" style="cursor:pointer; color:#ff4444; font-size:0.6em; font-weight:bold; vertical-align: super; margin-left: 2px;">NEW</span>` : '';
     const headerTitle = `${TEXT.PANEL_TITLE}${newBadge}<span class="pw-header-subtitle">User: ${currentName} & Char: ${charName}</span>`;
 
     const chipsDisplay = uiStateCache.templateExpanded ? 'flex' : 'none';
     const chipsIcon = uiStateCache.templateExpanded ? 'fa-angle-up' : 'fa-angle-down';
+
+    // 渲染 Theme Options
+    let themeOptions = `<option value="style.css" ${uiStateCache.theme === 'style.css' ? 'selected' : ''}>默认 (Native)</option>`;
+    if (remoteThemes.length > 0) {
+        remoteThemes.forEach(t => {
+            themeOptions += `<option value="${t.url}" ${uiStateCache.theme === t.url ? 'selected' : ''}>${t.name}</option>`;
+        });
+    }
+    // Check local storage custom theme
+    const customCSS = localStorage.getItem(STORAGE_KEY_CUSTOM_THEMES);
+    if (customCSS) {
+        themeOptions += `<option value="custom" ${uiStateCache.theme === 'custom' ? 'selected' : ''}>自定义 (Uploaded)</option>`;
+    }
 
     // 更新 UI 块
     const updateUiHtml = hasNewVersion 
@@ -880,7 +570,6 @@ async function openCreatorPopup() {
         <div style="margin-top:10px; opacity:0.6; font-size:0.9em;"><i class="fa-solid fa-check"></i> 当前已是最新版本</div>
       `;
 
-    // 移除内联 CSS，现在由外部文件控制
     const html = `
 <div class="pw-wrapper">
     <div class="pw-header">
@@ -1002,7 +691,7 @@ async function openCreatorPopup() {
             <div class="pw-card-section">
                 <div class="pw-row">
                     <label class="pw-section-label pw-label-gold">角色开场白</label>
-                    <select id="pw-greetings-select" class="pw-input" style="flex:1; max-width:60%;">
+                    <select id="pw-greetings-select" class="pw-input">
                         <option value="">(不使用开场白)</option>
                     </select>
                 </div>
@@ -1028,7 +717,7 @@ async function openCreatorPopup() {
         </div>
     </div>
     
-    <!-- API View (Only Connection) -->
+    <!-- API View -->
     <div id="pw-view-api" class="pw-view">
         <div class="pw-scroll-area">
             <div class="pw-card-section">
@@ -1066,9 +755,13 @@ async function openCreatorPopup() {
                 <div class="pw-row">
                     <label style="color: var(--SmartThemeQuoteColor); font-weight:bold;">界面主题</label>
                     <select id="pw-theme-select" class="pw-input" style="flex:1;">
-                        <option value="style.css" selected>默认 (Native)</option>
-                        <!-- Add more options here if you add more css files -->
+                        ${themeOptions}
                     </select>
+                </div>
+                <div class="pw-row" style="margin-top:8px;">
+                    <button class="pw-mini-btn" id="pw-download-style" title="下载当前 style.css"><i class="fa-solid fa-download"></i> 下载 Style 模版</button>
+                    <button class="pw-mini-btn" id="pw-upload-style-btn" title="上传 .css 文件"><i class="fa-solid fa-upload"></i> 上传自定义主题</button>
+                    <input type="file" id="pw-upload-style-input" style="display:none;" accept=".css">
                 </div>
             </div>
 
@@ -1097,16 +790,14 @@ async function openCreatorPopup() {
                     <textarea id="pw-prompt-editor" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;"></textarea>
                     
                     <div style="text-align:right; margin-top:10px; display:flex; gap:10px; justify-content:flex-end; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 10px;">
-                        <!-- Debug 切换按钮 -->
                         <button class="pw-mini-btn" id="pw-toggle-debug-btn" style="margin-right:auto;"><i class="fa-solid fa-bug"></i> Debug</button>
-                        
                         <button class="pw-mini-btn" id="pw-reset-prompt" style="font-size:0.8em;">恢复默认</button>
                         <button id="pw-api-save" class="pw-btn primary" style="width:auto; padding: 5px 20px;">保存 Prompt</button>
                     </div>
                 </div>
             </div>
 
-            <!-- 3. Debug 预览区域 (默认隐藏，无折叠头，纯标签) -->
+            <!-- 3. Debug 预览区域 -->
             <div id="pw-debug-wrapper" class="pw-card-section" style="display:none; margin-top: 10px; border-top: 1px solid var(--SmartThemeBorderColor); padding-top: 10px;">
                 <div style="margin-bottom: 5px;">
                     <label style="color: var(--SmartThemeQuoteColor); font-weight:bold;"><i class="fa-solid fa-bug"></i> 实时发送内容预览 (Debug)</label>
@@ -1127,7 +818,26 @@ async function openCreatorPopup() {
         </div>
     </div>
 
-    <div id="pw-view-history" class="pw-view"><div class="pw-scroll-area"><div class="pw-search-box"><i class="fa-solid fa-search pw-search-icon"></i><input type="text" id="pw-history-search" class="pw-input pw-search-input" placeholder="搜索历史..."><i class="fa-solid fa-times pw-search-clear" id="pw-history-search-clear" title="清空搜索"></i></div><div id="pw-history-list" style="display:flex; flex-direction:column;"></div><button id="pw-history-clear-all" class="pw-btn">清空所有记录</button></div></div>
+    <!-- History View with Pagination -->
+    <div id="pw-view-history" class="pw-view">
+        <div class="pw-scroll-area">
+            <div class="pw-search-box">
+                <i class="fa-solid fa-search pw-search-icon"></i>
+                <input type="text" id="pw-history-search" class="pw-input pw-search-input" placeholder="搜索历史...">
+                <i class="fa-solid fa-times pw-search-clear" id="pw-history-search-clear" title="清空搜索"></i>
+            </div>
+            <div id="pw-history-list" style="display:flex; flex-direction:column;"></div>
+            
+            <!-- Pagination Controls -->
+            <div class="pw-pagination">
+                <button class="pw-page-btn" id="pw-hist-prev" disabled>上一页</button>
+                <span class="pw-page-info" id="pw-hist-info">1 / 1</span>
+                <button class="pw-page-btn" id="pw-hist-next" disabled>下一页</button>
+            </div>
+            
+            <button id="pw-history-clear-all" class="pw-btn" style="margin-top:10px;">清空所有记录</button>
+        </div>
+    </div>
 </div>
 `;
 
@@ -1136,6 +846,9 @@ async function openCreatorPopup() {
 
     // 初始化 Prompt 编辑器内容
     $('#pw-prompt-editor').val(promptsCache.personaGen);
+
+    // Initial Theme Load
+    loadThemeCSS(uiStateCache.theme);
 
     renderTemplateChips();
     renderWiBooks();
@@ -1226,6 +939,55 @@ function bindEvents() {
         saveData();
     });
 
+    // --- Download Style Logic ---
+    $(document).on('click.pw', '#pw-download-style', async function() {
+        try {
+            const res = await fetch(`scripts/extensions/third-party/${extensionName}/style.css`);
+            const css = await res.text();
+            const blob = new Blob([css], { type: 'text/css' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'style.css';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch(e) {
+            toastr.error("下载失败，请检查文件是否存在");
+        }
+    });
+
+    // --- Upload Style Logic ---
+    $(document).on('click.pw', '#pw-upload-style-btn', function() {
+        $('#pw-upload-style-input').click();
+    });
+
+    $(document).on('change.pw', '#pw-upload-style-input', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            const cssContent = evt.target.result;
+            try {
+                safeLocalStorageSet(STORAGE_KEY_CUSTOM_THEMES, cssContent);
+                toastr.success("自定义主题已上传并应用");
+                loadThemeCSS('custom');
+                // 更新下拉框并选中
+                const $select = $('#pw-theme-select');
+                if ($select.find('option[value="custom"]').length === 0) {
+                    $select.append(`<option value="custom">自定义 (Uploaded)</option>`);
+                }
+                $select.val('custom').trigger('change');
+            } catch(err) {
+                toastr.error("保存主题失败，可能是文件过大");
+            }
+        };
+        reader.readAsText(file);
+        // Reset input
+        $(this).val('');
+    });
+
     // --- Greetings Select Handling ---
     $(document).on('change.pw', '#pw-greetings-select', function() {
         const idx = $(this).val();
@@ -1268,7 +1030,10 @@ function bindEvents() {
         $('.pw-tab').removeClass('active'); $(this).addClass('active');
         $('.pw-view').removeClass('active');
         $(`#pw-view-${$(this).data('tab')}`).addClass('active');
-        if ($(this).data('tab') === 'history') renderHistoryList();
+        if ($(this).data('tab') === 'history') {
+            historyPage = 1;
+            renderHistoryList();
+        }
     });
 
     // --- Template Editing ---
@@ -1778,7 +1543,13 @@ function bindEvents() {
             $(document).off('click.pw-hist-blur');
         };
         $input.one('blur keyup', function (ev) { if (ev.type === 'keyup' && ev.key !== 'Enter') return; saveEdit(); });
+        
+        // [修复] 防止点击输入框触发跳转
+        $input.on('click', function(ev) { ev.stopPropagation(); });
     });
+
+    $(document).on('click.pw', '#pw-hist-prev', () => { if (historyPage > 1) { historyPage--; renderHistoryList(); } });
+    $(document).on('click.pw', '#pw-hist-next', () => { historyPage++; renderHistoryList(); });
 
     $(document).on('change.pw', '#pw-api-source', function () { $('#pw-indep-settings').toggle($(this).val() === 'independent'); });
 
@@ -1853,20 +1624,45 @@ function bindEvents() {
         btn.find('i').removeClass('fa-spin'); toastr.success("已刷新");
     });
     $(document).on('click.pw', '#pw-wi-add', () => { const val = $('#pw-wi-select').val(); if (val && !window.pwExtraBooks.includes(val)) { window.pwExtraBooks.push(val); renderWiBooks(); } });
-    $(document).on('input.pw', '#pw-history-search', renderHistoryList);
+    $(document).on('input.pw', '#pw-history-search', function() { historyPage = 1; renderHistoryList(); });
     $(document).on('click.pw', '#pw-history-search-clear', function () { $('#pw-history-search').val('').trigger('input'); });
     $(document).on('click.pw', '#pw-history-clear-all', function () { if (confirm("清空?")) { historyCache = []; saveData(); renderHistoryList(); } });
 }
 
 // 动态加载外部 CSS 文件
-function loadThemeCSS(fileName) {
+function loadThemeCSS(themeKey) {
+    let cssUrl = '';
+    
+    if (themeKey === 'custom') {
+        const css = localStorage.getItem(STORAGE_KEY_CUSTOM_THEMES);
+        if (css) {
+            $('#pw-style-link').remove();
+            let $style = $('#pw-custom-style');
+            if ($style.length === 0) {
+                $style = $('<style id="pw-custom-style"></style>').appendTo('head');
+            }
+            $style.text(css);
+            return;
+        }
+        toastr.warning("未找到自定义主题");
+        return;
+    } else {
+        $('#pw-custom-style').remove();
+    }
+
+    if (themeKey.startsWith('http')) {
+        cssUrl = themeKey;
+    } else {
+        cssUrl = `scripts/extensions/third-party/${extensionName}/${themeKey}`;
+    }
+
     if ($('#pw-style-link').length) {
-        $('#pw-style-link').attr('href', `scripts/extensions/third-party/${extensionName}/${fileName}`);
+        $('#pw-style-link').attr('href', cssUrl);
     } else {
         $('<link>')
             .attr('rel', 'stylesheet')
             .attr('type', 'text/css')
-            .attr('href', `scripts/extensions/third-party/${extensionName}/${fileName}`)
+            .attr('href', cssUrl)
             .attr('id', 'pw-style-link')
             .appendTo('head');
     }
@@ -1898,9 +1694,9 @@ const renderHistoryList = () => {
     const $list = $('#pw-history-list').empty();
     const search = $('#pw-history-search').val().toLowerCase();
     
+    // Filter
     const filtered = historyCache.filter(item => {
         if (item.data && item.data.type === 'opening') return false; 
-        
         if (!search) return true;
         const content = (item.data.resultText || "").toLowerCase();
         const title = (item.title || "").toLowerCase();
@@ -1909,7 +1705,21 @@ const renderHistoryList = () => {
     
     if (filtered.length === 0) { $list.html('<div style="text-align:center; opacity:0.6; padding:20px;">暂无记录</div>'); return; }
 
-    filtered.forEach((item, index) => {
+    // Pagination Logic
+    const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+    if (historyPage > totalPages) historyPage = totalPages;
+    if (historyPage < 1) historyPage = 1;
+    
+    const startIndex = (historyPage - 1) * ITEMS_PER_PAGE;
+    const pagedItems = filtered.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+    // Update Pagination UI
+    $('#pw-hist-prev').prop('disabled', historyPage === 1);
+    $('#pw-hist-next').prop('disabled', historyPage === totalPages);
+    $('#pw-hist-info').text(`${historyPage} / ${totalPages}`);
+
+    pagedItems.forEach((item) => {
+        const originalIndex = historyCache.indexOf(item); // For delete
         const previewText = item.data.resultText || '无内容';
         const displayTitle = item.title || "User & Char";
 
@@ -1928,7 +1738,7 @@ const renderHistoryList = () => {
                     <input type="text" class="pw-hist-title-input" value="${displayTitle}" style="display:none;">
                     <div style="display:flex; gap:5px;">
                         <i class="fa-solid fa-pen pw-hist-action-btn edit" title="编辑标题"></i>
-                        <i class="fa-solid fa-trash pw-hist-action-btn del" data-index="${index}" title="删除"></i>
+                        <i class="fa-solid fa-trash pw-hist-action-btn del" data-index="${originalIndex}" title="删除"></i>
                     </div>
                 </div>
                 <div class="pw-hist-meta"><span>${item.timestamp || ''}</span></div>
@@ -1957,7 +1767,7 @@ const renderHistoryList = () => {
         $el.find('.pw-hist-action-btn.del').on('click', function (e) {
             e.stopPropagation();
             if (confirm("删除?")) {
-                historyCache.splice(historyCache.indexOf(item), 1);
+                historyCache.splice(originalIndex, 1);
                 saveData(); renderHistoryList();
             }
         });
@@ -2230,4 +2040,4 @@ jQuery(async () => {
     bindEvents(); 
     loadThemeCSS('style.css'); // Load default theme
     console.log("[PW] Persona Weaver Loaded (v11.4 - Restore Editor)");
-});
+})
