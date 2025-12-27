@@ -170,6 +170,7 @@ const getPosFilterCode = (pos) => {
     return pos;
 };
 
+// [隐蔽引导] 资料包装：伪装成系统底层数据流
 function wrapAsXiTaReference(content, title) {
     if (!content || !content.trim()) return "";
     return `
@@ -472,7 +473,7 @@ async function forceSavePersona(name, description) {
     return true;
 }
 
-// [修改] 世界书逻辑：Get -> Find -> Update/Create
+// [需求2] 世界书逻辑：Get -> Find -> Update/Create
 async function syncToWorldInfoViaHelper(userName, content) {
     if (!window.TavernHelper) return toastr.error(TEXT.TOAST_WI_ERROR);
 
@@ -833,10 +834,10 @@ async function openCreatorPopup() {
         .pw-diff-attr-name { color: #ffffff !important; text-align: center; font-weight: bold; font-size: 1.1em; margin: 15px 0 10px 0; border-bottom: 1px solid #555; padding-bottom: 5px; }
         
         .pw-wi-header-checkbox { margin-right: 10px; cursor: pointer; transform: scale(1.2); }
-        .pw-wi-depth-tools { display: none; flex-direction: column; gap: 8px; padding: 10px; background: rgba(0,0,0,0.1); border-bottom: 1px solid var(--SmartThemeBorderColor); font-size: 0.85em; }
-        .pw-wi-filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         
         /* 默认样式 (PC) */
+        .pw-wi-depth-tools { display: none; flex-direction: column; gap: 8px; padding: 10px; background: rgba(0,0,0,0.1); border-bottom: 1px solid var(--SmartThemeBorderColor); font-size: 0.85em; }
+        .pw-wi-filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .pw-keyword-input { flex: 1; padding: 4px 8px; background: var(--SmartThemeInputBg); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeInputColor); border-radius: 4px; min-width: 0; }
         .pw-pos-select { flex: 1; padding: 4px; background: var(--SmartThemeInputBg); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeInputColor); border-radius: 4px; max-width: 200px; }
         
@@ -863,33 +864,40 @@ async function openCreatorPopup() {
             /* 世界书筛选工具栏 */
             .pw-wi-depth-tools { gap: 5px; }
             
-            /* 第二行容器：确保不换行 */
-            .pw-wi-depth-tools .pw-wi-filter-row:nth-child(2) {
-                flex-wrap: nowrap;
+            /* 第一行：搜索框 + 按钮 */
+            .pw-keyword-input { width: auto; flex: 1; }
+
+            /* 第二行：位置 + 深度 + 重置 (强制不换行) */
+            .pw-wi-filter-row:nth-child(2) {
+                flex-wrap: nowrap !important;
                 gap: 4px;
             }
 
-            .pw-keyword-input { width: auto; flex: 1; }
-            
-            /* 位置选择框：不独占，缩小宽度 */
+            /* 缩小位置选择框 */
             .pw-pos-select { 
-                flex: 1 1 auto;
-                max-width: 90px; /* 限制最大宽度，给后面腾位置 */
+                flex: 0 0 85px !important; 
+                max-width: 85px !important; 
+                padding: 4px 2px;
+                font-size: 0.8em;
                 margin-bottom: 0;
-                font-size: 0.8em;
-                padding: 2px 0;
             }
-            
-            .pw-depth-input { 
-                width: 30px !important;
-                padding: 2px;
-                font-size: 0.8em;
+
+            /* 缩小深度输入框 */
+            .pw-depth-input {
+                flex: 1;
+                min-width: 0;
+                padding: 4px 2px;
                 text-align: center;
+                font-size: 0.8em;
             }
             
-            #d-reset { 
+            /* 分隔符 */
+            .pw-wi-filter-row span { font-size: 0.8em; }
+
+            /* 重置按钮 */
+            #d-reset {
                 margin-left: 2px;
-                padding: 2px 5px;
+                padding: 4px 6px;
                 font-size: 0.8em;
             }
         }
@@ -1479,4 +1487,645 @@ function bindEvents() {
                 const matchedKeyInOld = findMatchingKey(key, oldMap) || key;
                 const matchedKeyInNew = findMatchingKey(key, newMap) || key;
                 const valOld = oldMap.get(matchedKeyInOld) || "";
-                const valNew = newMap.get(matchedKeyInNew) ||
+                const valNew = newMap.get(matchedKeyInNew) || "";
+
+                const isChanged = valOld.trim() !== valNew.trim();
+                if (isChanged) changeCount++;
+                if (!valOld && !valNew) return;
+
+                let cardsHtml = '';
+                if (!isChanged) {
+                    cardsHtml = `
+                    <div class="pw-diff-card new selected single-view" data-val="${encodeURIComponent(valNew)}">
+                        <div class="pw-diff-label">无变更</div>
+                        <textarea class="pw-diff-textarea">${valNew}</textarea>
+                    </div>`;
+                } else {
+                    cardsHtml = `
+                    <div class="pw-diff-card old" data-val="${encodeURIComponent(valOld)}">
+                        <div class="pw-diff-label">原版本</div>
+                        <textarea class="pw-diff-textarea" readonly>${valOld || "(无)"}</textarea>
+                    </div>
+                    <div class="pw-diff-card new selected" data-val="${encodeURIComponent(valNew)}">
+                        <div class="pw-diff-label">新版本</div>
+                        <textarea class="pw-diff-textarea">${valNew || "(删除)"}</textarea>
+                    </div>`;
+                }
+
+                const rowHtml = `
+                <div class="pw-diff-row" data-key="${key}">
+                    <div class="pw-diff-attr-name">${key}</div>
+                    <div class="pw-diff-cards">
+                        ${cardsHtml}
+                    </div>
+                </div>`;
+                $list.append(rowHtml);
+            });
+
+            $('#pw-diff-overlay').data('source', 'persona');
+            
+            // Restore Tab names
+            $('.pw-diff-tab[data-view="diff"] div:first-child').text('智能对比');
+            $('.pw-diff-tab[data-view="diff"] .pw-tab-sub').text('选择编辑');
+            $('.pw-diff-tab[data-view="raw"] div:first-child').text('新版原文');
+            $('.pw-diff-tab[data-view="raw"] .pw-tab-sub').text('查看/编辑');
+            $('.pw-diff-tab[data-view="old-raw"] div:first-child').text('原版原文');
+            $('.pw-diff-tab[data-view="old-raw"] .pw-tab-sub').text('查看/编辑');
+
+            if (changeCount === 0 && !responseText) {
+                toastr.warning("返回内容为空，请切换到“直接编辑”查看");
+            } else if (changeCount === 0) {
+                toastr.info("没有检测到内容变化");
+            }
+
+            $('.pw-diff-tab[data-view="diff"]').click();
+            $('#pw-diff-overlay').fadeIn();
+            $('#pw-refine-input').val('');
+        } catch (e) { 
+            console.error(e);
+            toastr.error("润色失败: " + e.message); 
+        } finally { 
+            $btn.removeClass('fa-spinner fa-spin').addClass('fa-magic');
+            isProcessing = false;
+        }
+    });
+
+    $(document).on('click.pw', '.pw-diff-card', function () {
+        const $row = $(this).closest('.pw-diff-row');
+        if ($(this).hasClass('single-view')) return;
+
+        $row.find('.pw-diff-card').removeClass('selected');
+        $(this).addClass('selected');
+        
+        $row.find('.pw-diff-textarea').prop('readonly', true);
+        $(this).find('.pw-diff-textarea').prop('readonly', false).focus();
+    });
+
+    $(document).on('click.pw', '#pw-diff-confirm', function () {
+        const activeTab = $('.pw-diff-tab.active').data('view');
+        
+        let finalContent = "";
+
+        if (activeTab === 'raw') {
+            finalContent = $('#pw-diff-raw-textarea').val();
+        } else if (activeTab === 'old-raw') {
+            finalContent = $('#pw-diff-old-raw-textarea').val();
+        } else {
+            let finalLines = [];
+            $('.pw-diff-row').each(function () {
+                const key = $(this).data('key');
+                const val = $(this).find('.pw-diff-card.selected .pw-diff-textarea').val().trimEnd();
+                if (val && val !== "(删除)" && val !== "(无)") {
+                    if (val.includes('\n') || val.startsWith('  ')) finalLines.push(`${key}:\n${val}`);
+                    else finalLines.push(`${key}: ${val.trim()}`);
+                }
+            });
+            finalContent = finalLines.join('\n\n');
+        }
+        $('#pw-result-text').val(finalContent).trigger('input');
+
+        $('#pw-diff-overlay').fadeOut();
+        saveCurrentState();
+        toastr.success("修改已应用");
+    });
+
+    $(document).on('click.pw', '#pw-diff-cancel', () => $('#pw-diff-overlay').fadeOut());
+
+    // Generate Persona
+    $(document).on('click.pw', '#pw-btn-gen', async function (e) {
+        e.preventDefault();
+        
+        if (isProcessing) return;
+        isProcessing = true;
+
+        console.log("[PW] Gen Clicked");
+        const req = $('#pw-request').val();
+        if (!req) {
+            toastr.warning("请输入要求");
+            isProcessing = false;
+            return;
+        }
+        const $btn = $(this);
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 生成中...');
+        
+        await forcePaint();
+        
+        $('#pw-refine-input').val('');
+        $('#pw-result-text').val('');
+
+        try {
+            const contextData = await collectContextData();
+            const modelVal = $('#pw-api-source').val() === 'independent' ? $('#pw-api-model-select').val() : null;
+            const config = {
+                mode: 'initial', 
+                request: req, 
+                wiText: contextData.wi,
+                greetingsText: contextData.greetings,
+                apiSource: $('#pw-api-source').val(), 
+                indepApiUrl: $('#pw-api-url').val(),
+                indepApiKey: $('#pw-api-key').val(), 
+                indepApiModel: modelVal
+            };
+            const text = await runGeneration(config, config);
+            $('#pw-result-text').val(text);
+            $('#pw-result-area').fadeIn();
+            $('#pw-request').addClass('minimized');
+            saveCurrentState();
+            $('#pw-result-text').trigger('input');
+        } catch (e) { 
+            console.error(e);
+            toastr.error(e.message); 
+        } finally { 
+            $btn.prop('disabled', false).html('生成设定'); 
+            isProcessing = false;
+        }
+    });
+
+    $(document).on('click.pw', '#pw-btn-load-current', function() {
+        const content = getActivePersonaDescription();
+        if (content) {
+            if ($('#pw-result-text').val() && !confirm("当前结果框已有内容，确定要覆盖吗？")) return;
+            $('#pw-result-text').val(content);
+            $('#pw-result-area').fadeIn();
+            $('#pw-request').addClass('minimized');
+            toastr.success(TEXT.TOAST_LOAD_CURRENT);
+            saveCurrentState();
+            $('#pw-result-text').trigger('input');
+        } else {
+            toastr.warning("未检测到有效的人设描述");
+        }
+    });
+
+    // [需求2] 世界书保存
+    $(document).on('click.pw', '#pw-btn-save-wi', async function () {
+        const content = $('#pw-result-text').val();
+        if (!content) return toastr.warning("内容为空，无法保存");
+        const name = $('.persona_name').first().text().trim() || $('h5#your_name').text().trim() || "User";
+        await syncToWorldInfoViaHelper(name, content);
+    });
+
+    // 覆盖当前人设按钮
+    $(document).on('click.pw', '#pw-btn-apply', async function () {
+        const content = $('#pw-result-text').val();
+        if (!content) return toastr.warning("内容为空");
+        const name = $('.persona_name').first().text().trim() || $('h5#your_name').text().trim() || "User";
+        await forceSavePersona(name, content);
+        toastr.success(TEXT.TOAST_SAVE_SUCCESS(name));
+        $('.popup_close').click();
+    });
+
+    $(document).on('click.pw', '#pw-clear', function () {
+        if (confirm("确定清空？")) {
+            $('#pw-request').val('').removeClass('minimized');
+            $('#pw-result-area').hide();
+            $('#pw-result-text').val('');
+            saveCurrentState();
+        }
+    });
+
+    // 保存至记录
+    $(document).on('click.pw', '#pw-snapshot', function () {
+        const text = $('#pw-result-text').val();
+        const req = $('#pw-request').val();
+        if (!text && !req) return toastr.warning("没有任何内容可保存");
+        saveHistory({ 
+            request: req || "无", 
+            timestamp: new Date().toLocaleString(), 
+            title: "", 
+            data: { 
+                name: "Persona", 
+                resultText: text || "(无)", 
+                type: 'persona'
+            } 
+        });
+        toastr.success(TEXT.TOAST_SNAPSHOT);
+    });
+
+    $(document).on('click.pw', '.pw-hist-action-btn.edit', function (e) {
+        e.stopPropagation();
+        const $header = $(this).closest('.pw-hist-header');
+        const $display = $header.find('.pw-hist-title-display');
+        const $input = $header.find('.pw-hist-title-input');
+        $display.hide(); $input.show().focus();
+        const saveEdit = () => {
+            const newVal = $input.val();
+            $display.text(newVal).show(); $input.hide();
+            const index = $header.closest('.pw-history-item').find('.pw-hist-action-btn.del').data('index');
+            if (historyCache[index]) { historyCache[index].title = newVal; saveData(); }
+            $(document).off('click.pw-hist-blur');
+        };
+        $input.one('blur keyup', function (ev) { if (ev.type === 'keyup' && ev.key !== 'Enter') return; saveEdit(); });
+    });
+
+    $(document).on('change.pw', '#pw-api-source', function () { $('#pw-indep-settings').toggle($(this).val() === 'independent'); });
+
+    $(document).on('click.pw', '#pw-api-fetch', async function (e) {
+        e.preventDefault();
+        const url = $('#pw-api-url').val().replace(/\/$/, '');
+        const key = $('#pw-api-key').val();
+        const $btn = $(this).find('i').addClass('fa-spin');
+        try {
+            const endpoints = [url.includes('v1') ? `${url}/models` : `${url}/v1/models`, `${url}/models`];
+            let data = null;
+            for (const ep of endpoints) {
+                try {
+                    const res = await fetch(ep, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } });
+                    if (res.ok) { data = await res.json(); break; }
+                } catch { }
+            }
+            if (!data) throw new Error("连接失败或无法获取模型列表");
+            const models = (data.data || data).map(m => m.id).sort();
+            const $select = $('#pw-api-model-select').empty();
+            models.forEach(m => $select.append(`<option value="${m}">${m}</option>`));
+            if (models.length > 0) $select.val(models[0]);
+            toastr.success(`获取到 ${models.length} 个模型`);
+        } catch (e) { toastr.error(e.message); }
+        finally { $btn.removeClass('fa-spin'); }
+    });
+
+    $(document).on('click.pw', '#pw-api-test', async function (e) {
+        e.preventDefault();
+        const url = $('#pw-api-url').val().replace(/\/$/, '');
+        const key = $('#pw-api-key').val();
+        const model = $('#pw-api-model-select').val();
+        const $btn = $(this).html('<i class="fas fa-spinner fa-spin"></i>');
+        try {
+            const ep = url.includes('v1') ? `${url}/chat/completions` : `${url}/v1/chat/completions`;
+            const res = await fetch(ep, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+                body: JSON.stringify({ model: model, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 5 })
+            });
+            if (res.ok) toastr.success("连接成功！");
+            else toastr.error(`失败: ${res.status}`);
+        } catch (e) { toastr.error("请求发送失败"); }
+        finally { $btn.html('<i class="fa-solid fa-plug"></i>'); }
+    });
+
+    $(document).on('click.pw', '#pw-api-save', () => {
+        promptsCache.initial = $('#pw-prompt-initial').val();
+        saveData();
+        toastr.success("设置与Prompt已保存");
+    });
+
+    $(document).on('click.pw', '#pw-reset-initial', () => {
+        if (confirm("恢复初始生成Prompt？")) $('#pw-prompt-initial').val(defaultSystemPromptInitial);
+    });
+
+    $(document).on('click.pw', '#pw-wi-refresh', async function() {
+        const btn = $(this); btn.find('i').addClass('fa-spin');
+        await loadAvailableWorldBooks();
+        const options = availableWorldBooks.length > 0 ? availableWorldBooks.map(b => `<option value="${b}">${b}</option>`).join('') : `<option disabled>未找到世界书</option>`;
+        $('#pw-wi-select').html(`<option value="">-- 添加参考/目标世界书 --</option>${options}`);
+        btn.find('i').removeClass('fa-spin'); toastr.success("已刷新");
+    });
+    $(document).on('click.pw', '#pw-wi-add', () => { const val = $('#pw-wi-select').val(); if (val && !window.pwExtraBooks.includes(val)) { window.pwExtraBooks.push(val); renderWiBooks(); } });
+    $(document).on('input.pw', '#pw-history-search', renderHistoryList);
+    $(document).on('click.pw', '#pw-history-search-clear', function () { $('#pw-history-search').val('').trigger('input'); });
+    $(document).on('click.pw', '#pw-history-clear-all', function () { if (confirm("清空?")) { historyCache = []; saveData(); renderHistoryList(); } });
+}
+
+// ... 辅助渲染函数 ...
+const renderTemplateChips = () => {
+    const $container = $('#pw-template-chips').empty();
+    const blocks = parseYamlToBlocks(currentTemplate);
+    blocks.forEach((content, key) => {
+        const $chip = $(`<div class="pw-tag-chip"><i class="fa-solid fa-cube" style="opacity:0.5; margin-right:4px;"></i><span>${key}</span></div>`);
+        $chip.on('click', () => {
+            const $text = $('#pw-request');
+            const cur = $text.val();
+            const prefix = (cur && !cur.endsWith('\n') && cur.length > 0) ? '\n\n' : '';
+            let insertText = key + ":";
+            if (content && content.trim()) {
+                if (content.includes('\n') || content.startsWith(' ')) insertText += "\n" + content;
+                else insertText += " " + content;
+            } else insertText += " ";
+            $text.val(cur + prefix + insertText).focus();
+            $text.scrollTop($text[0].scrollHeight);
+        });
+        $container.append($chip);
+    });
+};
+
+const renderHistoryList = () => {
+    loadData();
+    const $list = $('#pw-history-list').empty();
+    const search = $('#pw-history-search').val().toLowerCase();
+    
+    // [Lite Fix] Filter out opening types
+    const filtered = historyCache.filter(item => {
+        if (item.data && item.data.type === 'opening') return false; 
+        
+        if (!search) return true;
+        const content = (item.data.resultText || "").toLowerCase();
+        const title = (item.title || "").toLowerCase();
+        return title.includes(search) || content.includes(search);
+    });
+    
+    if (filtered.length === 0) { $list.html('<div style="text-align:center; opacity:0.6; padding:20px;">暂无记录</div>'); return; }
+
+    filtered.forEach((item, index) => {
+        const previewText = item.data.resultText || '无内容';
+        const displayTitle = item.title || "User & Char";
+
+        let badgeHtml = '';
+        if (item.data && item.data.type === 'template') {
+            badgeHtml = '<span class="pw-badge template">模版</span>';
+        } else if (item.data && item.data.type === 'persona') {
+            badgeHtml = '<span class="pw-badge persona">人设</span>';
+        }
+
+        const $el = $(`
+        <div class="pw-history-item">
+            <div class="pw-hist-main">
+                <div class="pw-hist-header">
+                    <span class="pw-hist-title-display">${badgeHtml} ${displayTitle}</span>
+                    <input type="text" class="pw-hist-title-input" value="${displayTitle}" style="display:none;">
+                    <div style="display:flex; gap:5px;">
+                        <i class="fa-solid fa-pen pw-hist-action-btn edit" title="编辑标题"></i>
+                        <i class="fa-solid fa-trash pw-hist-action-btn del" data-index="${index}" title="删除"></i>
+                    </div>
+                </div>
+                <div class="pw-hist-meta"><span>${item.timestamp || ''}</span></div>
+                <div class="pw-hist-desc">${previewText}</div>
+            </div>
+        </div>
+    `);
+        $el.on('click', function (e) {
+            if ($(e.target).closest('.pw-hist-action-btn, .pw-hist-title-input').length) return;
+            if (item.data && item.data.type === 'template') {
+                $('#pw-template-text').val(previewText);
+                currentTemplate = previewText;
+                saveData();
+                renderTemplateChips();
+                $('.pw-tab[data-tab="editor"]').click();
+                if (!isEditingTemplate) {
+                     $('#pw-toggle-edit-template').click();
+                }
+                toastr.success("已加载选中的模版");
+            } else {
+                $('#pw-request').val(item.request); $('#pw-result-text').val(previewText); $('#pw-result-area').show();
+                $('#pw-request').addClass('minimized');
+                $('.pw-tab[data-tab="editor"]').click();
+            }
+        });
+        $el.find('.pw-hist-action-btn.del').on('click', function (e) {
+            e.stopPropagation();
+            if (confirm("删除?")) {
+                historyCache.splice(historyCache.indexOf(item), 1);
+                saveData(); renderHistoryList();
+            }
+        });
+        $list.append($el);
+    });
+};
+
+window.pwExtraBooks = [];
+const renderWiBooks = async () => {
+    const container = $('#pw-wi-container').empty();
+    const baseBooks = await getContextWorldBooks();
+    const allBooks = [...new Set([...baseBooks, ...(window.pwExtraBooks || [])])];
+    
+    if (allBooks.length === 0) { 
+        container.html('<div style="opacity:0.6; padding:10px; text-align:center;">此角色未绑定世界书，请在“世界书”标签页手动添加或在酒馆主界面绑定。</div>'); 
+        return; 
+    }
+
+    for (const book of allBooks) {
+        const isBound = baseBooks.includes(book);
+        
+        const $el = $(`
+        <div class="pw-wi-book">
+            <div class="pw-wi-header" style="display:flex; align-items:center;">
+                <input type="checkbox" class="pw-wi-header-checkbox pw-wi-select-all" title="全选/全不选 (仅选中当前可见条目)">
+                <span style="flex:1; display:flex; align-items:center;">
+                    <i class="fa-solid fa-book" style="margin-right:5px;"></i> ${book} ${isBound ? '<span class="pw-bound-status" style="margin-left:5px;">(已绑定)</span>' : ''}
+                </span>
+                <div class="pw-wi-filter-toggle" title="展开/收起筛选"><i class="fa-solid fa-filter"></i></div>
+                <div>${!isBound ? '<i class="fa-solid fa-times remove-book pw-remove-book-icon" title="移除"></i>' : ''}<i class="fa-solid fa-chevron-down arrow"></i></div>
+            </div>
+            <div class="pw-wi-list" data-book="${book}"></div>
+        </div>`);
+        
+        $el.find('.pw-wi-select-all').on('click', async function(e) {
+            e.stopPropagation();
+            const checked = $(this).prop('checked');
+            const $list = $el.find('.pw-wi-list');
+            
+            const doCheck = () => {
+                $list.find('.pw-wi-item:visible .pw-wi-check').prop('checked', checked);
+                const checkedUids = [];
+                $list.find('.pw-wi-check:checked').each(function() { checkedUids.push($(this).val()); });
+                saveWiSelection(book, checkedUids);
+            };
+
+            if (!$list.is(':visible') && !$list.data('loaded')) {
+                $el.find('.pw-wi-header').click(); 
+                setTimeout(doCheck, 150);
+            } else {
+                doCheck();
+            }
+        });
+
+        $el.find('.remove-book').on('click', (e) => { e.stopPropagation(); window.pwExtraBooks = window.pwExtraBooks.filter(b => b !== book); renderWiBooks(); });
+        
+        $el.find('.pw-wi-filter-toggle').on('click', function(e) {
+            e.stopPropagation();
+            const $list = $el.find('.pw-wi-list');
+            if (!$list.is(':visible')) {
+                $el.find('.pw-wi-header').click();
+            }
+            setTimeout(() => {
+                const $tools = $list.find('.pw-wi-depth-tools');
+                if($tools.length) {
+                    $tools.slideToggle();
+                }
+            }, 50);
+        });
+
+        $el.find('.pw-wi-header').on('click', async function (e) {
+            if ($(e.target).hasClass('pw-wi-header-checkbox') || $(e.target).closest('.pw-wi-filter-toggle').length) return; 
+
+            const $list = $el.find('.pw-wi-list');
+            const $arrow = $(this).find('.arrow');
+            
+            if ($list.is(':visible')) { 
+                $list.slideUp(); 
+                $arrow.removeClass('fa-flip-vertical'); 
+            } else {
+                $list.slideDown(); 
+                $arrow.addClass('fa-flip-vertical');
+                
+                if (!$list.data('loaded')) {
+                    $list.html('<div style="padding:10px;text-align:center;"><i class="fas fa-spinner fa-spin"></i></div>');
+                    
+                    const entries = await getWorldBookEntries(book);
+                    $list.empty();
+                    
+                    if (entries.length === 0) {
+                        $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
+                    } else {
+                        const $tools = $(`
+                        <div class="pw-wi-depth-tools">
+                            <div class="pw-wi-filter-row">
+                                <input type="text" class="pw-keyword-input" id="keyword" placeholder="关键词查找...">
+                                <button class="pw-depth-btn" id="d-filter-toggle" title="启用/取消筛选">筛选</button>
+                            </div>
+                            <div class="pw-wi-filter-row">
+                                <select id="p-select" class="pw-pos-select">
+                                    <option value="unknown">全部位置</option>
+                                    <option value="before_character_definition">角色前</option>
+                                    <option value="after_character_definition">角色后</option>
+                                    <option value="before_author_note">AN前</option>
+                                    <option value="after_author_note">AN后</option>
+                                    <option value="before_example_messages">样例前</option>
+                                    <option value="after_example_messages">样例后</option>
+                                    <option value="at_depth_as_system">@深度(系统)</option>
+                                    <option value="at_depth_as_assistant">@深度(助手)</option>
+                                    <option value="at_depth_as_user">@深度(用户)</option>
+                                </select>
+                                <input type="number" class="pw-depth-input" id="d-min" placeholder="0" title="最小深度">
+                                <span>-</span>
+                                <input type="number" class="pw-depth-input" id="d-max" placeholder="Max" title="最大深度">
+                                <button class="pw-depth-btn" id="d-reset" title="恢复为世界书原始状态" style="margin-left:auto;">重置</button>
+                            </div>
+                        </div>`);
+                        
+                        let isFiltering = false;
+
+                        const applyFilter = () => {
+                            if (!isFiltering) {
+                                $list.find('.pw-wi-item').show();
+                                $tools.find('#d-filter-toggle').removeClass('active').text('筛选');
+                                return;
+                            }
+                            $tools.find('#d-filter-toggle').addClass('active').text('取消筛选');
+                            const keyword = $tools.find('#keyword').val().toLowerCase();
+                            const pVal = $tools.find('#p-select').val();
+                            const dMin = parseInt($tools.find('#d-min').val()) || 0;
+                            const dMaxStr = $tools.find('#d-max').val();
+                            const dMax = dMaxStr === "" ? 99999 : parseInt(dMaxStr);
+
+                            $list.find('.pw-wi-item').each(function() {
+                                const $row = $(this);
+                                const d = $row.data('depth');
+                                const code = $row.data('code'); 
+                                const content = decodeURIComponent($row.find('.pw-wi-check').data('content')).toLowerCase();
+                                const title = $row.find('.pw-wi-title-text').text().toLowerCase();
+                                let matches = true;
+                                if (keyword && !title.includes(keyword) && !content.includes(keyword)) matches = false;
+                                if (matches && pVal !== 'unknown' && code !== pVal) matches = false;
+                                if (matches && (d < dMin || d > dMax)) matches = false;
+                                if (matches) $row.show(); else $row.hide();
+                            });
+                        };
+
+                        $tools.find('#d-filter-toggle').on('click', function() {
+                            isFiltering = !isFiltering;
+                            applyFilter();
+                        });
+
+                        $tools.find('#keyword').on('keyup', function(e) {
+                            if (e.key === 'Enter') {
+                                isFiltering = true;
+                                applyFilter();
+                            }
+                        });
+
+                        $tools.find('#d-reset').on('click', function() {
+                             $list.find('.pw-wi-item').each(function() {
+                                 const originalEnabled = $(this).data('original-enabled');
+                                 $(this).find('.pw-wi-check').prop('checked', originalEnabled).trigger('change');
+                             });
+                             toastr.info("已重置为世界书原始状态");
+                        });
+
+                        $list.append($tools);
+
+                        const savedSelection = loadWiSelection(book);
+
+                        entries.forEach(entry => {
+                            let isChecked = false;
+                            if (savedSelection) {
+                                isChecked = savedSelection.includes(String(entry.uid));
+                            } else {
+                                isChecked = entry.enabled;
+                            }
+                            
+                            const checkedAttr = isChecked ? 'checked' : '';
+                            const posAbbr = getPosAbbr(entry.position);
+                            const infoLabel = `<span class="pw-wi-info-badge" title="位置:深度">[${posAbbr}:${entry.depth}]</span>`;
+
+                            const $item = $(`
+                            <div class="pw-wi-item" data-depth="${entry.depth}" data-code="${getPosFilterCode(entry.position)}" data-original-enabled="${entry.enabled}">
+                                <div class="pw-wi-item-row">
+                                    <input type="checkbox" class="pw-wi-check" value="${entry.uid}" ${checkedAttr} data-content="${encodeURIComponent(entry.content)}">
+                                    <div class="pw-wi-title-text" style="font-weight:bold; font-size:0.9em; flex:1; display:flex; align-items:center;">
+                                        ${infoLabel} ${entry.displayName}
+                                    </div>
+                                    <i class="fa-solid fa-eye pw-wi-toggle-icon"></i>
+                                </div>
+                                <div class="pw-wi-desc">
+                                    ${entry.content}
+                                    <div class="pw-wi-close-bar"><i class="fa-solid fa-angle-up"></i> 收起</div>
+                                </div>
+                            </div>`);
+                            
+                            $item.find('.pw-wi-check').on('change', function() {
+                                const checkedUids = [];
+                                $list.find('.pw-wi-check:checked').each(function() { checkedUids.push($(this).val()); });
+                                saveWiSelection(book, checkedUids);
+                            });
+
+                            $item.find('.pw-wi-toggle-icon').on('click', function (e) {
+                                e.stopPropagation();
+                                const $desc = $(this).closest('.pw-wi-item').find('.pw-wi-desc');
+                                if ($desc.is(':visible')) { $desc.slideUp(); $(this).removeClass('active'); } else { $desc.slideDown(); $(this).addClass('active'); }
+                            });
+                            $item.find('.pw-wi-close-bar').on('click', function () { $(this).parent().slideUp(); $item.find('.pw-wi-toggle-icon').removeClass('active'); });
+                            $list.append($item);
+                        });
+                    }
+                    $list.data('loaded', true);
+                }
+            }
+        });
+        container.append($el);
+    }
+};
+
+const getPosAbbr = (pos) => {
+    // 简单的缩写映射，用于 UI 显示
+    if (pos === 0 || pos === 'before_character_definition') return 'PreChar';
+    if (pos === 1 || pos === 'after_character_definition') return 'PostChar';
+    if (pos === 2 || pos === 'before_example_messages') return 'PreEx';
+    if (pos === 3 || pos === 'after_example_messages') return 'PostEx';
+    if (pos === 4 || pos === 'before_author_note') return 'PreAN';
+    if (pos === 5 || pos === 'after_author_note') return 'PostAN';
+    if (pos === 6 || pos === 'at_depth_as_system') return '@Sys'; // 旧代码兼容
+    if (String(pos).includes('at_depth')) return '@Depth';
+    return '?';
+};
+
+const renderGreetingsList = () => {
+    const list = getCharacterGreetingsList();
+    currentGreetingsList = list;
+    const $select = $('#pw-greetings-select').empty();
+    $select.append('<option value="">(不使用开场白)</option>');
+    list.forEach((item, idx) => {
+        $select.append(`<option value="${idx}">${item.label}</option>`);
+    });
+};
+
+function addPersonaButton() {
+    const container = $('.persona_controls_buttons_block');
+    if (container.length === 0 || $(`#${BUTTON_ID}`).length > 0) return;
+    const newButton = $(`<div id="${BUTTON_ID}" class="menu_button fa-solid fa-wand-magic-sparkles interactable" title="${TEXT.BTN_TITLE}" tabindex="0" role="button"></div>`);
+    newButton.on('click', openCreatorPopup);
+    container.prepend(newButton);
+}
+
+jQuery(async () => {
+    addPersonaButton(); 
+    bindEvents(); 
+    console.log("[PW] Persona Weaver Loaded (v9.2 - UI Refined)");
+});
