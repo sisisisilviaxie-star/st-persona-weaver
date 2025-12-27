@@ -3,7 +3,7 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCu
 
 const extensionName = "st-persona-weaver";
 const CURRENT_VERSION = "1.0.0"; // 请确保这里的版本号与你 manifest.json 中的一致
-const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/main/manifest.json"; // 检查更新的源文件
+const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/sisisisilviaxie-star-main-dev/manifest.json"; // 检查更新的源文件
 
 const STORAGE_KEY_HISTORY = 'pw_history_v29_new_template'; 
 const STORAGE_KEY_STATE = 'pw_state_v20';
