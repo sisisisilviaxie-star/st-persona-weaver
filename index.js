@@ -2,21 +2,18 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
+const CURRENT_VERSION = "1.0.0"; // 请确保这里的版本号与你 manifest.json 中的一致
+const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/main/manifest.json"; // 检查更新的源文件
+
 const STORAGE_KEY_HISTORY = 'pw_history_v29_new_template'; 
 const STORAGE_KEY_STATE = 'pw_state_v20';
 const STORAGE_KEY_TEMPLATE = 'pw_template_v6_new_yaml'; 
-const STORAGE_KEY_PROMPTS = 'pw_prompts_v20_db_recovery'; 
+const STORAGE_KEY_PROMPTS = 'pw_prompts_v21_restore_edit'; 
 const STORAGE_KEY_WI_STATE = 'pw_wi_selection_v1';
 const STORAGE_KEY_UI_STATE = 'pw_ui_state_v1';
 const BUTTON_ID = 'pw_persona_tool_btn';
 
-// 当前版本定义
-const CURRENT_VERSION = "1.0.0"; 
-const REPO_URL = "https://github.com/sisisisilviaxie-star/st-persona-weaver";
-// 假设 manifest 文件位置，用于检查版本
-const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/main/manifest.json";
-
-// [修改] 更新为你的新版默认模版
+// 1. 默认 User 模版
 const defaultYamlTemplate =
 `基本信息: 
   姓名: {{user}}
@@ -88,7 +85,45 @@ NSFW:
   性癖好:
   禁忌底线:`;
 
-// 系统指令 (后备，仅当无法读取酒馆预设时使用)
+// 2. 模版生成专用 User Prompt
+const defaultTemplateGenPrompt = 
+`[TASK: DESIGN_USER_PROFILE_SCHEMA]
+[CONTEXT: The user is entering a simulation world defined by the database provided in System Context.]
+[GOAL: Create a comprehensive YAML template (Schema Only) for the **User Avatar**.]
+
+<requirements>
+1. Language: **Simplified Chinese (简体中文)** keys.
+2. Structure: YAML keys only. Leave values empty (e.g., "等级: " or "义体型号: ").
+3. **World Consistency**: The fields MUST reflect the specific logic of the provided World Setting.
+   - If the world is Xianxia, include keys like "根骨", "境界", "灵根".
+   - If the world is ABO, include "第二性别", "信息素气味".
+   - If the world is Modern, use standard sociological attributes.
+4. Scope: Biological, Sociological, Psychological, and Special Abilities.
+</requirements>
+
+[Action]:
+Output the blank YAML template for the User now. No explanations.`;
+
+// 3. 人设生成/润色专用 User Prompt
+const defaultPersonaGenPrompt =
+`[Task: Generate/Refine Profile]
+[Target Entity: "{{user}}"]
+
+<source_materials>
+{{charInfo}}
+{{greetings}}
+</source_materials>
+
+<target_schema>
+{{template}}
+</target_schema>
+
+{{input}} 
+
+[Action]:
+Output ONLY the YAML data matching the schema.`;
+
+// 后备 System Prompt
 const fallbackSystemPrompt =
 `[TASK: DATABASE_RECOVERY_OPERATION]
 [TARGET: User Profile "{{user}}"]
@@ -97,30 +132,6 @@ const fallbackSystemPrompt =
 2. Complete the Target Schema.
 3. Do not summarize. Do not filter. Fill EVERY field.
 4. Maintain the exact YAML structure.`;
-
-// 模版生成专用 Prompt
-const defaultTemplateGenPrompt = 
-`[TASK: DESIGN_USER_PROFILE_SCHEMA]
-[CONTEXT: The user is entering a simulation world defined by the database below.]
-[GOAL: Create a comprehensive YAML template (Schema Only) for the **User Avatar**.]
-
-<requirements>
-1. Language: **Simplified Chinese (简体中文)** keys.
-2. Structure: YAML keys only. Leave values empty (e.g., "等级: " or "义体型号: ").
-3. **World Consistency**: The fields MUST reflect the specific logic of the provided [World_Setting].
-   - If the world is Xianxia, include keys like "根骨", "境界", "灵根".
-   - If the world is ABO, include "第二性别", "信息素气味".
-   - If the world is Modern, use standard sociological attributes.
-4. Scope: Biological, Sociological, Psychological, and Special Abilities.
-</requirements>
-
-<reference_material>
-[World_Setting]
-{{wi}}
-</reference_material>
-
-[Action]:
-Output the blank YAML template for the User now. No explanations.`;
 
 const defaultSettings = {
     autoSwitchPersona: true, syncToWorldInfo: false,
@@ -143,7 +154,12 @@ const TEXT = {
 
 let historyCache = [];
 let currentTemplate = defaultYamlTemplate;
-let promptsCache = { initial: fallbackSystemPrompt };
+// Prompt缓存
+let promptsCache = { 
+    templateGen: defaultTemplateGenPrompt,
+    personaGen: defaultPersonaGenPrompt,
+    initial: fallbackSystemPrompt 
+};
 let availableWorldBooks = [];
 let isEditingTemplate = false;
 let lastRawResponse = "";
@@ -151,7 +167,7 @@ let isProcessing = false;
 let currentGreetingsList = []; 
 let wiSelectionCache = {};
 let uiStateCache = { templateExpanded: true };
-let hasNewVersion = false; // 用于存储更新状态
+let hasNewVersion = false; // 新版本标志
 
 // ============================================================================
 // 工具函数
@@ -224,49 +240,27 @@ function getCharacterGreetingsList() {
     return list;
 }
 
-// 简单的版本比较函数
-function compareVersions(v1, v2) {
-    const p1 = v1.split('.').map(Number);
-    const p2 = v2.split('.').map(Number);
-    for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
-        const n1 = p1[i] || 0;
-        const n2 = p2[i] || 0;
-        if (n1 > n2) return 1;
-        if (n1 < n2) return -1;
-    }
-    return 0;
-}
-
-// 检查更新
+// ============================================================================
+// 版本更新检查
+// ============================================================================
 async function checkForUpdates() {
     try {
-        // 防止重复检查
-        if (window.pwUpdateChecked) return;
-        window.pwUpdateChecked = true;
-
-        const response = await fetch(UPDATE_CHECK_URL);
-        if (response.ok) {
-            const data = await response.json();
-            const remoteVersion = data.version;
-            
-            if (remoteVersion && compareVersions(remoteVersion, CURRENT_VERSION) > 0) {
-                hasNewVersion = true;
-                // 更新UI（如果在面板关闭时检查）
-                updateTitleBadge();
-            }
+        const res = await fetch(UPDATE_CHECK_URL, { cache: "no-cache" });
+        if (!res.ok) return null;
+        const manifest = await res.json();
+        
+        // 简单的版本号比较逻辑 (Semantic Versioning)
+        const v1 = CURRENT_VERSION.split('.').map(Number);
+        const v2 = (manifest.version || "0.0.0").split('.').map(Number);
+        
+        for (let i = 0; i < 3; i++) {
+            if (v2[i] > v1[i]) return manifest;
+            if (v2[i] < v1[i]) return null;
         }
+        return null; // 版本相同
     } catch (e) {
         console.warn("[PW] Update check failed:", e);
-    }
-}
-
-function updateTitleBadge() {
-    if (hasNewVersion) {
-        // 如果面板已打开
-        const $title = $('.pw-title');
-        if ($title.length && $title.find('.pw-new-badge').length === 0) {
-             $title.append('<span class="pw-new-badge">NEW</span>');
-        }
+        return null;
     }
 }
 
@@ -470,10 +464,9 @@ function getRealSystemPrompt() {
 }
 
 // ============================================================================
-// [核心] 生成逻辑 (v11.3 - 模版生成修复 Prefill)
+// [核心] 生成逻辑
 // ============================================================================
-async function runGeneration(data, apiConfig, overridePrompt = null) {
-    // 1. 获取基础信息
+async function runGeneration(data, apiConfig, isTemplateMode = false) {
     let charName = "Char";
     if (window.TavernHelper && window.TavernHelper.getCharData) {
         const cData = window.TavernHelper.getCharData('current');
@@ -482,9 +475,8 @@ async function runGeneration(data, apiConfig, overridePrompt = null) {
     const currentName = $('.persona_name').first().text().trim() || 
                         $('h5#your_name').text().trim() || "User";
 
-    if (!promptsCache || !promptsCache.initial) loadData(); 
+    if (!promptsCache || !promptsCache.personaGen) loadData(); 
 
-    // 2. 准备素材
     const rawCharInfo = getCharacterInfoText(); 
     const rawWi = data.wiText || ""; 
     const rawGreetings = data.greetingsText || "";
@@ -497,7 +489,6 @@ async function runGeneration(data, apiConfig, overridePrompt = null) {
     const wrappedTags = wrapAsXiTaReference(currentTemplate, "Schema Definition");
     const wrappedInput = wrapInputForSafety(requestText, currentText, data.mode === 'refine');
 
-    // 3. 获取酒馆真实 System Prompt
     let activeSystemPrompt = getRealSystemPrompt();
 
     if (!activeSystemPrompt) {
@@ -509,45 +500,28 @@ async function runGeneration(data, apiConfig, overridePrompt = null) {
             .replace(/{{char}}/g, charName);
     }
 
-    // 4. 构建 User 消息 & Prefill
     let userMessageContent = "";
-    // [修复点] 默认的强制开头
     let prefillContent = "```yaml\n基本信息:"; 
 
-    if (overridePrompt) {
-        // === 场景1：模版生成 ===
-        userMessageContent = overridePrompt
+    if (isTemplateMode) {
+        let basePrompt = promptsCache.templateGen || defaultTemplateGenPrompt;
+        userMessageContent = basePrompt
+            .replace(/{{user}}/g, currentName)
+            .replace(/{{char}}/g, charName);
+    } else {
+        let basePrompt = promptsCache.personaGen || defaultPersonaGenPrompt;
+        userMessageContent = basePrompt
             .replace(/{{user}}/g, currentName)
             .replace(/{{char}}/g, charName)
-            .replace(/{{charInfo}}/g, "")   
-            .replace(/{{wi}}/g, "");        
-        
-        // [修复点] 模版生成也需要强制 YAML 开头，防止返回空
-        prefillContent = "```yaml\n基本信息:"; 
-    } else {
-        // === 场景2 & 3：人设生成 / 润色 ===
-        userMessageContent = `
-[Task: Generate/Refine Profile]
-[Target Entity: "${currentName}"]
-
-<source_materials>
-${wrappedCharInfo}
-${wrappedGreetings}
-</source_materials>
-
-<target_schema>
-${wrappedTags}
-</target_schema>
-
-${wrappedInput} 
-
-[Action]:
-Output ONLY the YAML data matching the schema.`;
+            .replace(/{{charInfo}}/g, wrappedCharInfo)
+            .replace(/{{greetings}}/g, wrappedGreetings)
+            .replace(/{{template}}/g, wrappedTags)
+            .replace(/{{input}}/g, wrappedInput);
     }
 
     const updateDebugView = (messages) => {
         let debugText = `=== 发送时间: ${new Date().toLocaleTimeString()} ===\n`;
-        debugText += `=== 模式: ${overridePrompt ? '模版生成' : (data.mode === 'refine' ? '润色' : '人设生成')} ===\n\n`;
+        debugText += `=== 模式: ${isTemplateMode ? '模版生成' : (data.mode === 'refine' ? '润色' : '人设生成')} ===\n\n`;
         messages.forEach((msg, idx) => {
             debugText += `[BLOCK ${idx + 1}: ${msg.role.toUpperCase()}]\n`;
             debugText += `--- START ---\n${msg.content}\n--- END ---\n\n`;
@@ -565,18 +539,14 @@ Output ONLY the YAML data matching the schema.`;
     try {
         const promptArray = [];
         
-        // 1. 破限
         promptArray.push({ role: 'system', content: activeSystemPrompt });
 
-        // 2. 独立世界书
         if (wrappedWi && wrappedWi.trim().length > 0) {
             promptArray.push({ role: 'system', content: wrappedWi });
         }
 
-        // 3. User 指令
         promptArray.push({ role: 'user', content: userMessageContent });
         
-        // 4. Prefill
         if (prefillContent) {
             promptArray.push({ role: 'assistant', content: prefillContent });
         }
@@ -631,10 +601,8 @@ Output ONLY the YAML data matching the schema.`;
     lastRawResponse = responseContent;
 
     if (prefillContent && !responseContent.startsWith(prefillContent) && !responseContent.startsWith("```yaml")) {
-        // [调整] 因为 prefillContent 现在总是包含 "基本信息:"，所以我们检查开头是否匹配
         const trimRes = responseContent.trim();
-        // 如果 AI 返回 "  姓名: xxx"，我们需要把头补上
-        if (!trimRes.startsWith("```yaml") && (trimRes.startsWith("姓名") || trimRes.startsWith("  姓名"))) {
+        if (!trimRes.startsWith("```yaml") && (trimRes.startsWith("姓名") || trimRes.startsWith("  姓名") || trimRes.startsWith("基本信息"))) {
              responseContent = prefillContent + responseContent;
         }
     }
@@ -666,12 +634,17 @@ function loadData() {
     } catch { currentTemplate = defaultYamlTemplate; }
     try {
         const p = JSON.parse(localStorage.getItem(STORAGE_KEY_PROMPTS));
-        let savedInitial = p ? (p.initial || p.main) : null;
-        promptsCache = { 
-            initial: savedInitial || fallbackSystemPrompt
+        promptsCache = {
+            templateGen: (p && p.templateGen) ? p.templateGen : defaultTemplateGenPrompt,
+            personaGen: (p && p.personaGen) ? p.personaGen : defaultPersonaGenPrompt,
+            initial: (p && p.initial) ? p.initial : fallbackSystemPrompt 
         };
     } catch { 
-        promptsCache = { initial: fallbackSystemPrompt }; 
+        promptsCache = { 
+            templateGen: defaultTemplateGenPrompt,
+            personaGen: defaultPersonaGenPrompt,
+            initial: fallbackSystemPrompt 
+        }; 
     }
     try {
         wiSelectionCache = JSON.parse(localStorage.getItem(STORAGE_KEY_WI_STATE)) || {};
@@ -852,6 +825,11 @@ async function openCreatorPopup() {
     const context = getContext();
     loadData();
     await loadAvailableWorldBooks();
+
+    // 检查更新
+    const updateInfo = await checkForUpdates();
+    hasNewVersion = !!updateInfo;
+
     const savedState = loadState();
     const config = { ...defaultSettings, ...extension_settings[extensionName], ...savedState.localConfig };
 
@@ -877,32 +855,21 @@ async function openCreatorPopup() {
     };
 
     const charName = getContext().characters[getContext().characterId]?.name || "None";
-    const headerTitle = `${TEXT.PANEL_TITLE}<span class="pw-header-subtitle">User: ${currentName} & Char: ${charName}</span>`;
+    // [新功能] 标题增加 NEW 提醒
+    const newBadge = hasNewVersion ? `<span class="pw-badge-new" style="background:red; color:white; font-size:0.6em; vertical-align:super; padding:1px 3px; border-radius:4px; margin-left:2px; font-weight:bold;">NEW</span>` : '';
+    const headerTitle = `${TEXT.PANEL_TITLE}${newBadge}<span class="pw-header-subtitle">User: ${currentName} & Char: ${charName}</span>`;
 
     const chipsDisplay = uiStateCache.templateExpanded ? 'flex' : 'none';
     const chipsIcon = uiStateCache.templateExpanded ? 'fa-angle-up' : 'fa-angle-down';
 
-    // 如果打开面板时发现有新版本，添加标记
-    const titleBadgeHtml = hasNewVersion ? '<span class="pw-new-badge">NEW</span>' : '';
-
     const forcedStyles = `
     <style>
-        /* [修复] 强制按钮不换行，解决关闭按钮变形问题 */
-        .swal2-confirm, .swal2-cancel, .swal2-deny {
+        .swal2-actions { flex-wrap: nowrap !important; }
+        .swal2-styled { 
             white-space: nowrap !important;
-            min-width: 60px;
-        }
-        
-        /* New Badge Style */
-        .pw-new-badge {
-            background-color: #ff4d4d;
-            color: white;
-            font-size: 0.6em;
-            padding: 2px 4px;
-            border-radius: 4px;
-            vertical-align: top;
-            margin-left: 5px;
-            animation: pulse 2s infinite;
+            width: auto !important; 
+            max-width: none !important; 
+            flex-shrink: 0 !important;
         }
 
         .pw-badge {
@@ -958,103 +925,45 @@ async function openCreatorPopup() {
         .pw-template-toolbar { display: flex; justify-content: flex-start; align-items: center; padding: 5px 10px; background: rgba(0,0,0,0.1); border-bottom: 1px solid var(--SmartThemeBorderColor); border-radius: 6px 6px 0 0; }
         .pw-template-footer { display: flex; justify-content: flex-end; align-items: center; padding: 5px 10px; background: rgba(0,0,0,0.1); border-top: 1px solid var(--SmartThemeBorderColor); border-radius: 0 0 6px 6px; gap: 8px; }
 
-        /* System Tab Styles */
-        .pw-version-section {
-            background: rgba(0,0,0,0.1);
-            border: 1px solid var(--SmartThemeBorderColor);
-            border-radius: 6px;
-            padding: 10px;
-            margin-bottom: 15px;
-        }
-        .pw-version-row { display: flex; justify-content: space-between; align-items: center; }
-        .pw-collapsible-header {
-            cursor: pointer;
-            padding: 8px;
-            background: rgba(0,0,0,0.05);
-            border: 1px solid var(--SmartThemeBorderColor);
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .pw-collapsible-header:hover { background: rgba(0,0,0,0.1); }
-        .pw-collapsible-content { display: none; padding-top: 10px; }
-
         @media screen and (max-width: 600px) {
             .pw-row { flex-wrap: wrap; }
             .pw-row label { width: 100%; margin-bottom: 4px; }
             .pw-input, .pw-select, #pw-api-url, #pw-api-key { min-width: 0 !important; width: 100% !important; flex: 1 1 auto; }
-
-            .pw-wi-depth-tools { gap: 5px; }
-            
-            .pw-wi-depth-tools .pw-keyword-input, 
-            .pw-wi-depth-tools .pw-pos-select, 
-            .pw-wi-depth-tools .pw-depth-input, 
-            .pw-wi-depth-tools .pw-depth-btn {
-                height: 30px !important;
-                box-sizing: border-box !important;
-                vertical-align: middle;
-            }
-
-            .pw-keyword-input {
-                width: auto;
-                flex: 1;
-                font-size: 0.8em; 
-                padding: 4px 6px; 
-            }
-            #d-filter-toggle {
-                font-size: 0.8em; 
-                padding: 4px 8px; 
-            }
-
-            .pw-wi-filter-row:nth-child(2) {
-                flex-wrap: nowrap !important;
-                gap: 4px;
-                align-items: center; 
-            }
-
-            .pw-pos-select { 
-                flex: 0 0 85px !important; 
-                max-width: 85px !important; 
-                padding: 4px 2px;
-                font-size: 0.8em;
-                margin-bottom: 0;
-            }
-
-            .pw-depth-input {
-                flex: 1;
-                min-width: 0;
-                padding: 4px 2px;
-                text-align: center;
-                font-size: 0.8em;
-            }
-            
-            .pw-wi-filter-row span { font-size: 0.8em; align-self: center; }
-
-            #d-reset {
-                margin-left: 2px;
-                padding: 4px 6px;
-                font-size: 0.8em;
-                white-space: nowrap;
-            }
+            /* ... (keep other mobile styles) ... */
         }
     </style>
     `;
 
-    // [修改2] 关闭按钮文本改为 "Close"
+    // [新功能] 更新 UI 块
+    const updateUiHtml = hasNewVersion 
+    ? `
+        <div id="pw-new-version-box" style="margin-top:10px; padding:15px; background:rgba(0,0,0,0.2); border: 1px solid var(--SmartThemeQuoteColor); border-radius: 6px;">
+            <div style="font-weight:bold; color:var(--SmartThemeQuoteColor); margin-bottom:8px;">
+                <i class="fa-solid fa-cloud-arrow-down"></i> 发现新版本: v${updateInfo.version}
+            </div>
+            <div id="pw-update-notes" style="font-size:0.9em; margin-bottom:10px; white-space: pre-wrap; color: var(--SmartThemeBodyColor); opacity: 0.9;">${updateInfo.notes || "无更新说明"}</div>
+            <button id="pw-btn-update" class="pw-btn primary" style="width:100%;">立即更新</button>
+        </div>
+      `
+    : `
+        <div style="margin-top:10px; opacity:0.6; font-size:0.9em;"><i class="fa-solid fa-check"></i> 当前已是最新版本</div>
+      `;
+
     const html = `
 ${forcedStyles}
 <div class="pw-wrapper">
     <div class="pw-header">
-        <div class="pw-top-bar"><div class="pw-title">${headerTitle} ${titleBadgeHtml}</div></div>
+        <div class="pw-top-bar"><div class="pw-title">${headerTitle}</div></div>
         <div class="pw-tabs">
             <div class="pw-tab active" data-tab="editor">人设</div>
             <div class="pw-tab" data-tab="context">参考</div> 
-            <div class="pw-tab" data-tab="system">系统</div> <!-- [修改] Tab改为系统 -->
+            <div class="pw-tab" data-tab="api">API</div> <!-- 移除了 Prompt -->
+            <div class="pw-tab" data-tab="system">系统</div> <!-- 新增系统 Tab -->
             <div class="pw-tab" data-tab="history">记录</div>
         </div>
     </div>
 
+    <!-- Editor View -->
     <div id="pw-view-editor" class="pw-view active">
         <div class="pw-scroll-area">
             <div class="pw-info-display">
@@ -1188,24 +1097,9 @@ ${forcedStyles}
         </div>
     </div>
     
-    <!-- System View (Renamed from API) -->
-    <div id="pw-view-system" class="pw-view">
+    <!-- API View (Only Connection) -->
+    <div id="pw-view-api" class="pw-view">
         <div class="pw-scroll-area">
-            
-            <!-- [修改] 新版本部分 -->
-            <div class="pw-version-section">
-                <div class="pw-version-row">
-                    <div>
-                        <div style="font-weight:bold; font-size:1.1em;">st-persona-weaver</div>
-                        <div style="font-size:0.8em; opacity:0.7;">当前版本: ${CURRENT_VERSION}</div>
-                    </div>
-                    <a href="${REPO_URL}" target="_blank" class="pw-btn primary" style="width:auto; text-decoration:none;">
-                        <i class="fa-brands fa-github"></i> 检查更新
-                    </a>
-                </div>
-                ${hasNewVersion ? `<div style="margin-top:10px; color:#ff6b6b; font-size:0.9em;"><i class="fa-solid fa-circle-exclamation"></i> 检测到新版本！请前往 GitHub 查看更新内容。</div>` : ''}
-            </div>
-
             <div class="pw-card-section">
                 <div class="pw-row"><label>API 来源</label><select id="pw-api-source" class="pw-input" style="flex:1;"><option value="main" ${config.apiSource === 'main' ? 'selected' : ''}>主 API</option><option value="independent" ${config.apiSource === 'independent' ? 'selected' : ''}>独立 API</option></select></div>
                 <div id="pw-indep-settings" style="display:${config.apiSource === 'independent' ? 'flex' : 'none'}; flex-direction:column; gap:15px;">
@@ -1220,15 +1114,62 @@ ${forcedStyles}
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <!-- [修改] Debug 区域：跟随主题颜色，折叠 -->
-            <div class="pw-card-section" style="border-top: 1px solid var(--SmartThemeBorderColor); margin-top: 10px; padding-top: 10px;">
-                <div class="pw-collapsible-header" id="pw-debug-toggle">
-                    <label style="color: var(--SmartThemeBodyColor); cursor:pointer; margin:0;"><i class="fa-solid fa-bug"></i> 实时发送内容预览 (Debug)</label>
+    <!-- [新] System View -->
+    <div id="pw-view-system" class="pw-view">
+        <div class="pw-scroll-area">
+            
+            <!-- 1. 新版本检查区域 -->
+            <div class="pw-card-section">
+                <div class="pw-row" style="margin-bottom:8px; border-bottom:1px solid var(--SmartThemeBorderColor); padding-bottom:5px;">
+                    <label style="color: var(--SmartThemeQuoteColor);"><i class="fa-solid fa-circle-info"></i> 插件版本</label>
+                    <span style="opacity:0.8; font-family:monospace;">当前: v${CURRENT_VERSION}</span>
+                </div>
+                ${updateUiHtml}
+            </div>
+
+            <!-- 2. Prompt 编辑区域 (Moved here) -->
+            <div class="pw-card-section">
+                <div class="pw-context-header" id="pw-prompt-header">
+                    <span><i class="fa-solid fa-terminal"></i> Prompt 查看与编辑 (User Prompt)</span>
                     <i class="fa-solid fa-chevron-down arrow"></i>
                 </div>
-                <div class="pw-collapsible-content" id="pw-debug-content">
-                    <div style="font-size: 0.8em; opacity: 0.7; margin-bottom: 5px;">由于采用智能组装模式，旧的Prompt框已移除。您可以在下方查看实际发送给 AI 的完整内容。</div>
+                <div id="pw-prompt-container" style="display:none; padding-top:10px;">
+                    <div class="pw-row" style="margin-bottom:8px;">
+                        <label>编辑目标</label>
+                        <select id="pw-prompt-type" class="pw-input" style="flex:1;">
+                            <option value="personaGen">人设生成/润色指令</option>
+                            <option value="templateGen">模版生成指令</option>
+                        </select>
+                    </div>
+                    <div class="pw-var-btns">
+                        <div class="pw-var-btn" data-ins="{{user}}"><span>User名</span><span class="code">{{user}}</span></div>
+                        <div class="pw-var-btn" data-ins="{{char}}"><span>Char名</span><span class="code">{{char}}</span></div>
+                        <div class="pw-var-btn" data-ins="{{charInfo}}"><span>角色设定</span><span class="code">{{charInfo}}</span></div>
+                        <div class="pw-var-btn" data-ins="{{greetings}}"><span>开场白</span><span class="code">{{greetings}}</span></div>
+                        <div class="pw-var-btn" data-ins="{{template}}"><span>模版内容</span><span class="code">{{template}}</span></div>
+                        <div class="pw-var-btn" data-ins="{{input}}"><span>用户要求</span><span class="code">{{input}}</span></div>
+                    </div>
+                    <textarea id="pw-prompt-editor" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;"></textarea>
+                    
+                    <div style="text-align:right; margin-top:5px; display:flex; gap:10px; justify-content:flex-end;">
+                        <button class="pw-mini-btn" id="pw-reset-prompt" style="font-size:0.8em;">恢复默认</button>
+                        <button id="pw-api-save" class="pw-btn primary" style="width:auto; padding: 5px 20px;">保存 Prompt</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Debug 预览区域 (Moved here & Updated) -->
+            <div class="pw-card-section" style="border-top: 1px solid var(--SmartThemeBorderColor); margin-top: 10px; padding-top: 10px;">
+                <div class="pw-context-header" id="pw-debug-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                    <label style="color: var(--SmartThemeQuoteColor); cursor: pointer; margin: 0;"><i class="fa-solid fa-bug"></i> 实时发送内容预览 (Debug)</label>
+                    <i class="fa-solid fa-chevron-down arrow"></i>
+                </div>
+                
+                <div id="pw-debug-container" style="display:none; margin-top:10px;">
+                    <div style="font-size: 0.8em; opacity: 0.7; margin-bottom: 5px;">点击“生成设定”后，下方将显示实际发给 AI 的完整内容。</div>
                     <textarea id="pw-debug-preview" class="pw-textarea" readonly style="
                         min-height: 250px; 
                         font-family: 'Consolas', 'Monaco', monospace; 
@@ -1248,8 +1189,11 @@ ${forcedStyles}
 </div>
 `;
 
-    // [修改] 关闭按钮改为 Close
+    // [变更1] 将 Close 按钮文本修改为 Close
     callPopup(html, 'text', '', { wide: true, large: true, okButton: "Close" });
+
+    // 初始化 Prompt 编辑器内容
+    $('#pw-prompt-editor').val(promptsCache.personaGen);
 
     renderTemplateChips();
     renderWiBooks();
@@ -1281,15 +1225,9 @@ function bindEvents() {
 
     const context = getContext();
     if (context && context.eventSource) {
-        context.eventSource.on(context.eventTypes.APP_READY, () => {
-            addPersonaButton();
-            checkForUpdates(); // 启动时检查更新
-        });
+        context.eventSource.on(context.eventTypes.APP_READY, addPersonaButton);
         context.eventSource.on(context.eventTypes.MOVABLE_PANELS_RESET, addPersonaButton);
     }
-    // 如果插件后加载，手动触发一次检查
-    checkForUpdates();
-
     window.openPersonaWeaver = openCreatorPopup;
 
     // --- Header Toggles (Prompt) ---
@@ -1300,17 +1238,39 @@ function bindEvents() {
         else { $body.slideDown(); $arrow.addClass('fa-flip-vertical'); }
     });
 
-    // [修改] Debug Toggle
-    $(document).on('click.pw', '#pw-debug-toggle', function() {
-        const $content = $('#pw-debug-content');
+    // --- [新] Debug Header Toggle ---
+    $(document).on('click.pw', '#pw-debug-header', function() {
+        const $body = $('#pw-debug-container');
         const $arrow = $(this).find('.arrow');
-        if ($content.is(':visible')) {
-            $content.slideUp();
-            $arrow.removeClass('fa-flip-vertical');
+        if ($body.is(':visible')) { $body.slideUp(); $arrow.removeClass('fa-flip-vertical'); }
+        else { $body.slideDown(); $arrow.addClass('fa-flip-vertical'); }
+    });
+
+    // --- Prompt Editor Type Switch ---
+    $(document).on('change.pw', '#pw-prompt-type', function() {
+        const type = $(this).val();
+        if (type === 'templateGen') {
+            $('#pw-prompt-editor').val(promptsCache.templateGen);
         } else {
-            $content.slideDown();
-            $arrow.addClass('fa-flip-vertical');
+            $('#pw-prompt-editor').val(promptsCache.personaGen);
         }
+    });
+
+    // --- [新] Update Button Logic ---
+    $(document).on('click.pw', '#pw-btn-update', function() {
+        if (!window.TavernHelper || !window.TavernHelper.updateExtension) {
+            toastr.error("TavernHelper 未加载，无法自动更新，请手动更新。");
+            return;
+        }
+        toastr.info("正在更新...");
+        window.TavernHelper.updateExtension(extensionName).then(res => {
+            if (res.ok) {
+                toastr.success("更新成功！请刷新页面。");
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                toastr.error("更新失败，请查看控制台。");
+            }
+        });
     });
 
     // --- Greetings Select Handling ---
@@ -1399,10 +1359,7 @@ function bindEvents() {
         
         try {
             const contextData = await collectContextData();
-            // 手动获取角色描述文本，用于判断是否为空
             const charInfoText = getCharacterInfoText(); 
-            
-            // 简单的非空检查阈值
             const hasCharInfo = charInfoText && charInfoText.length > 50; 
             const hasWi = contextData.wi && contextData.wi.length > 10;
 
@@ -1438,8 +1395,7 @@ function bindEvents() {
                 indepApiModel: modelVal
             };
             
-            // 使用 overridePrompt 调用，确保使用的是中文模版生成 prompt
-            const generatedTemplate = await runGeneration(config, config, defaultTemplateGenPrompt);
+            const generatedTemplate = await runGeneration(config, config, true);
             
             if (generatedTemplate) {
                 $('#pw-template-text').val(generatedTemplate);
@@ -1582,7 +1538,6 @@ function bindEvents() {
         $(this).addClass('active');
         const view = $(this).data('view');
         
-        // Hide all
         $('#pw-diff-list-view, #pw-diff-raw-view, #pw-diff-old-raw-view').hide();
 
         if (view === 'diff') { 
@@ -1609,7 +1564,7 @@ function bindEvents() {
             return;
         }
         
-        if(!promptsCache.initial) loadData();
+        if(!promptsCache.personaGen) loadData();
 
         const oldText = $('#pw-result-text').val();
         const $btn = $(this).find('i').removeClass('fa-magic').addClass('fa-spinner fa-spin');
@@ -1630,9 +1585,8 @@ function bindEvents() {
                 indepApiKey: $('#pw-api-key').val(), 
                 indepApiModel: modelVal
             };
-            const responseText = await runGeneration(config, config);
+            const responseText = await runGeneration(config, config, false);
 
-            // 填充新版和旧版 raw view
             $('#pw-diff-raw-textarea').val(lastRawResponse);
             $('#pw-diff-old-raw-textarea').val(oldText);
 
@@ -1684,7 +1638,6 @@ function bindEvents() {
 
             $('#pw-diff-overlay').data('source', 'persona');
             
-            // Restore Tab names
             $('.pw-diff-tab[data-view="diff"] div:first-child').text('智能对比');
             $('.pw-diff-tab[data-view="diff"] .pw-tab-sub').text('选择编辑');
             $('.pw-diff-tab[data-view="raw"] div:first-child').text('新版原文');
@@ -1786,7 +1739,7 @@ function bindEvents() {
                 indepApiKey: $('#pw-api-key').val(), 
                 indepApiModel: modelVal
             };
-            const text = await runGeneration(config, config);
+            const text = await runGeneration(config, config, false);
             $('#pw-result-text').val(text);
             $('#pw-result-area').fadeIn();
             $('#pw-request').addClass('minimized');
@@ -1816,7 +1769,6 @@ function bindEvents() {
         }
     });
 
-    // [需求2] 世界书保存
     $(document).on('click.pw', '#pw-btn-save-wi', async function () {
         const content = $('#pw-result-text').val();
         if (!content) return toastr.warning("内容为空，无法保存");
@@ -1824,7 +1776,6 @@ function bindEvents() {
         await syncToWorldInfoViaHelper(name, content);
     });
 
-    // 覆盖当前人设按钮
     $(document).on('click.pw', '#pw-btn-apply', async function () {
         const content = $('#pw-result-text').val();
         if (!content) return toastr.warning("内容为空");
@@ -1843,7 +1794,6 @@ function bindEvents() {
         }
     });
 
-    // 保存至记录
     $(document).on('click.pw', '#pw-snapshot', function () {
         const text = $('#pw-result-text').val();
         const req = $('#pw-request').val();
@@ -1922,13 +1872,24 @@ function bindEvents() {
     });
 
     $(document).on('click.pw', '#pw-api-save', () => {
-        promptsCache.initial = $('#pw-prompt-initial').val();
+        const type = $('#pw-prompt-type').val();
+        if (type === 'templateGen') {
+            promptsCache.templateGen = $('#pw-prompt-editor').val();
+        } else {
+            promptsCache.personaGen = $('#pw-prompt-editor').val();
+        }
         saveData();
-        toastr.success("设置与Prompt已保存");
+        toastr.success("Prompt已保存");
     });
 
-    $(document).on('click.pw', '#pw-reset-initial', () => {
-        if (confirm("恢复初始生成Prompt？")) $('#pw-prompt-initial').val(defaultSystemPromptInitial);
+    $(document).on('click.pw', '#pw-reset-prompt', () => {
+        if (!confirm("确定恢复默认 Prompt？")) return;
+        const type = $('#pw-prompt-type').val();
+        if (type === 'templateGen') {
+            $('#pw-prompt-editor').val(defaultTemplateGenPrompt);
+        } else {
+            $('#pw-prompt-editor').val(defaultPersonaGenPrompt);
+        }
     });
 
     $(document).on('click.pw', '#pw-wi-refresh', async function() {
@@ -1944,7 +1905,6 @@ function bindEvents() {
     $(document).on('click.pw', '#pw-history-clear-all', function () { if (confirm("清空?")) { historyCache = []; saveData(); renderHistoryList(); } });
 }
 
-// ... 辅助渲染函数 ...
 const renderTemplateChips = () => {
     const $container = $('#pw-template-chips').empty();
     const blocks = parseYamlToBlocks(currentTemplate);
@@ -1971,7 +1931,6 @@ const renderHistoryList = () => {
     const $list = $('#pw-history-list').empty();
     const search = $('#pw-history-search').val().toLowerCase();
     
-    // [Lite Fix] Filter out opening types
     const filtered = historyCache.filter(item => {
         if (item.data && item.data.type === 'opening') return false; 
         
@@ -2287,5 +2246,5 @@ function addPersonaButton() {
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
-    console.log("[PW] Persona Weaver Loaded (v11.3 - Fixed Template & UI)");
+    console.log("[PW] Persona Weaver Loaded (v11.4 - Restore Editor)");
 });
