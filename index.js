@@ -2,7 +2,7 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const STORAGE_KEY_HISTORY = 'pw_history_v26_fix_empty'; // 升级版本号
+const STORAGE_KEY_HISTORY = 'pw_history_v27_raw_output'; // 升级版本号
 const STORAGE_KEY_STATE = 'pw_state_v20';
 const STORAGE_KEY_TEMPLATE = 'pw_template_v5_data_schema'; 
 const STORAGE_KEY_PROMPTS = 'pw_prompts_v20_db_recovery'; 
@@ -60,7 +60,8 @@ const defaultYamlTemplate =
   兴奋阈值:
   禁忌边界:`;
 
-// [后备] 内置系统指令 (当无法读取酒馆预设时使用)
+// [System Prompt]
+// 如果读取不到酒馆预设，才使用这个。
 const fallbackSystemPrompt =
 `[TASK: DATABASE_RECOVERY_OPERATION]
 [TARGET: User Profile "{{user}}"]
@@ -135,7 +136,6 @@ const getPosFilterCode = (pos) => {
     return pos;
 };
 
-// [数据流包装]
 function wrapAsXiTaReference(content, title) {
     if (!content || !content.trim()) return "";
     return `
@@ -555,7 +555,7 @@ ${oldText}
     }
 }
 
-// [v10.1 修复] 运行逻辑：双重保险机制
+// [v10.2 修复] 运行逻辑：双重保险 + 移除过度过滤 + 详细调试日志
 async function runGeneration(data, apiConfig, overridePrompt = null) {
     const context = getContext();
     const charId = context.characterId;
@@ -564,7 +564,6 @@ async function runGeneration(data, apiConfig, overridePrompt = null) {
 
     if (!promptsCache || !promptsCache.initial) loadData(); 
 
-    // 1. 准备原始素材
     const rawCharInfo = getCharacterInfoText(); 
     const rawWi = data.wiText || "";
     const rawGreetings = data.greetingsText || "";
@@ -576,11 +575,8 @@ async function runGeneration(data, apiConfig, overridePrompt = null) {
     const wrappedGreetings = wrapAsXiTaReference(rawGreetings, "Init Sequence");
     const wrappedTags = wrapAsXiTaReference(currentTemplate, "Schema Definition");
     
-    // 3. 处理输入要求
     const wrappedInput = wrapInputForSafety(requestText, currentText, data.mode === 'refine');
 
-    // [v10.1 修复] 获取酒馆当前的 System Prompt (Main + Jailbreak)
-    // 如果获取不到，回退到 fallbackSystemPrompt
     let activeSystemPrompt = "";
     try {
         const settings = context.chatCompletionSettings;
@@ -591,11 +587,10 @@ async function runGeneration(data, apiConfig, overridePrompt = null) {
         }
     } catch (e) { console.warn("Failed to fetch ST system prompt", e); }
 
-    // [双重保险] 回退机制
+    // Fallback if no ST preset found
     if (!activeSystemPrompt) {
         console.log("[PW] ST System Prompt is empty. Falling back to Internal Kernel Mode.");
-        activeSystemPrompt = fallbackSystemPrompt
-            .replace(/{{user}}/g, currentName); // 简单替换以适应
+        activeSystemPrompt = fallbackSystemPrompt.replace(/{{user}}/g, currentName);
     }
 
     let userMessageContent = "";
@@ -608,9 +603,7 @@ async function runGeneration(data, apiConfig, overridePrompt = null) {
             .replace(/{{charInfo}}/g, wrappedCharInfo)
             .replace(/{{wi}}/g, wrappedWi);
     } else {
-        // 人设生成：构造 User Message，让酒馆 System Prompt 以为这是正常对话
-        // 这里的 strategy 是：System = 酒馆预设; User = [任务目标] + [素材]
-        
+        // 人设生成
         userMessageContent = `
 [Target: Generate User Profile for "${currentName}"]
 [Context: The user needs a detailed profile compatible with the current scenario.]
@@ -633,7 +626,9 @@ ${wrappedInput}
 Fill the target schema based on the source materials and instructions. Output ONLY the YAML.`;
     }
 
-    console.log(`[PW] Sending... System Len: ${activeSystemPrompt.length}, User Len: ${userMessageContent.length}`);
+    console.log(`[PW] Sending Prompt...`);
+    console.log(`[PW] System Length: ${activeSystemPrompt.length}`);
+    console.log(`[PW] User Length: ${userMessageContent.length}`);
     
     let responseContent = "";
     const controller = new AbortController();
@@ -645,7 +640,6 @@ Fill the target schema based on the source materials and instructions. Output ON
             if (baseUrl.endsWith('/chat/completions')) baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
             const url = `${baseUrl}/chat/completions`;
             
-            // 独立 API 模式：必须手动发送 System Prompt
             const messages = [
                 { role: 'system', content: activeSystemPrompt },
                 { role: 'user', content: userMessageContent }
@@ -672,17 +666,14 @@ Fill the target schema based on the source materials and instructions. Output ON
             responseContent = json.choices[0].message.content;
 
         } else {
-            // [v10.1 修复] 主 API 模式：改回使用 generateQuietPrompt
-            // 这是一个更高级的接口，它会自动处理 Presets, Jailbreaks, 和各种 ST 设置
-            // 它是“最像正常聊天”的接口，破限成功率最高
+            // [v10.2] 使用 generateQuietPrompt 并跳过 WIAN 以避免上下文重复
             if (typeof context.generateQuietPrompt === 'function') {
-                responseContent = await context.generateQuietPrompt(userMessageContent, false, false, null, currentName);
+                // generateQuietPrompt(prompt, quiet_to_loud, skip_wian, image, name)
+                responseContent = await context.generateQuietPrompt(userMessageContent, false, true, null, currentName);
             } else if (window.TavernHelper && typeof window.TavernHelper.generateRaw === 'function') {
-                // 如果 ST 版本太老没有 generateQuietPrompt，回退到 generateRaw
-                // 但这次我们把 User Content 放进去，让 ST 自动加 System
                  responseContent = await window.TavernHelper.generateRaw({
                     user_input: userMessageContent, 
-                    overrides: { chat_history: { prompts: [] } } // 仅禁用历史记录，保留 System Prompt
+                    overrides: { chat_history: { prompts: [] }, world_info_before: '', world_info_after: '' }
                 });
             } else {
                 throw new Error("ST版本过旧或未安装 TavernHelper");
@@ -695,14 +686,17 @@ Fill the target schema based on the source materials and instructions. Output ON
         clearTimeout(timeoutId); 
     }
     
-    if (responseContent.length < 10) {
-        throw new Error("生成结果过短或为空");
+    // [v10.2 核心] 调试日志：查看 API 到底返回了什么
+    console.log("[PW] RAW RESPONSE:", responseContent);
+
+    // 只要有内容，就视为成功。不再做严格的 Regex 过滤，防止误删。
+    if (!responseContent || responseContent.trim().length === 0) {
+        throw new Error("API 返回内容为空 (Empty Response)");
     }
 
     lastRawResponse = responseContent;
 
-    // [v10.1 修复] 移除严格的冒号过滤，防止误删有效内容
-    // 只做最基础的 Markdown 清理
+    // 只移除 Markdown 代码块标记，保留所有内部文本
     return responseContent.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
 }
 
@@ -2094,5 +2088,5 @@ function addPersonaButton() {
 jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
-    console.log("[PW] Persona Weaver Loaded (v10.1 - Empty Fix)");
+    console.log("[PW] Persona Weaver Loaded (v10.2 - Raw Output Fix)");
 });
