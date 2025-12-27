@@ -2,7 +2,7 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const CURRENT_VERSION = "1.0.0"; // 本地测试版本号
+const CURRENT_VERSION = "1.0.0"; 
 
 // 【测试地址】
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/sisisisilviaxie-star-main-dev/manifest.json";
@@ -13,8 +13,10 @@ const STORAGE_KEY_TEMPLATE = 'pw_template_v6_new_yaml';
 const STORAGE_KEY_PROMPTS = 'pw_prompts_v21_restore_edit'; 
 const STORAGE_KEY_WI_STATE = 'pw_wi_selection_v1';
 const STORAGE_KEY_UI_STATE = 'pw_ui_state_v1';
-const STORAGE_KEY_THEMES = 'pw_custom_themes_v1'; // 新增：存储自定义主题
+const STORAGE_KEY_THEMES = 'pw_custom_themes_v1'; 
 const BUTTON_ID = 'pw_persona_tool_btn';
+
+const HISTORY_PER_PAGE = 20; // 20 items per page
 
 // 1. 默认 User 模版
 const defaultYamlTemplate =
@@ -171,9 +173,8 @@ let currentGreetingsList = [];
 let wiSelectionCache = {};
 let uiStateCache = { templateExpanded: true, theme: 'style.css' };
 let hasNewVersion = false;
-let customThemes = {}; // { fileName: cssContent }
-let historyPage = 1; // 记录当前页码
-const HISTORY_PER_PAGE = 20;
+let customThemes = {}; 
+let historyPage = 1; 
 
 // ============================================================================
 // 工具函数
@@ -671,7 +672,7 @@ function saveData() {
 }
 
 function saveHistory(item) {
-    const limit = extension_settings[extensionName]?.historyLimit || 9999; 
+    const limit = 1000; // Hardcoded safety limit to prevent 10-item cap issues
 
     if (!item.title || item.title === "未命名") {
         const context = getContext();
@@ -833,7 +834,8 @@ async function getWorldBookEntries(bookName) {
 async function openCreatorPopup() {
     const context = getContext();
     loadData();
-    await loadAvailableWorldBooks();
+    // [Fix Delay] Don't await here, let UI render first
+    // await loadAvailableWorldBooks(); 
 
     // 检查更新
     const updateInfo = await checkForUpdates();
@@ -856,12 +858,8 @@ async function openCreatorPopup() {
         shouldShowResult = true;
     }
 
-    const renderBookOptions = () => {
-        if (availableWorldBooks.length > 0) {
-            return availableWorldBooks.map(b => `<option value="${b}">${b}</option>`).join('');
-        }
-        return `<option disabled>未找到世界书</option>`;
-    };
+    // Placeholders for now, will fill async
+    const renderBookOptions = () => `<option disabled>正在加载...</option>`;
 
     const charName = getContext().characters[getContext().characterId]?.name || "None";
     
@@ -1025,7 +1023,7 @@ async function openCreatorPopup() {
                 </div>
                 <div id="pw-wi-body" style="display:block; padding-top:5px;">
                     <div class="pw-wi-controls" style="margin-bottom:8px;">
-                        <select id="pw-wi-select" class="pw-input pw-wi-select"><option value="">-- 添加参考/目标世界书 --</option>${renderBookOptions()}</select>
+                        <select id="pw-wi-select" class="pw-input pw-wi-select"><option value="">正在加载...</option></select>
                         <button id="pw-wi-add" class="pw-btn primary pw-wi-add-btn"><i class="fa-solid fa-plus"></i></button>
                     </div>
                     <div id="pw-wi-container"></div>
@@ -1078,6 +1076,9 @@ async function openCreatorPopup() {
                         </select>
                         <input type="file" id="pw-theme-import" accept=".css" style="display:none;">
                         <button class="pw-btn primary" id="pw-btn-import-theme" title="导入本地 .css 文件" style="padding:6px 10px;"><i class="fa-solid fa-file-import"></i></button>
+                        
+                        <!-- [NEW] Download Template Button -->
+                        <button class="pw-btn primary" id="pw-btn-download-template" title="下载主题模版" style="padding:6px 10px;"><i class="fa-solid fa-download"></i></button>
                     </div>
                 </div>
             </div>
@@ -1166,9 +1167,16 @@ async function openCreatorPopup() {
     // 初始化
     $('#pw-prompt-editor').val(promptsCache.personaGen);
     renderTemplateChips();
-    renderWiBooks();
+    // [Performance Fix] Run this Async
+    loadAvailableWorldBooks().then(() => {
+        renderWiBooks();
+        // Update WI Select placeholder
+        const options = availableWorldBooks.length > 0 ? availableWorldBooks.map(b => `<option value="${b}">${b}</option>`).join('') : `<option disabled>未找到世界书</option>`;
+        $('#pw-wi-select').html(`<option value="">-- 添加参考/目标世界书 --</option>${options}`);
+    });
+    
     renderGreetingsList();
-    renderThemeOptions(); // 渲染主题选项
+    renderThemeOptions(); 
     
     // 初始化主题
     const savedTheme = uiStateCache.theme || 'style.css';
@@ -1274,6 +1282,32 @@ function bindEvents() {
         };
         reader.readAsText(file);
         $(this).val('');
+    });
+
+    // --- [New] Download Theme Template ---
+    $(document).on('click.pw', '#pw-btn-download-template', function() {
+        const template = `/* Persona Weaver Theme Template */
+.pw-wrapper {
+    /* Main Text Color */
+    --pw-text-main: #e0e0e0;
+    /* Border Color */
+    --pw-border: #444;
+    /* Input/Paper Background */
+    --pw-paper-bg: rgba(0, 0, 0, 0.2);
+    /* Danger Color (Red) */
+    --pw-danger: #ff6b6b;
+}
+/* Add more overrides below... */
+`;
+        const blob = new Blob([template], { type: "text/css" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "pw_theme_template.css";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     });
 
     // --- Theme Selector Logic ---
@@ -1840,25 +1874,14 @@ function bindEvents() {
         const $display = $header.find('.pw-hist-title-display');
         const $input = $header.find('.pw-hist-title-input');
         $display.hide(); $input.show().focus();
-        
         const saveEdit = () => {
             const newVal = $input.val();
             $display.text(newVal).show(); $input.hide();
             const index = $header.closest('.pw-history-item').find('.pw-hist-action-btn.del').data('index');
-            // 注意: 现在的 index 是相对于当前页的，需要转换
-            const realIndex = (historyPage - 1) * HISTORY_PER_PAGE + index;
-            if (historyCache[realIndex]) { historyCache[realIndex].title = newVal; saveData(); }
+            if (historyCache[index]) { historyCache[index].title = newVal; saveData(); }
+            $(document).off('click.pw-hist-blur');
         };
-
-        // [Fix] Click outside to save & Stop propagation
-        $input.off('click.pw-stop').on('click.pw-stop', (e) => e.stopPropagation());
-        $input.one('blur', saveEdit);
-        $input.on('keyup', function (ev) { 
-            if (ev.key === 'Enter') { 
-                saveEdit(); 
-                $(this).off('blur'); // Prevent double save
-            }
-        });
+        $input.one('blur keyup', function (ev) { if (ev.type === 'keyup' && ev.key !== 'Enter') return; saveEdit(); });
     });
 
     $(document).on('change.pw', '#pw-api-source', function () { $('#pw-indep-settings').toggle($(this).val() === 'independent'); });
@@ -2332,4 +2355,4 @@ jQuery(async () => {
     bindEvents(); 
     loadThemeCSS('style.css'); // Default theme
     console.log("[PW] Persona Weaver Loaded (v11.4 - Restore Editor)");
-});
+})
