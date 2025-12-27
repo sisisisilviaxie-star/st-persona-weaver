@@ -2,7 +2,7 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const CURRENT_VERSION = "1.0.0"; 
+const CURRENT_VERSION = "1.0.0"; // 本地版本号
 
 // 【测试地址】
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/sisisisilviaxie-star-main-dev/manifest.json";
@@ -16,7 +16,7 @@ const STORAGE_KEY_UI_STATE = 'pw_ui_state_v1';
 const STORAGE_KEY_THEMES = 'pw_custom_themes_v1'; 
 const BUTTON_ID = 'pw_persona_tool_btn';
 
-const HISTORY_PER_PAGE = 20; // 20 items per page
+const HISTORY_PER_PAGE = 20;
 
 // 1. 默认 User 模版
 const defaultYamlTemplate =
@@ -672,7 +672,7 @@ function saveData() {
 }
 
 function saveHistory(item) {
-    const limit = 1000; // Hardcoded safety limit to prevent 10-item cap issues
+    const limit = 1000; 
 
     if (!item.title || item.title === "未命名") {
         const context = getContext();
@@ -834,12 +834,11 @@ async function getWorldBookEntries(bookName) {
 async function openCreatorPopup() {
     const context = getContext();
     loadData();
-    // [Fix Delay] Don't await here, let UI render first
+    // [Performance Fix] 移除 await，直接后台加载
     // await loadAvailableWorldBooks(); 
 
-    // 检查更新
-    const updateInfo = await checkForUpdates();
-    hasNewVersion = !!updateInfo;
+    // [Performance Fix] 检查更新也移到后面
+    // const updateInfo = await checkForUpdates();
 
     const savedState = loadState();
     const config = { ...defaultSettings, ...extension_settings[extensionName], ...savedState.localConfig };
@@ -858,32 +857,24 @@ async function openCreatorPopup() {
         shouldShowResult = true;
     }
 
-    // Placeholders for now, will fill async
+    // 默认显示正在加载
     const renderBookOptions = () => `<option disabled>正在加载...</option>`;
 
     const charName = getContext().characters[getContext().characterId]?.name || "None";
     
-    // NEW 标记无背景，红色文字，可点击
-    const newBadge = hasNewVersion ? `<span id="pw-new-badge" title="点击查看更新" style="cursor:pointer; color:#ff4444; font-size:0.6em; font-weight:bold; vertical-align: super; margin-left: 2px;">NEW</span>` : '';
+    // NEW 标记初始隐藏
+    const newBadge = `<span id="pw-new-badge" title="点击查看更新" style="cursor:pointer; color:#ff4444; font-size:0.6em; font-weight:bold; vertical-align: super; margin-left: 2px; display:none;">NEW</span>`;
     const headerTitle = `${TEXT.PANEL_TITLE}${newBadge}<span class="pw-header-subtitle">User: ${currentName} & Char: ${charName}</span>`;
 
     const chipsDisplay = uiStateCache.templateExpanded ? 'flex' : 'none';
     const chipsIcon = uiStateCache.templateExpanded ? 'fa-angle-up' : 'fa-angle-down';
 
-    // 更新 UI 块
-    const updateUiHtml = hasNewVersion 
-    ? `
-        <div id="pw-new-version-box" style="margin-top:10px; padding:15px; background:rgba(0,0,0,0.2); border: 1px solid var(--SmartThemeQuoteColor); border-radius: 6px;">
-            <div style="font-weight:bold; color:var(--SmartThemeQuoteColor); margin-bottom:8px;">
-                <i class="fa-solid fa-cloud-arrow-down"></i> 发现新版本: v${updateInfo.version}
-            </div>
-            <div id="pw-update-notes" style="font-size:0.9em; margin-bottom:10px; white-space: pre-wrap; color: var(--SmartThemeBodyColor); opacity: 0.9;">${updateInfo.notes || "无更新说明"}</div>
-            <button id="pw-btn-update" class="pw-btn primary" style="width:100%;">立即更新</button>
+    // [修改] Update UI 初始状态
+    const updateUiHtml = `
+        <div id="pw-update-area">
+            <div style="margin-top:10px; opacity:0.6; font-size:0.9em;"><i class="fa-solid fa-spinner fa-spin"></i> 正在检查更新...</div>
         </div>
-      `
-    : `
-        <div style="margin-top:10px; opacity:0.6; font-size:0.9em;"><i class="fa-solid fa-check"></i> 当前已是最新版本</div>
-      `;
+    `;
 
     // 移除内联 CSS，现在由外部文件控制
     const html = `
@@ -1007,7 +998,7 @@ async function openCreatorPopup() {
             <div class="pw-card-section">
                 <div class="pw-row">
                     <label class="pw-section-label pw-label-gold">角色开场白</label>
-                    <select id="pw-greetings-select" class="pw-input" style="flex:1; max-width:60%;">
+                    <select id="pw-greetings-select" class="pw-input" style="flex:1;">
                         <option value="">(不使用开场白)</option>
                     </select>
                 </div>
@@ -1167,12 +1158,33 @@ async function openCreatorPopup() {
     // 初始化
     $('#pw-prompt-editor').val(promptsCache.personaGen);
     renderTemplateChips();
-    // [Performance Fix] Run this Async
+    
+    // [Performance Fix] 异步加载世界书
     loadAvailableWorldBooks().then(() => {
         renderWiBooks();
         // Update WI Select placeholder
         const options = availableWorldBooks.length > 0 ? availableWorldBooks.map(b => `<option value="${b}">${b}</option>`).join('') : `<option disabled>未找到世界书</option>`;
         $('#pw-wi-select').html(`<option value="">-- 添加参考/目标世界书 --</option>${options}`);
+    });
+
+    // [Async Update Check]
+    checkForUpdates().then(info => {
+        if (info) {
+            hasNewVersion = true;
+            $('#pw-new-badge').show();
+            // 动态更新 System Tab 内容
+            const newHtml = `
+            <div id="pw-new-version-box" style="margin-top:10px; padding:15px; background:rgba(0,0,0,0.2); border: 1px solid var(--SmartThemeQuoteColor); border-radius: 6px;">
+                <div style="font-weight:bold; color:var(--SmartThemeQuoteColor); margin-bottom:8px;">
+                    <i class="fa-solid fa-cloud-arrow-down"></i> 发现新版本: v${info.version}
+                </div>
+                <div id="pw-update-notes" style="font-size:0.9em; margin-bottom:10px; white-space: pre-wrap; color: var(--SmartThemeBodyColor); opacity: 0.9;">${info.notes || "无更新说明"}</div>
+                <button id="pw-btn-update" class="pw-btn primary" style="width:100%;">立即更新</button>
+            </div>`;
+            $('#pw-update-area').html(newHtml);
+        } else {
+            $('#pw-update-area').html(`<div style="margin-top:10px; opacity:0.6; font-size:0.9em;"><i class="fa-solid fa-check"></i> 当前已是最新版本</div>`);
+        }
     });
     
     renderGreetingsList();
@@ -1286,28 +1298,29 @@ function bindEvents() {
 
     // --- [New] Download Theme Template ---
     $(document).on('click.pw', '#pw-btn-download-template', function() {
-        const template = `/* Persona Weaver Theme Template */
-.pw-wrapper {
-    /* Main Text Color */
-    --pw-text-main: #e0e0e0;
-    /* Border Color */
-    --pw-border: #444;
-    /* Input/Paper Background */
-    --pw-paper-bg: rgba(0, 0, 0, 0.2);
-    /* Danger Color (Red) */
-    --pw-danger: #ff6b6b;
-}
-/* Add more overrides below... */
-`;
-        const blob = new Blob([template], { type: "text/css" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "pw_theme_template.css";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        const path = `scripts/extensions/third-party/${extensionName}/style.css`;
+        
+        fetch(path)
+            .then(response => {
+                if (!response.ok) throw new Error("无法读取 style.css");
+                return response.text();
+            })
+            .then(text => {
+                const blob = new Blob([text], { type: "text/css" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "pw_theme_template.css";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                toastr.success("模版已下载");
+            })
+            .catch(err => {
+                console.error(err);
+                toastr.error("下载失败，请检查文件路径");
+            });
     });
 
     // --- Theme Selector Logic ---
@@ -2176,8 +2189,6 @@ const renderWiBooks = async () => {
                     $list.empty();
                     
                     if (entries.length === 0) {
-                        $list.html('<div style="padding:10px;opacity:0.5;">无条目</div>');
-                    } else {
                         // [Layout Fix] 3 Rows Structure
                         const $tools = $(`
                         <div class="pw-wi-depth-tools">
@@ -2355,4 +2366,5 @@ jQuery(async () => {
     bindEvents(); 
     loadThemeCSS('style.css'); // Default theme
     console.log("[PW] Persona Weaver Loaded (v11.4 - Restore Editor)");
-})
+});
+```
