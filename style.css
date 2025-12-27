@@ -1,7 +1,6 @@
 /* =========================================
    Theme: Native High Contrast (原生高对比)
-   Logic: 放弃所有自定义色相，完全跟随酒馆字色
-          通过 透明度 和 粗体 区分层级
+   File: style.css
 ========================================= */
 
 .pw-wrapper {
@@ -85,7 +84,7 @@
 .pw-view.active { display: flex; }
 
 /* =========================================
-   3. 组件样式 (解决这里看不清的问题)
+   3. 组件样式
 ========================================= */
 .pw-info-display {
     display: flex; align-items: center; gap: 10px; 
@@ -168,7 +167,7 @@
 .pw-shortcut-btn:hover { opacity: 1; border-color: var(--pw-text-main); }
 
 /* =========================================
-   4. 输入框与按钮 (原生风格)
+   4. 输入框与按钮
 ========================================= */
 .pw-input, .pw-textarea, .pw-select {
     background-color: var(--pw-paper-bg);
@@ -197,7 +196,7 @@
 }
 .pw-btn:hover { background: rgba(128,128,128,0.25); filter: brightness(1.1); }
 
-/* 生成按钮 (实心，为了显眼) */
+/* 生成按钮 */
 .pw-btn.gen { 
     background: var(--pw-text-main); 
     color: var(--smart-theme-bg, #000); /* 文字颜色反转，保证对比 */
@@ -499,7 +498,7 @@
 }
 
 /* =========================================
-   9. JS 动态元素的样式类 (替换 JS 内联样式)
+   9. JS 动态元素的样式类
 ========================================= */
 
 /* 1. 世界书 - (已绑定) 文字 (解决：颜色问题) */
@@ -528,7 +527,7 @@
     margin-right: 5px;
 }
 
-/* 4. 模版编辑状态 (用于替换 JS 里的 .css('color', ...)) */
+/* 4. 模版编辑状态 */
 .pw-tags-edit-toggle.editing {
     color: var(--pw-danger) !important;
 }
@@ -543,4 +542,64 @@
 .pw-wi-toggle-icon.active {
     color: var(--pw-text-main);
     opacity: 1;
+}
+
+/* 6. 世界书筛选按钮 active 状态 (改为红色，修复看不清的问题) */
+.pw-depth-btn.active { 
+    border-color: #ff6b6b !important; 
+    color: #ff6b6b !important; 
+    background: rgba(255, 107, 107, 0.1) !important; 
+}
+
+/* 7. 折叠标题 */
+.pw-context-header {
+    background-color: var(--SmartThemeBtnBg);
+    color: var(--SmartThemeBtnText);
+    border: 1px solid var(--SmartThemeBorderColor);
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+.pw-context-header:hover {
+    background-color: var(--SmartThemeBtnHoverBg);
+    filter: brightness(1.1);
+}
+.pw-context-header i { margin-right: 6px; }
+
+/* 8. 修复 SweetAlert 按钮 */
+.swal2-actions { flex-wrap: nowrap !important; }
+.swal2-styled { 
+    white-space: nowrap !important;
+    width: auto !important; 
+    max-width: none !important; 
+    flex-shrink: 0 !important;
+}
+
+@media screen and (max-width: 600px) {
+    .pw-row { flex-wrap: wrap; }
+    .pw-row label { width: 100%; margin-bottom: 4px; }
+    .pw-input, .pw-select, #pw-api-url, #pw-api-key { min-width: 0 !important; width: 100% !important; flex: 1 1 auto; }
+    
+    .pw-wi-depth-tools { gap: 5px; }
+    .pw-wi-depth-tools .pw-keyword-input, 
+    .pw-wi-depth-tools .pw-pos-select, 
+    .pw-wi-depth-tools .pw-depth-input, 
+    .pw-wi-depth-tools .pw-depth-btn {
+        height: 30px !important;
+        box-sizing: border-box !important;
+        vertical-align: middle;
+    }
+    .pw-keyword-input { width: auto; flex: 1; font-size: 0.8em; padding: 4px 6px; }
+    #d-filter-toggle { font-size: 0.8em; padding: 4px 8px; }
+    .pw-wi-filter-row:nth-child(2) { flex-wrap: nowrap !important; gap: 4px; align-items: center; }
+    .pw-pos-select { flex: 0 0 85px !important; max-width: 85px !important; padding: 4px 2px; font-size: 0.8em; margin-bottom: 0; }
+    .pw-depth-input { flex: 1; min-width: 0; padding: 4px 2px; text-align: center; font-size: 0.8em; }
+    .pw-wi-filter-row span { font-size: 0.8em; align-self: center; }
+    #d-reset { margin-left: 2px; padding: 4px 6px; font-size: 0.8em; white-space: nowrap; }
 }
