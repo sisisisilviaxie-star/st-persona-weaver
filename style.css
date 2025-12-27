@@ -1,6 +1,6 @@
 /* =========================================
    File: style.css
-   Version: 1.4 (Performance & UI Polish)
+   Version: 1.5 (Fixes & Optimization)
 ========================================= */
 
 .pw-wrapper {
@@ -120,7 +120,12 @@
 
 /* Template Editor */
 .pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.pw-tags-label { font-weight: bold; opacity: 0.8; font-size: 0.85em; color: var(--pw-text-main); }
+.pw-tags-label { 
+    font-weight: bold; opacity: 0.8; font-size: 0.85em; color: var(--pw-text-main); 
+    cursor: pointer; user-select: none; /* Make clickable */
+}
+.pw-tags-label:hover { opacity: 1; }
+
 .pw-tags-edit-toggle { cursor: pointer; font-size: 0.8em; opacity: 0.7; text-decoration: underline; }
 .pw-tags-edit-toggle.editing { color: var(--pw-danger) !important; }
 .pw-tags-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
@@ -165,13 +170,17 @@
 /* [Fix] Book Title: Allow growing, use ellipsis */
 .pw-wi-book-title { 
     flex: 1; 
-    display: block; /* changed from flex to block for ellipsis to work better */
-    overflow: hidden; 
-    text-overflow: ellipsis; 
-    white-space: nowrap; 
+    display: block; 
+    /* Changed for full text wrapping */
+    overflow: visible; 
+    text-overflow: clip; 
+    white-space: normal; 
+    word-break: break-word; /* Ensure long words wrap */
+    
     margin-right: 10px; 
     font-weight: bold;
-    min-width: 0; /* Critical for flex child truncation */
+    min-width: 0; 
+    line-height: 1.2;
 }
 
 .pw-wi-header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
