@@ -1,6 +1,6 @@
 /* =========================================
    File: style.css
-   Version: 1.5.1 (Styles Fixed)
+   Version: 1.5.2 (Variable Cards Updated)
 ========================================= */
 
 .pw-wrapper {
@@ -142,51 +142,90 @@
 .pw-template-footer { display: flex; justify-content: space-between; align-items: center; background: rgba(128,128,128,0.1); padding: 5px 10px; border-top: 1px solid var(--pw-border); }
 
 /* =========================================
-   Shortcut & Variable Buttons (Fixed)
+   Shortcut & Variable Buttons (Updated)
 ========================================= */
-.pw-shortcut-bar { display: flex; gap: 5px; align-items: center; }
+
+/* 1. 模版编辑器的快捷键栏 (保持水平紧凑) */
+.pw-shortcut-bar { display: flex; gap: 6px; align-items: center; }
 
 .pw-shortcut-btn { 
-    padding: 4px 8px; 
+    padding: 5px 10px; 
     cursor: pointer; 
     font-size: 0.85em; 
-    background: rgba(128,128,128,0.15); 
+    background: var(--pw-paper-bg); 
     color: var(--pw-text-main); 
-    border-radius: 4px; 
+    border-radius: 5px; 
     border: 1px solid var(--pw-border); 
-    opacity: 0.8; 
-    display: inline-flex; align-items: center; /* Fix alignment */
-    transition: all 0.2s;
+    opacity: 0.9; 
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: all 0.1s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
-.pw-shortcut-btn:hover { opacity: 1; border-color: var(--pw-text-main); background: rgba(128,128,128,0.25); }
+.pw-shortcut-btn:hover { 
+    border-color: var(--pw-text-main); 
+    background: rgba(128,128,128,0.15);
+    transform: translateY(-1px);
+}
+.pw-shortcut-btn:active { transform: translateY(1px); }
 
-.pw-var-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 5px; }
+/* 快捷键的按键标识 (如 Tab) */
+.pw-shortcut-btn .code {
+    margin-left: 6px; 
+    font-family: Consolas, monospace;
+    font-weight: bold;
+    opacity: 0.7;
+    background: rgba(128, 128, 128, 0.15); 
+    padding: 0 4px; border-radius: 3px;
+}
+
+/* 2. Prompt 变量按钮 (修改为垂直卡片样式) */
+.pw-var-btns { 
+    display: grid; 
+    /* 自动适应宽度，每列最小85px，整齐排列 */
+    grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); 
+    gap: 8px; 
+    margin-bottom: 8px; 
+}
 
 .pw-var-btn { 
-    font-size: 0.8em; 
-    padding: 3px 8px; 
+    display: flex; 
+    flex-direction: column; /* 垂直排列：上文字下代码 */
+    align-items: center; 
+    justify-content: center;
+    text-align: center;
+    
+    padding: 8px 4px; 
+    background: var(--pw-paper-bg); /* 跟随主题背景 */
     border: 1px solid var(--pw-border); 
-    border-radius: 4px; 
+    border-radius: 8px; /* 圆角 */
     cursor: pointer; 
-    opacity: 0.8; 
-    color: var(--pw-text-main);
-    background: rgba(128,128,128,0.05);
-    display: inline-flex; align-items: center; /* Fix alignment */
+    transition: all 0.2s;
+    user-select: none;
+    min-height: 45px;
 }
-.pw-var-btn:hover { opacity: 1; border-color: var(--pw-text-main); background: rgba(128,128,128,0.2); }
 
-/* [NEW] Code block style for shortcuts */
-.pw-shortcut-btn .code, 
-.pw-var-btn .code {
-    margin-left: 6px; 
-    font-family: Consolas, "Courier New", monospace;
-    background: rgba(128, 128, 128, 0.2); 
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-size: 0.9em;
+.pw-var-btn:hover { 
+    background: rgba(128,128,128,0.15); 
+    border-color: var(--pw-text-main); 
+    transform: translateY(-2px); /* 悬浮上浮效果 */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* 第一行：描述文字 (如 User名) */
+.pw-var-btn span:first-child {
     font-weight: bold;
-    border: 1px solid rgba(128, 128, 128, 0.2);
-    opacity: 0.9;
+    font-size: 0.9em;
+    color: var(--pw-text-main);
+    margin-bottom: 2px;
+}
+
+/* 第二行：代码变量 (如 {{user}}) */
+.pw-var-btn .code {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 0.8em;
+    color: var(--pw-text-main);
+    opacity: 0.6; /* 稍微淡一点 */
+    word-break: break-all;
 }
 
 /* =========================================
