@@ -1,6 +1,6 @@
 /* =========================================
    File: style.css
-   Version: 1.7 (Compact & Exquisite Buttons)
+   Version: 1.7 (Fix: Compact & Exquisite Buttons)
 ========================================= */
 
 .pw-wrapper {
@@ -120,28 +120,29 @@
 
 /* =========================================
    [FIXED] Prompt Variable Buttons (Small & Exquisite)
+   小巧精致版本：内容自适应，不拉伸
 ========================================= */
 .pw-var-btns {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px; /* 更紧凑的间距 */
+    gap: 6px; /* 紧凑间距 */
     margin-bottom: 10px;
 }
 
 .pw-var-btn {
     display: flex;
-    flex-direction: column;
+    flex-direction: column; /* 上下排列 */
     align-items: center;
     justify-content: center;
-    background: rgba(128, 128, 128, 0.08); /* 更淡的背景 */
+    background: rgba(128, 128, 128, 0.08); /* 淡背景 */
     border: 1px solid var(--pw-border);
-    border-radius: 4px; /* 更小的圆角 */
-    padding: 4px 8px; /* 缩小内边距 */
+    border-radius: 4px; /* 小圆角 */
+    padding: 4px 8px; /* 小内边距 */
     cursor: pointer;
     transition: all 0.2s;
-    /* 关键修改：取消拉伸，宽度自适应 */
+    /* 关键：不拉伸，宽度随内容 */
     flex: 0 0 auto; 
-    min-width: auto;
+    min-width: auto; 
     user-select: none;
 }
 
@@ -153,17 +154,17 @@
 
 .pw-var-btn span {
     font-weight: bold;
-    font-size: 0.8em; /* 缩小字体 */
+    font-size: 0.85em; /* 较小标题 */
     color: var(--pw-text-main);
-    line-height: 1.1;
+    line-height: 1.2;
     opacity: 0.9;
 }
 
 .pw-var-btn .code {
     font-family: monospace;
     font-weight: normal;
-    opacity: 0.5; /* 降低代码透明度，突出标题 */
-    font-size: 0.75em; /* 代码字体更小 */
+    opacity: 0.5;
+    font-size: 0.75em; /* 极小代码 */
     margin-top: 2px;
 }
 
