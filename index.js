@@ -856,7 +856,7 @@ async function openCreatorPopup() {
 
         /* [手机端/窄屏] 响应式修复 */
         @media screen and (max-width: 600px) {
-            /* API设置行：强制换行，防止溢出 */
+            /* API设置行 */
             .pw-row { flex-wrap: wrap; }
             .pw-row label { width: 100%; margin-bottom: 4px; }
             .pw-input, .pw-select, #pw-api-url, #pw-api-key { min-width: 0 !important; width: 100% !important; flex: 1 1 auto; }
@@ -864,13 +864,23 @@ async function openCreatorPopup() {
             /* 世界书筛选工具栏 */
             .pw-wi-depth-tools { gap: 5px; }
             
-            /* 第一行：搜索框 + 按钮 */
-            .pw-keyword-input { width: auto; flex: 1; }
+            /* 第一行：搜索框 + 筛选按钮 (缩小字体和Padding) */
+            .pw-keyword-input {
+                width: auto;
+                flex: 1;
+                font-size: 0.8em; /* 缩小字体 */
+                padding: 4px 6px; /* 缩小内边距 */
+            }
+            #d-filter-toggle {
+                font-size: 0.8em; /* 缩小字体 */
+                padding: 4px 8px; /* 缩小内边距 */
+            }
 
-            /* 第二行：位置 + 深度 + 重置 (强制不换行) */
+            /* 第二行：位置 + 深度 + 重置 (强制不换行，且对齐第一行的高度) */
             .pw-wi-filter-row:nth-child(2) {
                 flex-wrap: nowrap !important;
                 gap: 4px;
+                align-items: stretch; /* 确保高度拉伸一致 */
             }
 
             /* 缩小位置选择框 */
@@ -892,13 +902,14 @@ async function openCreatorPopup() {
             }
             
             /* 分隔符 */
-            .pw-wi-filter-row span { font-size: 0.8em; }
+            .pw-wi-filter-row span { font-size: 0.8em; align-self: center; }
 
             /* 重置按钮 */
             #d-reset {
                 margin-left: 2px;
                 padding: 4px 6px;
                 font-size: 0.8em;
+                white-space: nowrap;
             }
         }
     </style>
