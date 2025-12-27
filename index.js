@@ -4,7 +4,7 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCu
 const extensionName = "st-persona-weaver";
 const CURRENT_VERSION = "1.0.0"; // 本地测试版本号
 
-// 【测试地址】保持你提供的 dev 分支
+// 【测试地址】
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/sisisisilviaxie-star-main-dev/manifest.json";
 
 const STORAGE_KEY_HISTORY = 'pw_history_v29_new_template'; 
@@ -858,7 +858,7 @@ async function openCreatorPopup() {
 
     const charName = getContext().characters[getContext().characterId]?.name || "None";
     
-    // [变更 3] NEW 标记无背景，红色文字，可点击
+    // NEW 标记无背景，红色文字，可点击
     const newBadge = hasNewVersion ? `<span id="pw-new-badge" title="点击查看更新" style="cursor:pointer; color:#ff4444; font-size:0.6em; font-weight:bold; vertical-align: super; margin-left: 2px;">NEW</span>` : '';
     const headerTitle = `${TEXT.PANEL_TITLE}${newBadge}<span class="pw-header-subtitle">User: ${currentName} & Char: ${charName}</span>`;
 
@@ -918,7 +918,10 @@ async function openCreatorPopup() {
         .pw-depth-input { width: 40px; padding: 4px; background: var(--SmartThemeInputBg); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeInputColor); border-radius: 4px; text-align: center; }
         .pw-depth-btn { padding: 4px 10px; background: var(--SmartThemeBtnBg); border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeBtnText); border-radius: 4px; cursor: pointer; white-space: nowrap; }
         .pw-depth-btn:hover { filter: brightness(1.1); }
-        .pw-depth-btn.active { border-color: #83c168; color: #83c168; background: rgba(131, 193, 104, 0.1); }
+        
+        /* [修改] active 状态改为红色，更醒目 */
+        .pw-depth-btn.active { border-color: #ff6b6b; color: #ff6b6b; background: rgba(255, 107, 107, 0.1); }
+        
         .pw-wi-info-badge { font-size: 0.75em; background: rgba(255,255,255,0.1); padding: 1px 4px; border-radius: 3px; color: #aaa; margin-right: 5px; white-space: nowrap; }
         .pw-wi-filter-toggle { cursor: pointer; margin-left: auto; margin-right: 10px; opacity: 0.7; font-size: 1em; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
         .pw-wi-filter-toggle:hover { opacity: 1; background: rgba(255,255,255,0.1); }
@@ -1177,7 +1180,7 @@ ${forcedStyles}
                     <textarea id="pw-prompt-editor" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;"></textarea>
                     
                     <div style="text-align:right; margin-top:10px; display:flex; gap:10px; justify-content:flex-end; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 10px;">
-                        <!-- [新增] Debug 切换按钮 -->
+                        <!-- Debug 切换按钮 -->
                         <button class="pw-mini-btn" id="pw-toggle-debug-btn" style="margin-right:auto;"><i class="fa-solid fa-bug"></i> Debug</button>
                         
                         <button class="pw-mini-btn" id="pw-reset-prompt" style="font-size:0.8em;">恢复默认</button>
@@ -1186,7 +1189,7 @@ ${forcedStyles}
                 </div>
             </div>
 
-            <!-- 3. Debug 预览区域 ([变更] 默认隐藏，无折叠头，纯标签) -->
+            <!-- 3. Debug 预览区域 (默认隐藏，无折叠头，纯标签) -->
             <div id="pw-debug-wrapper" class="pw-card-section" style="display:none; margin-top: 10px; border-top: 1px solid var(--SmartThemeBorderColor); padding-top: 10px;">
                 <div style="margin-bottom: 5px;">
                     <label style="color: var(--SmartThemeQuoteColor); font-weight:bold;"><i class="fa-solid fa-bug"></i> 实时发送内容预览 (Debug)</label>
@@ -1260,12 +1263,12 @@ function bindEvents() {
         else { $body.slideDown(); $arrow.addClass('fa-flip-vertical'); }
     });
 
-    // --- [新增] Debug 切换按钮逻辑 ---
+    // --- Debug 切换按钮逻辑 ---
     $(document).on('click.pw', '#pw-toggle-debug-btn', function() {
         $('#pw-debug-wrapper').slideToggle();
     });
 
-    // --- [新增] NEW 标记点击跳转 ---
+    // --- NEW 标记点击跳转 ---
     $(document).on('click.pw', '#pw-new-badge', function() {
         $('.pw-tab[data-tab="system"]').click();
     });
@@ -1289,7 +1292,8 @@ function bindEvents() {
         toastr.info("正在更新...");
         window.TavernHelper.updateExtension(extensionName).then(res => {
             if (res.ok) {
-                toastr.success("更新成功！请刷新页面。");
+                // [修改] 更新提示语
+                toastr.success("更新成功！正在刷新页面...");
                 setTimeout(() => window.location.reload(), 1500);
             } else {
                 toastr.error("更新失败，请查看控制台。");
