@@ -927,7 +927,7 @@ async function openCreatorPopup() {
             </div>
 
             <!-- [Modified Prompt Text] -->
-            <textarea id="pw-request" class="pw-textarea pw-auto-height" placeholder="在此输入要求。点击上方模版块可插入参考结构（仅需填写您关注的部分，无需全部填满）...">${savedState.request || ''}</textarea>
+            <textarea id="pw-request" class="pw-textarea pw-auto-height" placeholder="在此输入要求。点击上方模版块可插入参考结构（无需全部填满）...">${savedState.request || ''}</textarea>
             <button id="pw-btn-gen" class="pw-btn gen">生成设定</button>
 
             <div id="pw-result-area" style="display:none; margin-top:15px;">
