@@ -1,0 +1,286 @@
+/* =========================================
+   Theme: Coffee Afternoon (v1.6.1)
+   Style: Vintage, Elegant, Paper-like
+========================================= */
+
+.pw-wrapper {
+    /* --- 调色板 Palette --- */
+    --coffee-bg-deep: #35423A;      /* 深苔藓绿 (背景) */
+    --coffee-paper: #F2EFE9;        /* 米白色 (纸张) */
+    --coffee-paper-dark: #E6E2D6;   /* 深一点的米色 (输入框/表头) */
+    --coffee-ink: #3D3226;          /* 深咖啡色 (主要文字) */
+    --coffee-ink-light: #6B5B4B;    /* 浅咖啡色 (次要文字) */
+    --coffee-gold: #C5A668;         /* 复古金 (高亮/按钮) */
+    --coffee-border: #8C7B65;       /* 灰棕色 (边框) */
+    --coffee-accent-red: #B85C5C;   /* 邮戳红 (警告) */
+    --coffee-accent-green: #5C7A66; /* 绑定绿 */
+
+    /* --- 映射到插件变量 --- */
+    --pw-text-main: var(--coffee-paper); 
+    --pw-border: var(--coffee-border);
+    --pw-paper-bg: var(--coffee-bg-deep);
+    --pw-danger: var(--coffee-accent-red);
+    
+    font-family: "Georgia", "Times New Roman", "Songti SC", "SimSun", serif;
+    background-color: var(--coffee-bg-deep);
+    
+    box-sizing: border-box;
+    width: 96%;
+    height: 96%;
+    margin: 2% auto;
+    border: 1px solid var(--coffee-gold);
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+/* 全局文字修正 */
+.pw-title, .pw-header-subtitle, .pw-tab {
+    color: var(--coffee-paper) !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.pw-header {
+    border-bottom: 1px solid var(--coffee-gold);
+    background: rgba(0,0,0,0.1);
+    margin-bottom: 12px;
+}
+
+/* =========================================
+   卡片与容器
+========================================= */
+.pw-card-section, 
+.pw-template-editor-area,
+.pw-diff-container,
+.pw-view-history .pw-history-item {
+    background-color: var(--coffee-paper) !important;
+    color: var(--coffee-ink) !important; 
+    border: 1px solid var(--coffee-border);
+    box-shadow: 2px 4px 8px rgba(0,0,0,0.2);
+    border-radius: 6px;
+}
+
+.pw-card-section *, 
+.pw-diff-container *, 
+.pw-history-item *,
+.pw-wi-list * {
+    color: var(--coffee-ink);
+}
+
+::placeholder { color: var(--coffee-ink-light) !important; opacity: 0.6; }
+
+.pw-scroll-area::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+.pw-scroll-area::-webkit-scrollbar-thumb { background: var(--coffee-gold); border: 1px solid var(--coffee-bg-deep); border-radius: 4px; }
+
+/* =========================================
+   Buttons
+========================================= */
+.pw-btn {
+    background: transparent;
+    color: var(--coffee-paper) !important;
+    border: 1px solid var(--coffee-paper);
+    border-radius: 6px;
+    transition: all 0.2s;
+    min-width: 0;
+    white-space: nowrap !important;
+}
+.pw-btn:hover {
+    background: var(--coffee-gold);
+    border-color: var(--coffee-gold);
+    color: var(--coffee-ink) !important;
+}
+
+.pw-btn.primary, .pw-btn.gen {
+    background: var(--coffee-ink) !important;
+    color: var(--coffee-paper) !important;
+    font-weight: bold;
+    border: 1px solid var(--coffee-ink);
+}
+.pw-btn.primary i, .pw-btn.gen i { color: inherit !important; }
+
+.pw-btn.primary:hover, .pw-btn.gen:hover {
+    background: var(--coffee-gold) !important;
+    color: var(--coffee-ink) !important;
+    border-color: var(--coffee-gold) !important;
+}
+
+.pw-btn.danger {
+    background: transparent !important;
+    color: var(--coffee-accent-red) !important;
+    border-color: var(--coffee-accent-red) !important;
+}
+.pw-btn.danger:hover {
+    background: var(--coffee-accent-red) !important;
+    color: #fff !important;
+}
+
+.pw-mini-btn, #pw-reset-prompt {
+    background: var(--coffee-paper-dark) !important;
+    color: var(--coffee-ink) !important;
+    border: 1px solid var(--coffee-border) !important;
+    border-radius: 6px;
+    padding: 6px 12px;
+    white-space: nowrap !important;
+}
+.pw-mini-btn:hover {
+    background: #FFF !important;
+    border-color: var(--coffee-gold) !important;
+}
+
+/* Debug 按钮 */
+.pw-toggle-switch {
+    background: rgba(0,0,0,0.05) !important;
+    border: 1px solid var(--coffee-border) !important;
+    color: var(--coffee-ink-light) !important;
+    padding: 1px 8px !important;
+    font-size: 0.65em !important;
+    border-radius: 10px !important;
+    height: 20px !important;
+    margin-right: auto; 
+    align-self: center !important;
+    white-space: nowrap;
+    opacity: 0.6;
+}
+.pw-toggle-switch:hover {
+    background: rgba(0,0,0,0.1) !important;
+    color: var(--coffee-ink) !important;
+    opacity: 1;
+}
+.pw-toggle-switch.active {
+    background: var(--coffee-gold) !important;
+    color: var(--coffee-ink) !important;
+    border-color: var(--coffee-gold) !important;
+    font-weight: bold;
+    opacity: 1;
+}
+
+.pw-row { flex-wrap: wrap; gap: 8px; }
+#pw-theme-select { min-width: 120px; }
+
+/* =========================================
+   [关键修改] 底部栏 & 按钮布局
+========================================= */
+.pw-footer { 
+    background: rgba(0,0,0,0.2) !important; 
+    border-top: 1px solid rgba(255,255,255,0.1); 
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap !important; /* 强制不换行 */
+    gap: 8px; 
+}
+
+/* 左侧图标组 */
+.pw-footer-group {
+    display: flex; 
+    gap: 5px; 
+    align-items: center;
+}
+
+.pw-compact-btn { 
+    color: var(--coffee-paper) !important; 
+    border-color: rgba(255,255,255,0.3) !important; 
+    border-radius: 6px; 
+    flex-shrink: 0;
+}
+.pw-compact-btn:hover { 
+    background: var(--coffee-gold) !important; 
+    color: var(--coffee-ink) !important; 
+    border-color: var(--coffee-gold) !important; 
+}
+
+/* 手机端优化 */
+@media screen and (max-width: 600px) {
+    /* 让右侧按钮组占据所有剩余空间 */
+    .pw-footer .pw-footer-group:last-child {
+        flex: 1;
+        width: auto;
+        display: flex;
+        justify-content: flex-end;
+        gap: 5px;
+    }
+
+    /* 右侧两个大按钮样式重构 */
+    .pw-footer .pw-btn {
+        flex: 1; /* 两个按钮平分空间 */
+        width: auto !important; /* 取消固定宽度 */
+        min-width: 0; 
+        white-space: nowrap !important; /* 强制单行，解决断句问题 */
+        padding: 0 4px !important;
+        font-size: 0.85em; /* 字号适中 */
+        height: 34px !important; 
+        line-height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
+}
+
+/* =========================================
+   History
+========================================= */
+.pw-history-item { background: var(--coffee-paper) !important; border-color: var(--coffee-border) !important; }
+.pw-hist-title-display { color: var(--coffee-ink) !important; font-weight: bold; }
+.pw-hist-desc, .pw-hist-meta { color: var(--coffee-ink-light) !important; opacity: 1 !important; }
+.pw-hist-header i.pw-hist-action-btn { color: var(--coffee-ink-light) !important; opacity: 0.6; }
+.pw-hist-header i.pw-hist-action-btn:hover { color: var(--coffee-gold) !important; opacity: 1; }
+
+/* =========================================
+   Diff / Refine View
+========================================= */
+.pw-diff-container { background: var(--coffee-paper) !important; }
+.pw-diff-tabs-bar { background: var(--coffee-paper-dark) !important; border-bottom: 1px solid var(--coffee-border) !important; }
+
+.pw-diff-tab { background: transparent !important; color: var(--coffee-ink-light) !important; border-right: 1px solid rgba(0,0,0,0.05) !important; opacity: 0.7; }
+.pw-diff-tab div { color: var(--coffee-ink-light) !important; }
+
+.pw-diff-tab.active { background: var(--coffee-gold) !important; color: var(--coffee-ink) !important; font-weight: bold; opacity: 1; border-bottom: 1px solid var(--coffee-gold) !important; }
+.pw-diff-tab.active div { color: var(--coffee-ink) !important; }
+
+.pw-diff-attr-name { background: var(--coffee-paper-dark) !important; color: var(--coffee-ink) !important; border-bottom: 1px solid var(--coffee-border); }
+.pw-diff-card { background: #FFF !important; border: 1px dashed var(--coffee-border); }
+.pw-diff-card.selected { background: #FFFBF0 !important; border: 1px solid var(--coffee-gold) !important; box-shadow: 0 0 0 1px var(--coffee-gold); }
+.pw-diff-label { background: var(--coffee-paper-dark) !important; color: var(--coffee-ink-light) !important; }
+.pw-diff-card.selected .pw-diff-label { background: var(--coffee-gold) !important; color: var(--coffee-ink) !important; }
+.pw-diff-textarea, .pw-diff-raw-textarea { color: var(--coffee-ink) !important; background: transparent !important; }
+.pw-diff-raw-view textarea { background: #FFF !important; border: 1px solid var(--coffee-border) !important; }
+
+/* =========================================
+   World Info & Greetings
+========================================= */
+.pw-wi-header { background: var(--coffee-paper-dark) !important; color: var(--coffee-ink) !important; border-bottom: 1px solid var(--coffee-border); }
+.pw-wi-item { background: #FFF !important; border-bottom: 1px dashed #DDD; }
+.pw-bound-status { color: var(--coffee-accent-green) !important; opacity: 1 !important; font-weight: bold; }
+
+.pw-keyword-input, .pw-pos-select, .pw-depth-input { background: #FFF !important; color: var(--coffee-ink) !important; border: 1px solid var(--coffee-border) !important; border-radius: 6px; }
+.pw-depth-btn { background: var(--coffee-paper-dark) !important; color: var(--coffee-ink) !important; border: 1px solid var(--coffee-border) !important; border-radius: 6px; }
+.pw-wi-info-badge { background: var(--coffee-ink) !important; color: var(--coffee-paper) !important; opacity: 0.8 !important; }
+.pw-wi-toggle-icon, .pw-wi-close-bar i { color: var(--coffee-gold) !important; opacity: 1 !important; }
+.pw-wi-toggle-icon.active { color: var(--coffee-ink) !important; }
+#pw-greetings-preview, .pw-wi-desc { background: var(--coffee-paper-dark) !important; color: var(--coffee-ink) !important; border: 1px solid var(--coffee-border); }
+
+/* =========================================
+   Input Fields & Template
+========================================= */
+.pw-input, .pw-textarea, .pw-select, .pw-result-textarea, .pw-refine-input {
+    background-color: #FFF !important;
+    border: 1px solid #C0B8A8 !important;
+    color: var(--coffee-ink) !important;
+    border-radius: 6px;
+}
+.pw-input:focus, .pw-textarea:focus { border-color: var(--coffee-gold) !important; box-shadow: 0 0 0 2px rgba(197, 166, 104, 0.2); }
+.pw-template-textarea { color: var(--coffee-ink) !important; background: transparent !important; }
+
+/* 模版块 */
+.pw-tag-chip {
+    background: #FFF !important;
+    border: 1px solid var(--coffee-border) !important;
+    border-left: 5px solid var(--coffee-gold) !important;
+    color: var(--coffee-ink) !important;
+    border-radius: 4px;
+}
+.pw-tag-chip:hover { background: #FFFAF0 !important; transform: translateY(-1px); }
+
+/* 快捷键按钮 */
+.pw-shortcut-btn { background: rgba(255,255,255,0.5) !important; border: 1px solid var(--coffee-border) !important; color: var(--coffee-ink) !important; border-radius: 6px;}
+.pw-shortcut-btn .code { background: rgba(0,0,0,0.1) !important; color: var(--coffee-ink) !important; border-color: rgba(0,0,0,0.1) !important; }
