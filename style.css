@@ -1,6 +1,6 @@
 /* =========================================
    File: style.css
-   Version: 1.6.0 (Alignment, Vertical Buttons & Toggles)
+   Version: 1.5.3 (Alignment & Toggles)
 ========================================= */
 
 .pw-wrapper {
@@ -67,15 +67,7 @@
     display: flex; flex-direction: column; gap: 8px; 
 }
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; flex-wrap: wrap; }
-
-/* [Modified] #3: Title/Label Font Size Reduced */
-.pw-section-label { 
-    font-weight: bold; 
-    font-size: 0.9em; /* Reduced from 1em */
-    padding: 2px 4px; 
-    color: var(--pw-text-main); 
-    opacity: 0.9; 
-}
+.pw-section-label { font-weight: bold; font-size: 1em; padding: 2px 4px; color: var(--pw-text-main); opacity: 0.9; }
 
 /* Info Display */
 .pw-info-display {
@@ -126,20 +118,27 @@
 }
 .pw-mini-btn:hover { opacity: 1; border-color: var(--pw-text-main); }
 
-/* [Modified] #4: Debug Toggle Button Styling */
-#pw-toggle-debug-btn {
-    border-radius: 50px !important;
-    padding: 4px 12px !important;
-    transition: all 0.3s ease;
+/* [New] Toggle Switch Button (Debug) */
+.pw-toggle-switch {
+    border-radius: 50px !important; /* Capsule shape */
+    padding: 4px 14px !important;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     border: 1px solid var(--pw-border);
     background: rgba(128,128,128,0.1);
+    color: var(--pw-text-main);
+    opacity: 0.7;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.85em; font-weight: bold;
 }
-/* Active state for Debug Button (Requires JS to toggle 'active' class) */
-#pw-toggle-debug-btn.active {
-    background: var(--pw-text-main) !important;
-    color: var(--smart-theme-bg, #000) !important;
-    border-color: var(--pw-text-main) !important;
-    box-shadow: 0 0 8px rgba(128, 128, 128, 0.3);
+.pw-toggle-switch:hover { opacity: 1; }
+
+.pw-toggle-switch.active {
+    background: var(--pw-text-main); /* Active color */
+    color: var(--smart-theme-bg, #000); /* Contrast text */
+    border-color: transparent;
+    opacity: 1;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
 /* Template Editor */
@@ -166,57 +165,56 @@
 .pw-template-footer { display: flex; justify-content: space-between; align-items: center; background: rgba(128,128,128,0.1); padding: 5px 10px; border-top: 1px solid var(--pw-border); }
 
 /* =========================================
-   [Modified] #2: Template Shortcuts (Vertical Structure)
+   [Fix] Template Shortcuts (Stacked like Prompt Buttons)
 ========================================= */
 .pw-shortcut-bar { display: flex; gap: 5px; align-items: center; }
 
 .pw-shortcut-btn { 
-    /* Changed to Vertical layout */
+    /* Stacked Layout - Same as pw-var-btn */
     display: inline-flex; 
     flex-direction: column; 
-    align-items: center;
+    align-items: center; 
     justify-content: center;
     
-    padding: 6px 8px; 
-    cursor: pointer; 
-    font-size: 0.85em; 
-    background: rgba(128,128,128,0.15); 
-    color: var(--pw-text-main); 
-    border-radius: 4px; 
+    padding: 5px 2px; /* Vertical padding > Horizontal */
+    min-width: 50px; 
+    
     border: 1px solid var(--pw-border); 
-    opacity: 0.8; 
+    border-radius: 4px; 
+    background: rgba(128,128,128,0.08); 
+    
+    color: var(--pw-text-main);
+    cursor: pointer; 
     transition: all 0.2s;
-    text-align: center;
-    min-width: 45px; /* Ensure uniform look */
+    user-select: none;
+    line-height: 1.1;
+    opacity: 0.9;
 }
-.pw-shortcut-btn:hover { opacity: 1; border-color: var(--pw-text-main); background: rgba(128,128,128,0.25); }
+.pw-shortcut-btn:hover { opacity: 1; border-color: var(--pw-text-main); background: rgba(128,128,128,0.15); transform: translateY(-1px); }
 
-/* Box style code for shortcuts (moved to bottom) */
+/* Shortcut Label (Top) */
+.pw-shortcut-btn span:first-child {
+    font-size: 0.75em; 
+    font-weight: bold;
+    opacity: 0.9;
+    margin-bottom: 1px;
+}
+
+/* Shortcut Key Code (Bottom) */
 .pw-shortcut-btn .code {
     margin-left: 0; 
-    margin-top: 4px; /* Space on top */
-    
+    background: transparent; 
+    border: none;
+    padding: 0;
     font-family: Consolas, "Courier New", monospace;
-    background: rgba(128, 128, 128, 0.2); 
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-size: 0.9em;
-    font-weight: bold;
-    border: 1px solid rgba(128, 128, 128, 0.2);
-    opacity: 0.9;
-    width: 100%; /* Fill width */
-    box-sizing: border-box;
+    font-size: 0.7em; 
+    opacity: 0.6;
 }
 
 /* =========================================
-   [Modified] #5: Prompt Variable Buttons (Height Increased)
+   Variable Buttons (Stacked - Tiny Size)
 ========================================= */
-.pw-var-btns { 
-    display: flex; 
-    flex-wrap: wrap; 
-    gap: 8px; 
-    margin-bottom: 8px; 
-}
+.pw-var-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; } /* Gap 8px */
 
 .pw-var-btn { 
     display: inline-flex; 
@@ -224,10 +222,8 @@
     align-items: center; 
     justify-content: center;
     
-    /* Increased Height and Padding */
-    padding: 8px 6px; 
-    min-height: 48px; /* Taller */
-    min-width: 55px; 
+    padding: 5px 2px; 
+    min-width: 50px; 
     
     border: 1px solid var(--pw-border); 
     border-radius: 4px; 
@@ -247,24 +243,8 @@
     transform: translateY(-1px); 
 }
 
-/* Label (Top Row) */
-.pw-var-btn span:first-child {
-    font-size: 0.75em; 
-    font-weight: bold;
-    opacity: 0.9;
-    margin-bottom: 3px; /* Slightly more space */
-}
-
-/* Variable Code (Bottom Row) */
-.pw-var-btn .code {
-    margin-left: 0; 
-    background: transparent; 
-    border: none;
-    padding: 0;
-    font-family: Consolas, "Courier New", monospace;
-    font-size: 0.7em; 
-    opacity: 0.6;
-}
+.pw-var-btn span:first-child { font-size: 0.75em; font-weight: bold; opacity: 0.9; margin-bottom: 1px; }
+.pw-var-btn .code { margin-left: 0; background: transparent; border: none; padding: 0; font-family: Consolas, "Courier New", monospace; font-size: 0.7em; opacity: 0.6; }
 
 /* =========================================
    Result & Refine
@@ -284,24 +264,40 @@
 .pw-float-quote-btn { position: fixed; top: 20%; right: 0; background: var(--pw-paper-bg); color: var(--pw-text-main); padding: 8px 12px; border-radius: 20px 0 0 20px; font-weight: bold; font-size: 0.85em; box-shadow: -2px 2px 8px rgba(0,0,0,0.4); cursor: pointer; z-index: 9999; display: none; align-items: center; gap: 4px; border: 1px solid var(--pw-border); border-right: none; backdrop-filter: blur(5px); }
 
 /* =========================================
-   World Info (Layout & Spacing)
+   [Fix] World Info (Layout & Spacing)
 ========================================= */
 .pw-wi-book { border: 1px solid var(--pw-border); border-radius: 6px; margin-bottom: 6px; overflow: hidden; }
 .pw-wi-header { padding: 8px; background: rgba(128,128,128,0.1); cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: var(--pw-text-main); }
+/* Header items spacing */
 .pw-wi-header-checkbox { margin-right: 8px; transform: scale(1.2); cursor: pointer; }
 
+/* [Fix] Book Title: Allow growing, use ellipsis */
 .pw-wi-book-title { 
     flex: 1; 
     display: block; 
     overflow: visible; 
     text-overflow: clip; 
     white-space: normal; 
-    word-break: break-word; 
+    word-break: break-word; /* Ensure long words wrap */
+    
     margin-right: 10px; 
     font-weight: bold;
     min-width: 0; 
     line-height: 1.2;
-    text-align: left; 
+    text-align: left; /* [Fix] Left Align */
+}
+
+/* [Fix] Entry Title: Force Left Align */
+.pw-wi-title-text {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    font-weight: bold;
+    font-size: 0.9em;
+    
+    text-align: left; /* Critical Fix */
+    white-space: normal; /* Allow wrap */
+    line-height: 1.3;
 }
 
 .pw-wi-header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
@@ -327,36 +323,22 @@
 
 .pw-wi-list { display: none; padding: 8px; border-top: 1px solid var(--pw-border); }
 .pw-wi-item { background: rgba(128,128,128,0.05); padding: 6px 10px; border-radius: 4px; margin-bottom: 4px; }
-
-/* [Modified] #1: World Info Item Alignment Fix */
-.pw-wi-item-row { 
-    display: flex; 
-    align-items: flex-start; /* Changed from center to flex-start for multi-line */
-    gap: 8px; 
-    text-align: left; /* Ensure left alignment */
-}
-/* Ensure the text span inside the row takes up space and wraps correctly */
-.pw-wi-item-row span {
-    flex: 1; 
-    word-break: break-word;
-    line-height: 1.4;
-    padding-top: 2px; /* Visual alignment with checkbox */
-}
-
-.pw-wi-check { transform: scale(1.1); cursor: pointer; margin-top: 2px; /* Align with text top */ }
-.pw-wi-toggle-icon { color: var(--pw-text-main); opacity: 0.5; cursor: pointer; margin-left: 8px; margin-top: 2px; }
+.pw-wi-item-row { display: flex; align-items: center; gap: 8px; }
+.pw-wi-check { transform: scale(1.1); cursor: pointer; margin-right: 8px; } /* Add margin */
+.pw-wi-toggle-icon { color: var(--pw-text-main); opacity: 0.5; cursor: pointer; margin-left: 8px; flex-shrink: 0;}
 .pw-wi-toggle-icon.active { opacity: 1; }
-.pw-remove-book-icon { color: var(--pw-danger); cursor: pointer; transition: transform 0.2s; margin-top: 2px; }
+.pw-remove-book-icon { color: var(--pw-danger); cursor: pointer; transition: transform 0.2s; }
 .pw-remove-book-icon:hover { transform: scale(1.1); }
 .pw-bound-status { color: var(--pw-text-main) !important; opacity: 0.6; font-size: 0.8em; margin-left: 5px; font-weight: bold; }
 .pw-wi-desc, #pw-greetings-preview { display: none; background: rgba(128,128,128,0.1) !important; color: var(--pw-text-main) !important; border: 1px solid var(--pw-border); border-radius: 4px; padding: 8px; font-size: 0.9em; width: 100%; box-sizing: border-box; resize: vertical; line-height: 1.5; margin-top: 5px; }
 
+/* [Fix] Smaller and lighter info badges */
 .pw-wi-info-badge { 
     font-size: 0.65em; 
     background: rgba(128,128,128,0.1); 
     padding: 1px 4px; border-radius: 3px; 
     color: var(--pw-text-main); 
-    opacity: 0.4; 
+    opacity: 0.4; /* Much lighter */
     margin-right: 5px; 
     white-space: nowrap; 
     vertical-align: middle;
@@ -398,7 +380,7 @@
 .pw-badge.template { background-color: rgba(255, 165, 0, 0.2); color: #ffbc42; border: 1px solid rgba(255, 165, 0, 0.4); }
 
 /* =========================================
-   Diff / Refine View
+   [Fix] Diff / Refine View (Hardcoded Legacy Style & Responsive)
 ========================================= */
 .pw-diff-container {
     background: var(--pw-diff-bg); /* Force Dark */
@@ -438,7 +420,7 @@
 #pw-diff-cancel { background: transparent; border: 1px solid var(--pw-diff-red); color: var(--pw-diff-red); }
 #pw-diff-cancel:hover { background: rgba(255, 107, 107, 0.1); }
 
-/* Raw Views in Diff */
+/* Raw Views in Diff [Fix: Smaller Font] */
 .pw-diff-raw-view { display: none; height: 100%; }
 .pw-diff-raw-textarea { 
     width: 100%; height: 100%; background: #111; color: #ddd; 
@@ -458,6 +440,7 @@
 #pw_persona_tool_btn { color: var(--smart-theme-body-color); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin-right: 5px; font-size: 1.1em; opacity: 0.7; transition: opacity 0.2s; }
 #pw_persona_tool_btn:hover { opacity: 1; color: var(--pw-text-main); }
 
+/* [Fix] Prompt Editor Header Left Align & Size */
 .pw-context-header { 
     padding: 8px 12px; 
     background: var(--SmartThemeBtnBg); 
@@ -471,6 +454,7 @@
     font-weight: bold; 
     margin-bottom: 5px;
     text-align: left; 
+    font-size: 0.85em; /* [Fix] Smaller Title */
 }
 .pw-context-header:hover { background: var(--SmartThemeBtnHoverBg); }
 .pw-context-header i { margin-right: 6px; }
@@ -478,12 +462,14 @@
 .swal2-actions { flex-wrap: nowrap !important; }
 .swal2-styled { white-space: nowrap !important; width: auto !important; max-width: none !important; flex-shrink: 0 !important; }
 
-/* Responsive Layout */
+/* [Fix] Responsive Layout for Mobile */
 @media screen and (max-width: 600px) {
     .pw-row { flex-wrap: wrap; }
+    /* [Fix] API Labels Left Align */
     .pw-row label { width: 100%; margin-bottom: 4px; text-align: left; display: block; }
     .pw-input, .pw-select, #pw-api-url, #pw-api-key { min-width: 0 !important; width: 100% !important; flex: 1 1 auto; }
     
+    /* WI Tools */
     .pw-wi-depth-tools { gap: 5px; }
     .pw-wi-depth-tools .pw-keyword-input, 
     .pw-wi-depth-tools .pw-pos-select, 
@@ -501,6 +487,7 @@
     .pw-wi-filter-row span { font-size: 0.8em; align-self: center; }
     #d-reset { margin-left: 2px; padding: 4px 6px; font-size: 0.8em; white-space: nowrap; }
 
+    /* [Fix] Diff Cards Stack Vertically on Mobile */
     .pw-diff-cards { flex-direction: column; }
     .pw-diff-card { width: 100%; }
     
