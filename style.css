@@ -1,6 +1,6 @@
 /* =========================================
    File: style.css
-   Version: 1.5.2 (Ultra Compact Buttons)
+   Version: 1.7 (Full Restoration + Prompt Buttons)
 ========================================= */
 
 .pw-wrapper {
@@ -10,7 +10,7 @@
     --pw-paper-bg: var(--smart-theme-input-bg, rgba(0, 0, 0, 0.05)); 
     --pw-danger: #ff6b6b;
     
-    /* Diff 界面专用硬编码颜色 */
+    /* Diff 界面专用硬编码颜色 (深色模式) */
     --pw-diff-green: #83c168;
     --pw-diff-red: #ff6b6b;
     --pw-diff-bg: #1a1a1a; 
@@ -122,7 +122,7 @@
 .pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .pw-tags-label { 
     font-weight: bold; opacity: 0.8; font-size: 0.85em; color: var(--pw-text-main); 
-    cursor: pointer; user-select: none; /* Clickable Header */
+    cursor: pointer; user-select: none; /* Make clickable */
 }
 .pw-tags-label:hover { opacity: 1; }
 
@@ -140,95 +140,38 @@
 .pw-template-textarea { width: 100%; height: 200px; font-family: monospace; font-size: 0.85em; background: transparent; color: var(--pw-text-main); border: none; resize: vertical; padding: 8px; white-space: pre; outline: none; box-sizing: border-box; }
 .pw-template-toolbar { display: flex; justify-content: flex-start; align-items: center; padding: 5px 10px; background: rgba(128,128,128,0.2); border-bottom: 1px solid var(--pw-border); border-radius: 6px 6px 0 0; }
 .pw-template-footer { display: flex; justify-content: space-between; align-items: center; background: rgba(128,128,128,0.1); padding: 5px 10px; border-top: 1px solid var(--pw-border); }
-
-/* =========================================
-   Shortcut Buttons (Horizontal - Tab, Enter etc.)
-========================================= */
 .pw-shortcut-bar { display: flex; gap: 5px; align-items: center; }
-
-.pw-shortcut-btn { 
-    padding: 4px 8px; 
-    cursor: pointer; 
-    font-size: 0.85em; 
-    background: rgba(128,128,128,0.15); 
-    color: var(--pw-text-main); 
-    border-radius: 4px; 
-    border: 1px solid var(--pw-border); 
-    opacity: 0.8; 
-    display: inline-flex; align-items: center;
-    transition: all 0.2s;
-}
-.pw-shortcut-btn:hover { opacity: 1; border-color: var(--pw-text-main); background: rgba(128,128,128,0.25); }
-
-/* Box style code for shortcuts */
-.pw-shortcut-btn .code {
-    margin-left: 6px; 
-    font-family: Consolas, "Courier New", monospace;
-    background: rgba(128, 128, 128, 0.2); 
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-size: 0.9em;
-    font-weight: bold;
-    border: 1px solid rgba(128, 128, 128, 0.2);
-    opacity: 0.9;
-}
+.pw-shortcut-btn { padding: 4px 8px; cursor: pointer; font-size: 0.85em; background: rgba(128,128,128,0.2); color: inherit; border-radius: 4px; border: 1px solid transparent; opacity: 0.8; font-family: monospace; }
+.pw-shortcut-btn:hover { opacity: 1; border-color: var(--pw-text-main); }
 
 /* =========================================
-   Variable Buttons (Stacked - Tiny Size)
+   [补充] Prompt Variables Buttons (System Tab)
+   用于 System Tab 中的 {{user}}, {{char}} 等按钮
 ========================================= */
-.pw-var-btns { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 8px; }
-
-.pw-var-btn { 
-    /* Stacked Layout */
-    display: inline-flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: center;
-    
-    /* Tiny Sizing */
-    padding: 2px 6px; 
-    min-width: 40px; 
-    
-    border: 1px solid var(--pw-border); 
-    border-radius: 4px; 
-    background: rgba(128,128,128,0.08); 
-    
-    color: var(--pw-text-main);
-    cursor: pointer; 
+.pw-var-btns {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;
+}
+.pw-var-btn {
+    font-size: 0.85em; padding: 4px 8px;
+    border: 1px solid var(--pw-border); border-radius: 4px;
+    cursor: pointer; opacity: 0.8; color: var(--pw-text-main);
+    background: rgba(128,128,128,0.1);
+    display: inline-flex; align-items: center; gap: 6px;
     transition: all 0.2s;
-    user-select: none;
-    line-height: 1.1; /* Tight line height */
 }
-
-.pw-var-btn:hover { 
-    opacity: 1; 
-    border-color: var(--pw-text-main); 
-    background: rgba(128,128,128,0.15); 
-    transform: translateY(-1px); 
+.pw-var-btn:hover {
+    opacity: 1; border-color: var(--pw-text-main);
+    background: rgba(128,128,128,0.2);
 }
-
-/* Label (Top Row) */
-.pw-var-btn span:first-child {
-    font-size: 0.75em; 
-    font-weight: bold;
-    opacity: 0.9;
-    margin-bottom: 1px;
-}
-
-/* Variable Code (Bottom Row) */
 .pw-var-btn .code {
-    margin-left: 0; 
-    background: transparent; 
-    border: none;
-    padding: 0;
-    font-family: Consolas, "Courier New", monospace;
-    font-size: 0.7em; 
-    opacity: 0.6;
+    font-family: monospace;
+    background: rgba(0,0,0,0.15);
+    padding: 1px 5px; border-radius: 3px;
+    font-size: 0.9em;
+    opacity: 0.9;
 }
 
-/* =========================================
-   Result & Refine
-========================================= */
+/* Result & Refine */
 .pw-relative-container { position: relative; }
 .pw-result-textarea {
     width: 100%; min-height: 450px; background: var(--pw-paper-bg);
@@ -255,12 +198,10 @@
 .pw-wi-book-title { 
     flex: 1; 
     display: block; 
-    /* Changed for full text wrapping */
     overflow: visible; 
     text-overflow: clip; 
     white-space: normal; 
-    word-break: break-word; /* Ensure long words wrap */
-    
+    word-break: break-word; 
     margin-right: 10px; 
     font-weight: bold;
     min-width: 0; 
