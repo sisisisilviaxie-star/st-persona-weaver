@@ -1,6 +1,6 @@
 /* =========================================
    File: style.css
-   Version: 1.5.4 (Accent Bars & Visibility Base)
+   Version: 1.5.4 (Decoration Bar Added)
 ========================================= */
 
 .pw-wrapper {
@@ -10,8 +10,8 @@
     --pw-paper-bg: var(--smart-theme-input-bg, rgba(0, 0, 0, 0.05)); 
     --pw-danger: #ff6b6b;
     
-    /* 自动获取酒馆的强调色，如果没有则用文字色 */
-    --pw-accent-color: var(--SmartThemeQuoteColor, var(--pw-text-main));
+    /* [New] 装饰条颜色：优先使用酒馆的引用色(强调色)，如果没有则用文字色 */
+    --pw-accent: var(--SmartThemeQuoteColor, var(--smart-theme-body-color));
 
     /* Diff 界面专用硬编码颜色 */
     --pw-diff-green: #83c168;
@@ -61,14 +61,20 @@
 .pw-view.active { display: flex; }
 
 /* =========================================
-   General Components
+   General Components (Card with Decoration)
 ========================================= */
 .pw-card-section { 
     background: rgba(128, 128, 128, 0.1); 
     border: 1px solid var(--pw-border); 
     border-radius: 8px; padding: 10px; 
-    display: flex; flex-direction: column; gap: 8px; 
+    display: flex; flex-direction: column; gap: 8px;
+    
+    /* [NEW] 左侧装饰条样式 */
+    border-left: 5px solid var(--pw-accent); 
+    position: relative;
+    overflow: hidden; /* 防止圆角溢出 */
 }
+
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; flex-wrap: wrap; }
 .pw-section-label { font-weight: bold; font-size: 1em; padding: 2px 4px; color: var(--pw-text-main); opacity: 0.9; }
 
@@ -77,6 +83,9 @@
     display: flex; align-items: center; gap: 10px; 
     background: rgba(128,128,128,0.1); padding: 8px; border-radius: 6px; 
     border: 1px solid var(--pw-border); margin-bottom: 5px;
+    
+    /* [NEW] Info 区域也可以加个细一点的装饰条 */
+    border-left: 3px solid var(--pw-text-main);
 }
 .pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--pw-text-main); font-size: 1.05em; }
 #pw-display-name { text-decoration: underline; opacity: 0.9; }
@@ -121,9 +130,9 @@
 }
 .pw-mini-btn:hover { opacity: 1; border-color: var(--pw-text-main); }
 
-/* [Fix] Debug Toggle Switch Style */
+/* Toggle Switch Button (Debug) */
 .pw-toggle-switch {
-    border-radius: 50px !important; /* Capsule shape */
+    border-radius: 50px !important;
     padding: 4px 14px !important;
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     border: 1px solid var(--pw-border);
@@ -135,7 +144,6 @@
     font-size: 0.85em; font-weight: bold;
 }
 .pw-toggle-switch:hover { opacity: 1; }
-
 .pw-toggle-switch.active {
     background: var(--pw-text-main);
     color: var(--smart-theme-bg, #000);
@@ -148,78 +156,52 @@
 .pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .pw-tags-label { 
     font-weight: bold; opacity: 0.8; font-size: 0.85em; color: var(--pw-text-main); 
-    cursor: pointer; user-select: none;
+    cursor: pointer; user-select: none; 
 }
 .pw-tags-label:hover { opacity: 1; }
 
 .pw-tags-edit-toggle { cursor: pointer; font-size: 0.8em; opacity: 0.7; text-decoration: underline; }
 .pw-tags-edit-toggle.editing { color: var(--pw-danger) !important; }
 .pw-tags-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-
-/* [NEW] Tag Chip with Accent Bar (Yellow/Themed Bar) */
 .pw-tag-chip {
-    display: inline-flex; align-items: center; 
-    background: rgba(128, 128, 128, 0.15);
-    border: 1px solid var(--pw-border); 
-    /* Remove default left border logic to avoid double borders if applied differently */
-    border-left: 4px solid var(--pw-accent-color); /* The accent bar */
-    padding: 4px 10px; border-radius: 4px; /* Slightly sharper radius for chips */
+    display: inline-flex; align-items: center; background: rgba(128, 128, 128, 0.15);
+    border: 1px solid var(--pw-border); padding: 4px 10px; border-radius: 6px;
     font-size: 0.9em; cursor: pointer; transition: all 0.2s; color: var(--pw-text-main);
 }
 .pw-tag-chip:hover { background: rgba(128, 128, 128, 0.3); transform: translateY(-1px); }
 
-.pw-template-editor-area { display: none; flex-direction: column; gap: 0; background: var(--pw-paper-bg); border-radius: 6px; border: 1px solid var(--pw-border); overflow: hidden; }
+.pw-template-editor-area { display: none; flex-direction: column; gap: 0; background: var(--pw-paper-bg); border-radius: 6px; border: 1px solid var(--pw-border); overflow: hidden; 
+    border-left: 5px solid var(--pw-accent); /* Editor also gets decoration */
+}
 .pw-template-textarea { width: 100%; height: 200px; font-family: monospace; font-size: 0.85em; background: transparent; color: var(--pw-text-main); border: none; resize: vertical; padding: 8px; white-space: pre; outline: none; box-sizing: border-box; }
 .pw-template-toolbar { display: flex; justify-content: flex-start; align-items: center; padding: 5px 10px; background: rgba(128,128,128,0.2); border-bottom: 1px solid var(--pw-border); border-radius: 6px 6px 0 0; }
 .pw-template-footer { display: flex; justify-content: space-between; align-items: center; background: rgba(128,128,128,0.1); padding: 5px 10px; border-top: 1px solid var(--pw-border); }
 
-/* =========================================
-   Shortcut Buttons (Stacked like Prompt Buttons)
-========================================= */
+/* Shortcut Buttons */
 .pw-shortcut-bar { display: flex; gap: 5px; align-items: center; }
-
 .pw-shortcut-btn { 
-    display: inline-flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: center;
-    padding: 5px 2px;
-    min-width: 50px; 
-    border: 1px solid var(--pw-border); 
-    border-radius: 4px; 
-    background: rgba(128,128,128,0.08); 
-    color: var(--pw-text-main);
-    cursor: pointer; 
-    transition: all 0.2s;
-    user-select: none;
-    line-height: 1.1;
-    opacity: 0.9;
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 5px 2px; min-width: 50px; 
+    border: 1px solid var(--pw-border); border-radius: 4px; background: rgba(128,128,128,0.08); 
+    color: var(--pw-text-main); cursor: pointer; transition: all 0.2s; user-select: none; line-height: 1.1; opacity: 0.9;
 }
 .pw-shortcut-btn:hover { opacity: 1; border-color: var(--pw-text-main); background: rgba(128,128,128,0.15); transform: translateY(-1px); }
 .pw-shortcut-btn span:first-child { font-size: 0.75em; font-weight: bold; opacity: 0.9; margin-bottom: 1px; }
 .pw-shortcut-btn .code { margin-left: 0; background: transparent; border: none; padding: 0; font-family: Consolas, "Courier New", monospace; font-size: 0.7em; opacity: 0.6; }
 
-/* =========================================
-   Variable Buttons (Stacked - Tiny Size)
-========================================= */
+/* Variable Buttons */
 .pw-var-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-
 .pw-var-btn { 
     display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 5px 2px; min-width: 50px; 
-    border: 1px solid var(--pw-border); 
-    border-radius: 4px; 
-    background: rgba(128,128,128,0.08); 
-    color: var(--pw-text-main);
-    cursor: pointer; transition: all 0.2s; user-select: none; line-height: 1.1;
+    border: 1px solid var(--pw-border); border-radius: 4px; background: rgba(128,128,128,0.08); 
+    color: var(--pw-text-main); cursor: pointer; transition: all 0.2s; user-select: none; line-height: 1.1;
 }
 .pw-var-btn:hover { opacity: 1; border-color: var(--pw-text-main); background: rgba(128,128,128,0.15); transform: translateY(-1px); }
 .pw-var-btn span:first-child { font-size: 0.75em; font-weight: bold; opacity: 0.9; margin-bottom: 1px; }
 .pw-var-btn .code { margin-left: 0; background: transparent; border: none; padding: 0; font-family: Consolas, "Courier New", monospace; font-size: 0.7em; opacity: 0.6; }
 
-/* =========================================
-   Result & Refine
-========================================= */
+/* Result & Refine */
 .pw-relative-container { position: relative; }
 .pw-result-textarea {
     width: 100%; min-height: 450px; background: var(--pw-paper-bg);
@@ -234,34 +216,24 @@
 .pw-refine-btn-text { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 2px; }
 .pw-float-quote-btn { position: fixed; top: 20%; right: 0; background: var(--pw-paper-bg); color: var(--pw-text-main); padding: 8px 12px; border-radius: 20px 0 0 20px; font-weight: bold; font-size: 0.85em; box-shadow: -2px 2px 8px rgba(0,0,0,0.4); cursor: pointer; z-index: 9999; display: none; align-items: center; gap: 4px; border: 1px solid var(--pw-border); border-right: none; backdrop-filter: blur(5px); }
 
-/* =========================================
-   [Fix] World Info (Layout & Spacing)
-========================================= */
+/* World Info */
 .pw-wi-book { border: 1px solid var(--pw-border); border-radius: 6px; margin-bottom: 6px; overflow: hidden; }
 .pw-wi-header { padding: 8px; background: rgba(128,128,128,0.1); cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: var(--pw-text-main); }
 .pw-wi-header-checkbox { margin-right: 8px; transform: scale(1.2); cursor: pointer; }
-
-/* Book Title */
 .pw-wi-book-title { 
-    flex: 1; display: block; overflow: visible; text-overflow: clip; 
-    white-space: normal; word-break: break-word; 
-    margin-right: 10px; font-weight: bold; min-width: 0; line-height: 1.2;
-    text-align: left;
+    flex: 1; display: block; overflow: visible; text-overflow: clip; white-space: normal; word-break: break-word;
+    margin-right: 10px; font-weight: bold; min-width: 0; line-height: 1.2; text-align: left; 
 }
-
-/* Entry Title */
 .pw-wi-title-text {
-    flex: 1; display: flex; align-items: center;
-    font-weight: bold; font-size: 0.9em;
+    flex: 1; display: flex; align-items: center; font-weight: bold; font-size: 0.9em;
     text-align: left; white-space: normal; line-height: 1.3;
 }
-
 .pw-wi-header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .pw-wi-controls { display: flex; gap: 6px; width: 100%; align-items: center; flex-wrap: nowrap !important; }
 .pw-wi-select { flex-grow: 1; width: 100%; min-width: 0; }
 .pw-wi-add-btn { flex-shrink: 0; padding: 6px 12px; width: auto; white-space: nowrap; }
 
-/* Filter Tools (3 Rows) */
+/* Filter Tools */
 .pw-wi-depth-tools { display: none; flex-direction: column; gap: 8px; padding: 10px; background: rgba(0,0,0,0.1); border-bottom: 1px solid var(--pw-border); }
 .pw-wi-filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; width: 100%; }
 .pw-keyword-input { width: 100%; padding: 6px; font-size: 0.9em; }
@@ -273,30 +245,24 @@
 .pw-wi-list { display: none; padding: 8px; border-top: 1px solid var(--pw-border); }
 .pw-wi-item { background: rgba(128,128,128,0.05); padding: 6px 10px; border-radius: 4px; margin-bottom: 4px; }
 .pw-wi-item-row { display: flex; align-items: center; gap: 8px; }
-.pw-wi-check { transform: scale(1.1); cursor: pointer; margin-right: 8px; }
+.pw-wi-check { transform: scale(1.1); cursor: pointer; margin-right: 8px; } 
 .pw-wi-toggle-icon { color: var(--pw-text-main); opacity: 0.5; cursor: pointer; margin-left: 8px; flex-shrink: 0;}
 .pw-wi-toggle-icon.active { opacity: 1; }
 .pw-remove-book-icon { color: var(--pw-danger); cursor: pointer; transition: transform 0.2s; }
 .pw-remove-book-icon:hover { transform: scale(1.1); }
 .pw-bound-status { color: var(--pw-text-main) !important; opacity: 0.6; font-size: 0.8em; margin-left: 5px; font-weight: bold; }
 .pw-wi-desc, #pw-greetings-preview { display: none; background: rgba(128,128,128,0.1) !important; color: var(--pw-text-main) !important; border: 1px solid var(--pw-border); border-radius: 4px; padding: 8px; font-size: 0.9em; width: 100%; box-sizing: border-box; resize: vertical; line-height: 1.5; margin-top: 5px; }
+.pw-wi-info-badge { font-size: 0.65em; background: rgba(128,128,128,0.1); padding: 1px 4px; border-radius: 3px; color: var(--pw-text-main); opacity: 0.4; margin-right: 5px; white-space: nowrap; vertical-align: middle; }
 
-/* Info Badges */
-.pw-wi-info-badge { 
-    font-size: 0.65em; background: rgba(128,128,128,0.1); 
-    padding: 1px 4px; border-radius: 3px; color: var(--pw-text-main); 
-    opacity: 0.4; margin-right: 5px; white-space: nowrap; vertical-align: middle;
-}
-
-/* =========================================
-   History Section
-========================================= */
+/* History Section */
 .pw-search-box { position: relative; display: flex; align-items: center; margin-bottom: 10px; background: rgba(128,128,128,0.1); border-radius: 6px; border: 1px solid var(--pw-border); width: 100%; }
 .pw-search-icon { position: absolute; left: 10px; opacity: 0.5; pointer-events: none; color: var(--pw-text-main); }
 .pw-search-input { width: 100%; padding-left: 32px !important; padding-right: 30px; border: none; background: transparent; color: var(--pw-text-main); box-sizing: border-box; }
 .pw-search-clear { position: absolute; right: 10px; opacity: 0.5; cursor: pointer; z-index: 2; color: var(--pw-text-main); }
 
-.pw-history-item { background: rgba(128,128,128,0.1); border: 1px solid var(--pw-border); border-radius: 6px; padding: 8px; margin-bottom: 6px; display: flex; gap: 8px; cursor: pointer; transition: background 0.2s; }
+.pw-history-item { background: rgba(128,128,128,0.1); border: 1px solid var(--pw-border); border-radius: 6px; padding: 8px; margin-bottom: 6px; display: flex; gap: 8px; cursor: pointer; transition: background 0.2s; 
+    border-left: 4px solid var(--pw-accent); /* History items get a smaller decoration */
+}
 .pw-history-item:hover { background: rgba(128,128,128,0.2); }
 .pw-hist-main { flex: 1; display: flex; flex-direction: column; gap: 3px; overflow: hidden; }
 .pw-hist-header { display: flex; align-items: center; justify-content: space-between; gap: 5px; width: 100%; }
@@ -319,9 +285,7 @@
 .pw-badge.persona { background-color: rgba(65, 150, 255, 0.2); color: #88c0ff; border: 1px solid rgba(65, 150, 255, 0.4); }
 .pw-badge.template { background-color: rgba(255, 165, 0, 0.2); color: #ffbc42; border: 1px solid rgba(255, 165, 0, 0.4); }
 
-/* =========================================
-   [Fix] Diff / Refine View
-========================================= */
+/* Diff / Refine View */
 .pw-diff-container { background: var(--pw-diff-bg); color: #fff; padding: 0; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000; box-sizing: border-box; display: flex; flex-direction: column; }
 .pw-diff-tabs-bar { border-bottom: 1px solid #444; background: rgba(0,0,0,0.3); padding: 0; gap: 0; display: flex; }
 .pw-diff-tab { padding: 10px 20px; cursor: pointer; border: none; border-right: 1px solid #444; border-bottom: 1px solid #444; background: transparent; color: #aaa; opacity: 1; font-size: 0.9em; display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -346,14 +310,11 @@
 .pw-diff-raw-view { display: none; height: 100%; }
 .pw-diff-raw-textarea { width: 100%; height: 100%; background: #111; color: #ddd; border: 1px solid #444; padding: 10px; font-family: monospace; resize: none; outline: none; font-size: 0.85em; line-height: 1.4; }
 
-/* =========================================
-   System & Footer
-========================================= */
+/* System & Footer */
 .pw-footer { margin-top: auto; padding: 8px; border-top: 1px solid var(--pw-border); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-shrink: 0; background: rgba(128,128,128,0.1); }
 .pw-footer-group { display: flex; gap: 5px; align-items: center; }
 .pw-compact-btn { width: 32px; height: 32px; border-radius: 4px; border: 1px solid var(--pw-border); background: transparent; color: var(--pw-text-main); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1em; opacity: 0.7; transition: all 0.2s; }
 .pw-compact-btn:hover { opacity: 1; background: rgba(128,128,128,0.2); }
-
 #pw_persona_tool_btn { color: var(--smart-theme-body-color); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin-right: 5px; font-size: 1.1em; opacity: 0.7; transition: opacity 0.2s; }
 #pw_persona_tool_btn:hover { opacity: 1; color: var(--pw-text-main); }
 
@@ -364,10 +325,13 @@
     border: 1px solid var(--SmartThemeBorderColor); 
     border-radius: 6px; 
     cursor: pointer; 
-    display: flex; justify-content: space-between; align-items: center; 
-    font-weight: bold; margin-bottom: 5px;
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    font-weight: bold; 
+    margin-bottom: 5px;
     text-align: left; 
-    font-size: 0.85em; /* Small title */
+    font-size: 0.85em;
 }
 .pw-context-header:hover { background: var(--SmartThemeBtnHoverBg); }
 .pw-context-header i { margin-right: 6px; }
@@ -375,23 +339,10 @@
 .swal2-actions { flex-wrap: nowrap !important; }
 .swal2-styled { white-space: nowrap !important; width: auto !important; max-width: none !important; flex-shrink: 0 !important; }
 
-/* [Fix] Responsive Layout for Mobile */
 @media screen and (max-width: 600px) {
     .pw-row { flex-wrap: wrap; }
     .pw-row label { width: 100%; margin-bottom: 4px; text-align: left; display: block; }
     .pw-input, .pw-select, #pw-api-url, #pw-api-key { min-width: 0 !important; width: 100% !important; flex: 1 1 auto; }
-    .pw-wi-depth-tools { gap: 5px; }
-    .pw-wi-depth-tools .pw-keyword-input, 
-    .pw-wi-depth-tools .pw-pos-select, 
-    .pw-wi-depth-tools .pw-depth-input, 
-    .pw-wi-depth-tools .pw-depth-btn { height: 30px !important; box-sizing: border-box !important; vertical-align: middle; }
-    .pw-keyword-input { width: 100%; font-size: 0.8em; padding: 4px 6px; }
-    #d-filter-toggle { font-size: 0.8em; padding: 4px 8px; }
-    .pw-wi-filter-row:nth-child(2) { flex-wrap: nowrap !important; gap: 4px; align-items: center; }
-    .pw-pos-select { flex: 0 0 85px !important; max-width: 85px !important; padding: 4px 2px; font-size: 0.8em; margin-bottom: 0; }
-    .pw-depth-input { flex: 1; min-width: 0; padding: 4px 2px; text-align: center; font-size: 0.8em; }
-    .pw-wi-filter-row span { font-size: 0.8em; align-self: center; }
-    #d-reset { margin-left: 2px; padding: 4px 6px; font-size: 0.8em; white-space: nowrap; }
     .pw-diff-cards { flex-direction: column; }
     .pw-diff-card { width: 100%; }
     .pw-footer { flex-wrap: wrap; }
