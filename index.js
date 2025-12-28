@@ -2,9 +2,9 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const CURRENT_VERSION = "1.5.4"; 
+const CURRENT_VERSION = "2.0.0"; 
 
-// 【测试地址】
+// Update URL
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/sisisisilviaxie-star-main-dev/manifest.json";
 
 const STORAGE_KEY_HISTORY = 'pw_history_v29_new_template'; 
