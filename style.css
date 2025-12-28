@@ -1,6 +1,6 @@
 /* =========================================
    File: style.css
-   Version: 1.5.3 (Alignment & Toggles)
+   Version: 1.5.4 (Accent Bars & Visibility Base)
 ========================================= */
 
 .pw-wrapper {
@@ -10,6 +10,9 @@
     --pw-paper-bg: var(--smart-theme-input-bg, rgba(0, 0, 0, 0.05)); 
     --pw-danger: #ff6b6b;
     
+    /* 自动获取酒馆的强调色，如果没有则用文字色 */
+    --pw-accent-color: var(--SmartThemeQuoteColor, var(--pw-text-main));
+
     /* Diff 界面专用硬编码颜色 */
     --pw-diff-green: #83c168;
     --pw-diff-red: #ff6b6b;
@@ -118,7 +121,7 @@
 }
 .pw-mini-btn:hover { opacity: 1; border-color: var(--pw-text-main); }
 
-/* [New] Toggle Switch Button (Debug) */
+/* [Fix] Debug Toggle Switch Style */
 .pw-toggle-switch {
     border-radius: 50px !important; /* Capsule shape */
     padding: 4px 14px !important;
@@ -134,8 +137,8 @@
 .pw-toggle-switch:hover { opacity: 1; }
 
 .pw-toggle-switch.active {
-    background: var(--pw-text-main); /* Active color */
-    color: var(--smart-theme-bg, #000); /* Contrast text */
+    background: var(--pw-text-main);
+    color: var(--smart-theme-bg, #000);
     border-color: transparent;
     opacity: 1;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
@@ -145,16 +148,22 @@
 .pw-tags-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .pw-tags-label { 
     font-weight: bold; opacity: 0.8; font-size: 0.85em; color: var(--pw-text-main); 
-    cursor: pointer; user-select: none; /* Clickable Header */
+    cursor: pointer; user-select: none;
 }
 .pw-tags-label:hover { opacity: 1; }
 
 .pw-tags-edit-toggle { cursor: pointer; font-size: 0.8em; opacity: 0.7; text-decoration: underline; }
 .pw-tags-edit-toggle.editing { color: var(--pw-danger) !important; }
 .pw-tags-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+
+/* [NEW] Tag Chip with Accent Bar (Yellow/Themed Bar) */
 .pw-tag-chip {
-    display: inline-flex; align-items: center; background: rgba(128, 128, 128, 0.15);
-    border: 1px solid var(--pw-border); padding: 4px 10px; border-radius: 6px;
+    display: inline-flex; align-items: center; 
+    background: rgba(128, 128, 128, 0.15);
+    border: 1px solid var(--pw-border); 
+    /* Remove default left border logic to avoid double borders if applied differently */
+    border-left: 4px solid var(--pw-accent-color); /* The accent bar */
+    padding: 4px 10px; border-radius: 4px; /* Slightly sharper radius for chips */
     font-size: 0.9em; cursor: pointer; transition: all 0.2s; color: var(--pw-text-main);
 }
 .pw-tag-chip:hover { background: rgba(128, 128, 128, 0.3); transform: translateY(-1px); }
@@ -165,24 +174,20 @@
 .pw-template-footer { display: flex; justify-content: space-between; align-items: center; background: rgba(128,128,128,0.1); padding: 5px 10px; border-top: 1px solid var(--pw-border); }
 
 /* =========================================
-   [Fix] Template Shortcuts (Stacked like Prompt Buttons)
+   Shortcut Buttons (Stacked like Prompt Buttons)
 ========================================= */
 .pw-shortcut-bar { display: flex; gap: 5px; align-items: center; }
 
 .pw-shortcut-btn { 
-    /* Stacked Layout - Same as pw-var-btn */
     display: inline-flex; 
     flex-direction: column; 
     align-items: center; 
     justify-content: center;
-    
-    padding: 5px 2px; /* Vertical padding > Horizontal */
+    padding: 5px 2px;
     min-width: 50px; 
-    
     border: 1px solid var(--pw-border); 
     border-radius: 4px; 
     background: rgba(128,128,128,0.08); 
-    
     color: var(--pw-text-main);
     cursor: pointer; 
     transition: all 0.2s;
@@ -191,58 +196,24 @@
     opacity: 0.9;
 }
 .pw-shortcut-btn:hover { opacity: 1; border-color: var(--pw-text-main); background: rgba(128,128,128,0.15); transform: translateY(-1px); }
-
-/* Shortcut Label (Top) */
-.pw-shortcut-btn span:first-child {
-    font-size: 0.75em; 
-    font-weight: bold;
-    opacity: 0.9;
-    margin-bottom: 1px;
-}
-
-/* Shortcut Key Code (Bottom) */
-.pw-shortcut-btn .code {
-    margin-left: 0; 
-    background: transparent; 
-    border: none;
-    padding: 0;
-    font-family: Consolas, "Courier New", monospace;
-    font-size: 0.7em; 
-    opacity: 0.6;
-}
+.pw-shortcut-btn span:first-child { font-size: 0.75em; font-weight: bold; opacity: 0.9; margin-bottom: 1px; }
+.pw-shortcut-btn .code { margin-left: 0; background: transparent; border: none; padding: 0; font-family: Consolas, "Courier New", monospace; font-size: 0.7em; opacity: 0.6; }
 
 /* =========================================
    Variable Buttons (Stacked - Tiny Size)
 ========================================= */
-.pw-var-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; } /* Gap 8px */
+.pw-var-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 
 .pw-var-btn { 
-    display: inline-flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: center;
-    
-    padding: 5px 2px; 
-    min-width: 50px; 
-    
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 5px 2px; min-width: 50px; 
     border: 1px solid var(--pw-border); 
     border-radius: 4px; 
     background: rgba(128,128,128,0.08); 
-    
     color: var(--pw-text-main);
-    cursor: pointer; 
-    transition: all 0.2s;
-    user-select: none;
-    line-height: 1.1;
+    cursor: pointer; transition: all 0.2s; user-select: none; line-height: 1.1;
 }
-
-.pw-var-btn:hover { 
-    opacity: 1; 
-    border-color: var(--pw-text-main); 
-    background: rgba(128,128,128,0.15); 
-    transform: translateY(-1px); 
-}
-
+.pw-var-btn:hover { opacity: 1; border-color: var(--pw-text-main); background: rgba(128,128,128,0.15); transform: translateY(-1px); }
 .pw-var-btn span:first-child { font-size: 0.75em; font-weight: bold; opacity: 0.9; margin-bottom: 1px; }
 .pw-var-btn .code { margin-left: 0; background: transparent; border: none; padding: 0; font-family: Consolas, "Courier New", monospace; font-size: 0.7em; opacity: 0.6; }
 
@@ -268,63 +239,41 @@
 ========================================= */
 .pw-wi-book { border: 1px solid var(--pw-border); border-radius: 6px; margin-bottom: 6px; overflow: hidden; }
 .pw-wi-header { padding: 8px; background: rgba(128,128,128,0.1); cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: var(--pw-text-main); }
-/* Header items spacing */
 .pw-wi-header-checkbox { margin-right: 8px; transform: scale(1.2); cursor: pointer; }
 
-/* [Fix] Book Title: Allow growing, use ellipsis */
+/* Book Title */
 .pw-wi-book-title { 
-    flex: 1; 
-    display: block; 
-    overflow: visible; 
-    text-overflow: clip; 
-    white-space: normal; 
-    word-break: break-word; /* Ensure long words wrap */
-    
-    margin-right: 10px; 
-    font-weight: bold;
-    min-width: 0; 
-    line-height: 1.2;
-    text-align: left; /* [Fix] Left Align */
+    flex: 1; display: block; overflow: visible; text-overflow: clip; 
+    white-space: normal; word-break: break-word; 
+    margin-right: 10px; font-weight: bold; min-width: 0; line-height: 1.2;
+    text-align: left;
 }
 
-/* [Fix] Entry Title: Force Left Align */
+/* Entry Title */
 .pw-wi-title-text {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    font-weight: bold;
-    font-size: 0.9em;
-    
-    text-align: left; /* Critical Fix */
-    white-space: normal; /* Allow wrap */
-    line-height: 1.3;
+    flex: 1; display: flex; align-items: center;
+    font-weight: bold; font-size: 0.9em;
+    text-align: left; white-space: normal; line-height: 1.3;
 }
 
 .pw-wi-header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-
 .pw-wi-controls { display: flex; gap: 6px; width: 100%; align-items: center; flex-wrap: nowrap !important; }
 .pw-wi-select { flex-grow: 1; width: 100%; min-width: 0; }
 .pw-wi-add-btn { flex-shrink: 0; padding: 6px 12px; width: auto; white-space: nowrap; }
 
 /* Filter Tools (3 Rows) */
-.pw-wi-depth-tools { 
-    display: none; flex-direction: column; gap: 8px; 
-    padding: 10px; background: rgba(0,0,0,0.1); 
-    border-bottom: 1px solid var(--pw-border); 
-}
+.pw-wi-depth-tools { display: none; flex-direction: column; gap: 8px; padding: 10px; background: rgba(0,0,0,0.1); border-bottom: 1px solid var(--pw-border); }
 .pw-wi-filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; width: 100%; }
 .pw-keyword-input { width: 100%; padding: 6px; font-size: 0.9em; }
 .pw-pos-select { flex: 1; padding: 6px; min-width: 0; }
 .pw-depth-input { width: 50px; text-align: center; padding: 6px; }
 .pw-depth-btn { padding: 6px 12px; background: var(--pw-paper-bg); border: 1px solid var(--pw-border); color: var(--pw-text-main); border-radius: 4px; cursor: pointer; flex: 1; text-align: center; font-size: 0.9em; }
-.pw-depth-btn.active { 
-    border-color: var(--pw-danger) !important; color: var(--pw-danger) !important; background: rgba(255, 107, 107, 0.1) !important; 
-}
+.pw-depth-btn.active { border-color: var(--pw-danger) !important; color: var(--pw-danger) !important; background: rgba(255, 107, 107, 0.1) !important; }
 
 .pw-wi-list { display: none; padding: 8px; border-top: 1px solid var(--pw-border); }
 .pw-wi-item { background: rgba(128,128,128,0.05); padding: 6px 10px; border-radius: 4px; margin-bottom: 4px; }
 .pw-wi-item-row { display: flex; align-items: center; gap: 8px; }
-.pw-wi-check { transform: scale(1.1); cursor: pointer; margin-right: 8px; } /* Add margin */
+.pw-wi-check { transform: scale(1.1); cursor: pointer; margin-right: 8px; }
 .pw-wi-toggle-icon { color: var(--pw-text-main); opacity: 0.5; cursor: pointer; margin-left: 8px; flex-shrink: 0;}
 .pw-wi-toggle-icon.active { opacity: 1; }
 .pw-remove-book-icon { color: var(--pw-danger); cursor: pointer; transition: transform 0.2s; }
@@ -332,16 +281,11 @@
 .pw-bound-status { color: var(--pw-text-main) !important; opacity: 0.6; font-size: 0.8em; margin-left: 5px; font-weight: bold; }
 .pw-wi-desc, #pw-greetings-preview { display: none; background: rgba(128,128,128,0.1) !important; color: var(--pw-text-main) !important; border: 1px solid var(--pw-border); border-radius: 4px; padding: 8px; font-size: 0.9em; width: 100%; box-sizing: border-box; resize: vertical; line-height: 1.5; margin-top: 5px; }
 
-/* [Fix] Smaller and lighter info badges */
+/* Info Badges */
 .pw-wi-info-badge { 
-    font-size: 0.65em; 
-    background: rgba(128,128,128,0.1); 
-    padding: 1px 4px; border-radius: 3px; 
-    color: var(--pw-text-main); 
-    opacity: 0.4; /* Much lighter */
-    margin-right: 5px; 
-    white-space: nowrap; 
-    vertical-align: middle;
+    font-size: 0.65em; background: rgba(128,128,128,0.1); 
+    padding: 1px 4px; border-radius: 3px; color: var(--pw-text-main); 
+    opacity: 0.4; margin-right: 5px; white-space: nowrap; vertical-align: middle;
 }
 
 /* =========================================
@@ -371,63 +315,36 @@
 .pw-page-info { font-size: 0.9em; opacity: 0.8; }
 
 /* Badges */
-.pw-badge {
-    display: inline-block; padding: 2px 5px; border-radius: 3px;
-    font-size: 0.7em; margin-right: 5px; font-weight: bold; text-transform: uppercase;
-    vertical-align: middle;
-}
+.pw-badge { display: inline-block; padding: 2px 5px; border-radius: 3px; font-size: 0.7em; margin-right: 5px; font-weight: bold; text-transform: uppercase; vertical-align: middle; }
 .pw-badge.persona { background-color: rgba(65, 150, 255, 0.2); color: #88c0ff; border: 1px solid rgba(65, 150, 255, 0.4); }
 .pw-badge.template { background-color: rgba(255, 165, 0, 0.2); color: #ffbc42; border: 1px solid rgba(255, 165, 0, 0.4); }
 
 /* =========================================
-   [Fix] Diff / Refine View (Hardcoded Legacy Style & Responsive)
+   [Fix] Diff / Refine View
 ========================================= */
-.pw-diff-container {
-    background: var(--pw-diff-bg); /* Force Dark */
-    color: #fff;
-    padding: 0; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000; box-sizing: border-box; display: flex; flex-direction: column;
-}
+.pw-diff-container { background: var(--pw-diff-bg); color: #fff; padding: 0; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000; box-sizing: border-box; display: flex; flex-direction: column; }
 .pw-diff-tabs-bar { border-bottom: 1px solid #444; background: rgba(0,0,0,0.3); padding: 0; gap: 0; display: flex; }
-.pw-diff-tab {
-    padding: 10px 20px; cursor: pointer; border: none; border-right: 1px solid #444; border-bottom: 1px solid #444;
-    background: transparent; color: #aaa; opacity: 1; font-size: 0.9em; display: flex; flex-direction: column; align-items: center; justify-content: center;
-}
+.pw-diff-tab { padding: 10px 20px; cursor: pointer; border: none; border-right: 1px solid #444; border-bottom: 1px solid #444; background: transparent; color: #aaa; opacity: 1; font-size: 0.9em; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .pw-diff-tab.active { background: #333; color: #fff; border-bottom: 1px solid #333; }
 .pw-tab-sub { font-size: 0.75em; opacity: 0.7; font-weight: normal; margin-top: 2px; }
-
 .pw-diff-content-area { flex: 1; overflow: hidden; padding: 15px; background: #222; }
 .pw-diff-list-view { overflow-y: auto; height: 100%; padding-right: 5px; }
 .pw-diff-row { background: transparent; border: 1px solid #444; border-radius: 8px; padding: 0; margin-bottom: 15px; overflow: hidden; }
-.pw-diff-attr-name { 
-    background: #333; color: #fff; padding: 8px; font-weight: bold; text-align: center; border-bottom: 1px solid #444; font-size: 1em; margin: 0; 
-}
+.pw-diff-attr-name { background: #333; color: #fff; padding: 8px; font-weight: bold; text-align: center; border-bottom: 1px solid #444; font-size: 1em; margin: 0; }
 .pw-diff-cards { display: flex; padding: 10px; gap: 10px; background: #2a2a2a; }
-.pw-diff-card { 
-    flex: 1; display: flex; flex-direction: column; 
-    border: 1px solid #555; border-radius: 6px; background: #111; 
-    overflow: hidden; cursor: pointer; opacity: 0.6; transition: all 0.2s; 
-}
+.pw-diff-card { flex: 1; display: flex; flex-direction: column; border: 1px solid #555; border-radius: 6px; background: #111; overflow: hidden; cursor: pointer; opacity: 0.6; transition: all 0.2s; }
 .pw-diff-card:hover { opacity: 0.8; }
 .pw-diff-card.selected { opacity: 1; border-color: var(--pw-diff-green); box-shadow: 0 0 8px rgba(131, 193, 104, 0.1); }
 .pw-diff-label { text-align: center; font-size: 0.8em; padding: 5px; background: #333; color: #aaa; border-bottom: 1px solid #444; font-weight: bold; }
 .pw-diff-card.selected .pw-diff-label { background: rgba(131, 193, 104, 0.1); color: var(--pw-diff-green); border-bottom-color: var(--pw-diff-green); }
 .pw-diff-textarea { width: 100%; background: transparent; border: none; color: #ddd; padding: 10px; font-family: inherit; font-size: 0.95em; resize: none; outline: none; line-height: 1.5; min-height: 80px; }
-
-/* Buttons in Diff */
 .pw-diff-actions { background: #1a1a1a; padding: 15px; border-top: 1px solid #444; display: flex; justify-content: flex-end; gap: 10px; }
 #pw-diff-confirm { background: transparent; border: 1px solid var(--pw-diff-green); color: var(--pw-diff-green); }
 #pw-diff-confirm:hover { background: rgba(131, 193, 104, 0.1); }
 #pw-diff-cancel { background: transparent; border: 1px solid var(--pw-diff-red); color: var(--pw-diff-red); }
 #pw-diff-cancel:hover { background: rgba(255, 107, 107, 0.1); }
-
-/* Raw Views in Diff [Fix: Smaller Font] */
 .pw-diff-raw-view { display: none; height: 100%; }
-.pw-diff-raw-textarea { 
-    width: 100%; height: 100%; background: #111; color: #ddd; 
-    border: 1px solid #444; padding: 10px; 
-    font-family: monospace; resize: none; outline: none; 
-    font-size: 0.85em; line-height: 1.4; 
-}
+.pw-diff-raw-textarea { width: 100%; height: 100%; background: #111; color: #ddd; border: 1px solid #444; padding: 10px; font-family: monospace; resize: none; outline: none; font-size: 0.85em; line-height: 1.4; }
 
 /* =========================================
    System & Footer
@@ -440,7 +357,6 @@
 #pw_persona_tool_btn { color: var(--smart-theme-body-color); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin-right: 5px; font-size: 1.1em; opacity: 0.7; transition: opacity 0.2s; }
 #pw_persona_tool_btn:hover { opacity: 1; color: var(--pw-text-main); }
 
-/* [Fix] Prompt Editor Header Left Align & Size */
 .pw-context-header { 
     padding: 8px 12px; 
     background: var(--SmartThemeBtnBg); 
@@ -448,13 +364,10 @@
     border: 1px solid var(--SmartThemeBorderColor); 
     border-radius: 6px; 
     cursor: pointer; 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    font-weight: bold; 
-    margin-bottom: 5px;
+    display: flex; justify-content: space-between; align-items: center; 
+    font-weight: bold; margin-bottom: 5px;
     text-align: left; 
-    font-size: 0.85em; /* [Fix] Smaller Title */
+    font-size: 0.85em; /* Small title */
 }
 .pw-context-header:hover { background: var(--SmartThemeBtnHoverBg); }
 .pw-context-header i { margin-right: 6px; }
@@ -465,20 +378,13 @@
 /* [Fix] Responsive Layout for Mobile */
 @media screen and (max-width: 600px) {
     .pw-row { flex-wrap: wrap; }
-    /* [Fix] API Labels Left Align */
     .pw-row label { width: 100%; margin-bottom: 4px; text-align: left; display: block; }
     .pw-input, .pw-select, #pw-api-url, #pw-api-key { min-width: 0 !important; width: 100% !important; flex: 1 1 auto; }
-    
-    /* WI Tools */
     .pw-wi-depth-tools { gap: 5px; }
     .pw-wi-depth-tools .pw-keyword-input, 
     .pw-wi-depth-tools .pw-pos-select, 
     .pw-wi-depth-tools .pw-depth-input, 
-    .pw-wi-depth-tools .pw-depth-btn {
-        height: 30px !important;
-        box-sizing: border-box !important;
-        vertical-align: middle;
-    }
+    .pw-wi-depth-tools .pw-depth-btn { height: 30px !important; box-sizing: border-box !important; vertical-align: middle; }
     .pw-keyword-input { width: 100%; font-size: 0.8em; padding: 4px 6px; }
     #d-filter-toggle { font-size: 0.8em; padding: 4px 8px; }
     .pw-wi-filter-row:nth-child(2) { flex-wrap: nowrap !important; gap: 4px; align-items: center; }
@@ -486,10 +392,7 @@
     .pw-depth-input { flex: 1; min-width: 0; padding: 4px 2px; text-align: center; font-size: 0.8em; }
     .pw-wi-filter-row span { font-size: 0.8em; align-self: center; }
     #d-reset { margin-left: 2px; padding: 4px 6px; font-size: 0.8em; white-space: nowrap; }
-
-    /* [Fix] Diff Cards Stack Vertically on Mobile */
     .pw-diff-cards { flex-direction: column; }
     .pw-diff-card { width: 100%; }
-    
     .pw-footer { flex-wrap: wrap; }
 }
