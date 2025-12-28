@@ -2,7 +2,7 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const CURRENT_VERSION = "1.5.3"; 
+const CURRENT_VERSION = "1.5.4"; 
 
 // 【测试地址】
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/sisisisilviaxie-star-main-dev/manifest.json";
@@ -106,10 +106,12 @@ const defaultTemplateGenPrompt =
 4. Scope: Biological, Sociological, Psychological, and Special Abilities.
 </requirements>
 
+[Constraint]: Do NOT include any "Little Theater", "Small Theater", scene descriptions, internal monologues, or CoT status bars. STRICTLY YAML DATA ONLY.
+
 [Action]:
 Output the blank YAML template for the User now. No explanations.`;
 
-// 3. 人设生成/润色专用 User Prompt
+// 3. 人设生成/润色专用 User Prompt (Added Constraints)
 const defaultPersonaGenPrompt =
 `[Task: Generate/Refine Profile]
 [Target Entity: "{{user}}"]
@@ -124,6 +126,8 @@ const defaultPersonaGenPrompt =
 </target_schema>
 
 {{input}} 
+
+[Constraint]: Do NOT include any "Little Theater", "Small Theater", scene descriptions, internal monologues, or CoT status bars. STRICTLY YAML DATA ONLY.
 
 [Action]:
 Output ONLY the YAML data matching the schema.`;
@@ -606,13 +610,11 @@ async function runGeneration(data, apiConfig, isTemplateMode = false) {
     if (!responseContent) throw new Error("API 返回为空");
     lastRawResponse = responseContent;
 
-    // [Fix 3] 纯净提取 YAML 代码块
     const yamlRegex = /```(?:yaml)?\n([\s\S]*?)```/i;
     const match = responseContent.match(yamlRegex);
     if (match && match[1]) {
-        responseContent = match[1].trim(); // 仅保留代码块内容
+        responseContent = match[1].trim(); 
     } else {
-        // Fallback: 如果没有代码块，保留原逻辑
         if (prefillContent && !responseContent.startsWith(prefillContent) && !responseContent.startsWith("```yaml")) {
             const trimRes = responseContent.trim();
             if (!trimRes.startsWith("```yaml") && (trimRes.startsWith("姓名") || trimRes.startsWith("  姓名") || trimRes.startsWith("基本信息"))) {
@@ -924,7 +926,8 @@ async function openCreatorPopup() {
                 </div>
             </div>
 
-            <textarea id="pw-request" class="pw-textarea pw-auto-height" placeholder="在此输入要求，或点击上方模版块插入...">${savedState.request || ''}</textarea>
+            <!-- [Modified Prompt Text] -->
+            <textarea id="pw-request" class="pw-textarea pw-auto-height" placeholder="在此输入要求。点击上方模版块可插入参考结构（仅需填写您关注的部分，无需全部填满）...">${savedState.request || ''}</textarea>
             <button id="pw-btn-gen" class="pw-btn gen">生成设定</button>
 
             <div id="pw-result-area" style="display:none; margin-top:15px;">
@@ -1096,7 +1099,6 @@ async function openCreatorPopup() {
                     <textarea id="pw-prompt-editor" class="pw-textarea pw-auto-height" style="min-height:150px; font-size:0.85em;"></textarea>
                     
                     <div style="text-align:right; margin-top:10px; display:flex; gap:10px; justify-content:flex-end; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 10px;">
-                        <!-- [Fix 6] New Debug Button Class -->
                         <div id="pw-toggle-debug-btn" class="pw-toggle-switch" style="margin-right:auto;"><i class="fa-solid fa-bug"></i> Debug</div>
                         
                         <button class="pw-mini-btn" id="pw-reset-prompt" style="font-size:0.8em;">恢复默认</button>
@@ -1193,11 +1195,11 @@ async function openCreatorPopup() {
     if (savedTheme === 'style.css') {
         loadThemeCSS('style.css');
         $('#pw-theme-select').val('style.css');
-        $('#pw-btn-delete-theme').hide(); // Hide delete for default
+        $('#pw-btn-delete-theme').hide(); 
     } else if (customThemes[savedTheme]) {
         applyCustomTheme(customThemes[savedTheme]);
         $('#pw-theme-select').val(savedTheme);
-        $('#pw-btn-delete-theme').show(); // Show delete for custom
+        $('#pw-btn-delete-theme').show();
     }
 
     $('.pw-auto-height').each(function() {
@@ -1239,7 +1241,7 @@ function bindEvents() {
         else { $body.slideDown(); $arrow.addClass('fa-flip-vertical'); }
     });
 
-    // --- [Fix 6] Debug Toggle Button Logic ---
+    // --- Debug Toggle Button Logic ---
     $(document).on('click.pw', '#pw-toggle-debug-btn', function() {
         const $wrapper = $('#pw-debug-wrapper');
         const $btn = $(this);
@@ -1305,16 +1307,15 @@ function bindEvents() {
         $(this).val('');
     });
 
-    // --- [Fix 4] Delete Theme Logic ---
+    // --- Delete Theme Logic ---
     $(document).on('click.pw', '#pw-btn-delete-theme', function() {
         const current = $('#pw-theme-select').val();
-        if (current === 'style.css') return; // Should be hidden anyway
+        if (current === 'style.css') return; 
         
         if (confirm(`确定要删除主题 "${current}" 吗？`)) {
             delete customThemes[current];
             saveData();
             
-            // Switch back to default
             uiStateCache.theme = 'style.css';
             saveData();
             loadThemeCSS('style.css');
@@ -1325,26 +1326,34 @@ function bindEvents() {
         }
     });
 
-    // --- [New] Download Theme Template ---
-    $(document).on('click.pw', '#pw-btn-download-template', function() {
-        const template = `/* Persona Weaver Theme Template */
-.pw-wrapper {
-    /* Main Text Color */
-    --pw-text-main: #e0e0e0;
-    /* Border Color */
-    --pw-border: #444;
-    /* Input/Paper Background */
-    --pw-paper-bg: rgba(0, 0, 0, 0.2);
-    /* Danger Color (Red) */
-    --pw-danger: #ff6b6b;
-}
-/* Add more overrides below... */
-`;
-        const blob = new Blob([template], { type: "text/css" });
+    // --- [New] Dynamic Download Theme Button ---
+    $(document).on('click.pw', '#pw-btn-download-template', async function() {
+        const currentThemeName = $('#pw-theme-select').val();
+        let cssContent = "";
+        let fileName = currentThemeName;
+
+        if (currentThemeName === 'style.css') {
+            // Try fetching default style
+            try {
+                const res = await fetch(`scripts/extensions/third-party/${extensionName}/style.css?v=${CURRENT_VERSION}`);
+                if (!res.ok) throw new Error("Fetch failed");
+                cssContent = await res.text();
+            } catch (e) {
+                // Fallback content if fetch fails
+                cssContent = `/* Native Style v${CURRENT_VERSION} */\n.pw-wrapper { --pw-text-main: var(--smart-theme-body-color); ... }`;
+            }
+        } else {
+            // Get custom theme content
+            cssContent = customThemes[currentThemeName];
+        }
+
+        if (!cssContent) return toastr.error("无法获取主题内容");
+
+        const blob = new Blob([cssContent], { type: "text/css" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "pw_theme_template.css";
+        a.download = fileName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -2426,5 +2435,5 @@ jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
     loadThemeCSS('style.css'); // Default theme
-    console.log("[PW] Persona Weaver Loaded (v1.5.3 - Final Polish)");
+    console.log("[PW] Persona Weaver Loaded (v1.5.4 - Fix Pack)");
 })
