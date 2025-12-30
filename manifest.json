@@ -7,5 +7,5 @@
     "js": "index.js",
     "css": "style.css",
     "type": "extension",
-    "notes": "v1.0.1 更新说明：\n1. 新增了 System 选项卡。\n2. 优化了 Prompt 编辑体验。\n3. 修复了 Debug 预览的样式问题。\n4. 支持在线检查更新。"
+    "notes": "v2.1.0 更新说明： NPC 模式、自动开场白、Markdown 清洗、历史记录筛选"
 }
