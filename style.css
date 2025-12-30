@@ -1,7 +1,7 @@
 
 /* =========================================
    File: style.css
-   Version: 2.2.0 (Native Default)
+   Version: 2.4.0 (Native Default)
    Description: Persona Weaver Core Styles
 ========================================= */
 
@@ -80,14 +80,15 @@
 }
 .pw-info-display.mode-switcher {
     padding: 2px;
-    gap: 2px; /* 更紧密 */
+    gap: 2px; 
     justify-content: stretch;
 }
 
 .pw-mode-btn {
-    flex: 1; /* Default size */
+    flex: 1; 
     display: flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 10px; border-radius: 4px; cursor: pointer;
+    padding: 10px; border-radius: 20px; /* [Fix 1] More Rounded */
+    cursor: pointer;
     font-size: 0.9em; color: var(--pw-text-main); opacity: 0.5;
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     font-weight: bold;
