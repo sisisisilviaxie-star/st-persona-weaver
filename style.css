@@ -1,7 +1,7 @@
 
 /* =========================================
    File: style.css
-   Version: 2.4.0 (Native Default)
+   Version: 2.5.0 (Native Default)
    Description: Persona Weaver Core Styles
 ========================================= */
 
@@ -72,7 +72,7 @@
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; flex-wrap: wrap; }
 .pw-section-label { font-weight: bold; font-size: 1em; padding: 2px 4px; color: var(--pw-text-main); opacity: 0.9; }
 
-/* Info Display & Mode Switcher */
+/* Info Display & Mode Switcher (NEW) */
 .pw-info-display {
     display: flex; align-items: center; gap: 10px; 
     background: rgba(128,128,128,0.1); padding: 5px; border-radius: 6px; 
@@ -80,15 +80,8 @@
 }
 .pw-info-display.mode-switcher {
     padding: 2px;
-    gap: 0; 
-    justify-content: space-between; 
-}
-
-/* Grouping the toggle buttons together */
-.pw-switcher-group {
-    display: flex;
-    gap: 2px;
-    flex: 1; 
+    gap: 2px; 
+    justify-content: stretch;
 }
 
 .pw-mode-btn {
@@ -106,7 +99,7 @@
 
 /* Active State: Grow and Highlight */
 .pw-mode-btn.pw-mode-active {
-    flex: 1.2; 
+    flex: 2; 
     font-size: 1.05em;
     background: var(--pw-paper-bg);
     opacity: 1;
@@ -117,18 +110,23 @@
 .pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--pw-text-main); font-size: 1.05em; }
 #pw-display-name { text-decoration: underline; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 
-/* Load Button Styling */
-.pw-load-btn {
-    font-size: 0.85em; background: transparent; border: 1px solid transparent;
-    padding: 4px 12px; cursor: pointer; color: var(--pw-text-main);
-    opacity: 0.7; font-weight: normal; 
+/* [Fix 1] New Button Style: Pill Action Button */
+.pw-action-btn-pill {
+    font-size: 0.85em; 
+    background: rgba(128,128,128,0.15); 
+    border: 1px solid var(--pw-border);
+    padding: 6px 12px; border-radius: 20px; 
+    cursor: pointer; color: var(--pw-text-main);
+    opacity: 0.8; font-weight: bold; margin-left: auto; transition: all 0.2s;
     white-space: nowrap; flex-shrink: 0;
-    margin-left: auto; /* Push to right */
-    border-radius: 6px;
-    display: flex; align-items: center; gap: 5px;
-    transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px;
 }
-.pw-load-btn:hover { opacity: 1; background: rgba(128,128,128,0.1); border-color: var(--pw-border); }
+.pw-action-btn-pill:hover { 
+    opacity: 1; 
+    background: var(--pw-paper-bg); 
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
 
 /* Inputs */
 .pw-input, .pw-textarea, .pw-select {
@@ -344,10 +342,12 @@
 .pw-page-btn:disabled { opacity: 0.3; cursor: default; }
 .pw-page-info { font-size: 0.9em; opacity: 0.8; }
 
-/* Badges */
+/* Badges [Fix 5] */
 .pw-badge { display: inline-block; padding: 2px 5px; border-radius: 3px; font-size: 0.7em; margin-right: 5px; font-weight: bold; text-transform: uppercase; vertical-align: middle; }
-.pw-badge.persona { background-color: rgba(65, 150, 255, 0.2); color: #88c0ff; border: 1px solid rgba(65, 150, 255, 0.4); }
-.pw-badge.template { background-color: rgba(255, 165, 0, 0.2); color: #ffbc42; border: 1px solid rgba(255, 165, 0, 0.4); }
+.pw-badge.persona.user { background-color: rgba(65, 150, 255, 0.2); color: #88c0ff; border: 1px solid rgba(65, 150, 255, 0.4); }
+.pw-badge.persona.npc  { background-color: rgba(155, 89, 182, 0.2); color: #a569bd; border: 1px solid rgba(155, 89, 182, 0.4); }
+.pw-badge.template.user { background-color: rgba(0, 128, 128, 0.2); color: #40e0d0; border: 1px solid rgba(0, 128, 128, 0.4); }
+.pw-badge.template.npc  { background-color: rgba(255, 165, 0, 0.2); color: #ffbc42; border: 1px solid rgba(255, 165, 0, 0.4); }
 
 /* =========================================
    Diff / Refine View
@@ -428,4 +428,4 @@
     .pw-diff-cards { flex-direction: column; }
     .pw-diff-card { width: 100%; }
     .pw-footer { flex-wrap: wrap; }
-}
+
