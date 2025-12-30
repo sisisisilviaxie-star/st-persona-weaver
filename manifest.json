@@ -6,6 +6,5 @@
     "description": "原生扩展：AI辅助生成用户设定，支持历史记录、自动保存并同步至世界书。",
     "js": "index.js",
     "css": "style.css",
-    "type": "extension",
-    "notes": "v2.1.0 更新说明： NPC 模式、自动开场白、Markdown 清洗、历史记录筛选"
+    "type": "extension"
 }
