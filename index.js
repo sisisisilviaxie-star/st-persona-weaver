@@ -1,11 +1,9 @@
-
 import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const CURRENT_VERSION = "2.3.0"; // Bump version
+const CURRENT_VERSION = "2.4.0"; // Bump version
 
-// Update URL
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/sisisisilviaxie-star-main-dev/manifest.json";
 
 const STORAGE_KEY_HISTORY = 'pw_history_v29_new_template'; 
@@ -137,6 +135,9 @@ const defaultTemplateGenPrompt =
 1. Language: **Simplified Chinese (简体中文)** keys.
 2. Structure: YAML keys only. Leave values empty.
 3. **World Consistency**: The fields MUST reflect the specific logic of the provided World Setting.
+   - If the world is Xianxia, include keys like "根骨", "境界", "灵根".
+   - If the world is ABO, include "第二性别", "信息素气味".
+   - If the world is Modern, use standard sociological attributes.
 4. Scope: Biological, Sociological, Psychological, Special Abilities.
 5. Detail Level: High. This is for the main character.
 </requirements>
@@ -146,7 +147,7 @@ const defaultTemplateGenPrompt =
 [Action]:
 Output the blank YAML template now. No explanations.`;
 
-// 2.1 [新增] NPC 模版生成专用 Prompt
+// 2.1 [Fix 6] NPC 模版生成专用 Prompt (补充世界观说明)
 const defaultNpcTemplateGenPrompt = 
 `[TASK: DESIGN_NPC_PROFILE_SCHEMA]
 [CONTEXT: The user needs a supporting character for the simulation.]
@@ -156,6 +157,9 @@ const defaultNpcTemplateGenPrompt =
 1. Language: **Simplified Chinese (简体中文)** keys.
 2. Structure: YAML keys only. Leave values empty.
 3. **World Consistency**: The fields MUST reflect the specific logic of the provided World Setting.
+   - If the world is Xianxia, include keys like "根骨", "境界", "宗门".
+   - If the world is ABO, include "第二性别", "信息素".
+   - If the world is Cyberpunk, include "义体化程度", "所属公司".
 4. Scope: Functional (Role/Faction), Visual (Appearance), Relational (Connection to MC).
 5. Detail Level: Moderate. Focus on identifiable traits and narrative function. Remove excessive introspection fields.
 </requirements>
@@ -244,10 +248,9 @@ const TEXT = {
 
 let historyCache = [];
 let currentTemplate = defaultYamlTemplate;
-// Prompt缓存更新
 let promptsCache = { 
     templateGen: defaultTemplateGenPrompt,
-    npcTemplateGen: defaultNpcTemplateGenPrompt, // 新增
+    npcTemplateGen: defaultNpcTemplateGenPrompt,
     personaGen: defaultPersonaGenPrompt,
     npcGen: defaultNpcGenPrompt, 
     initial: fallbackSystemPrompt 
@@ -557,7 +560,7 @@ function getRealSystemPrompt() {
 }
 
 // ============================================================================
-// [核心] 生成逻辑 (更新模版生成逻辑)
+// [核心] 生成逻辑
 // ============================================================================
 async function runGeneration(data, apiConfig, isTemplateMode = false) {
     let charName = "Char";
@@ -607,7 +610,6 @@ async function runGeneration(data, apiConfig, isTemplateMode = false) {
     let prefillContent = "```yaml\n基本信息:"; 
 
     if (isTemplateMode) {
-        // [New Logic] Select Template Prompt based on Mode
         if (isNpcMode) {
             let basePrompt = promptsCache.npcTemplateGen || defaultNpcTemplateGenPrompt;
             userMessageContent = basePrompt
@@ -744,7 +746,7 @@ function loadData() {
         const p = JSON.parse(localStorage.getItem(STORAGE_KEY_PROMPTS));
         promptsCache = {
             templateGen: (p && p.templateGen) ? p.templateGen : defaultTemplateGenPrompt,
-            npcTemplateGen: (p && p.npcTemplateGen) ? p.npcTemplateGen : defaultNpcTemplateGenPrompt, // 加载
+            npcTemplateGen: (p && p.npcTemplateGen) ? p.npcTemplateGen : defaultNpcTemplateGenPrompt, 
             personaGen: (p && p.personaGen) ? p.personaGen : defaultPersonaGenPrompt,
             npcGen: (p && p.npcGen) ? p.npcGen : defaultNpcGenPrompt, 
             initial: (p && p.initial) ? p.initial : fallbackSystemPrompt 
@@ -771,6 +773,7 @@ function saveData() {
     safeLocalStorageSet(STORAGE_KEY_THEMES, JSON.stringify(customThemes));
 }
 
+// [Fix 7] Detailed History Types & Titles
 function saveHistory(item) {
     const limit = 1000; 
     const mode = uiStateCache.generationMode; // 'user' or 'npc'
@@ -786,7 +789,8 @@ function saveHistory(item) {
             if (mode === 'npc') {
                 const nameMatch = item.data.resultText.match(/姓名:\s*(.*?)(\n|$)/);
                 const npcName = nameMatch ? nameMatch[1].trim() : "Unknown NPC";
-                item.title = `NPC: ${npcName}`;
+                // [Fix 7] Add Char Name to NPC Title
+                item.title = `NPC: ${npcName} & ${charName}`;
             } else {
                 item.title = `${userName} & ${charName}`;
             }
@@ -1045,8 +1049,8 @@ async function openCreatorPopup() {
                     <i class="fa-solid fa-user-secret"></i>
                     <span>NPC</span>
                 </div>
-                <!-- Hide in NPC Mode -->
-                <div class="pw-load-btn" id="pw-btn-load-current" style="${isNpc ? 'display:none;' : ''}">载入当前人设</div>
+                <!-- [Fix 1 & 2] Rename & Visibility Hidden -->
+                <div class="pw-load-btn" id="pw-btn-load-current" style="${isNpc ? 'visibility:hidden;' : ''}">载入当前User人设</div>
             </div>
 
             <div>
@@ -1069,12 +1073,14 @@ async function openCreatorPopup() {
                             <div class="pw-shortcut-btn" data-key="- "><span>列表</span><span class="code">-</span></div>
                             <div class="pw-shortcut-btn" data-key="\n"><span>换行</span><span class="code">Enter</span></div>
                         </div>
+                        <!-- [Fix 3] Reset Template Small Button -->
+                        <div class="pw-mini-btn" id="pw-reset-template-small" title="恢复为该模式的默认模版" style="margin-left:auto; padding:2px 8px; font-size:0.8em; border:none; background:transparent;"><i class="fa-solid fa-rotate-left"></i> 恢复默认</div>
                     </div>
                     <textarea id="pw-template-text" class="pw-template-textarea">${currentTemplate}</textarea>
                     <div class="pw-template-footer">
                         <button class="pw-mini-btn" id="pw-gen-template-smart" title="根据当前世界书和设定，生成定制化模版">生成模板</button>
-                        <!-- Load Main Template Btn in NPC Mode -->
-                        <button class="pw-mini-btn" id="pw-load-main-template" style="${isNpc ? '' : 'display:none;'}" title="使用默认User模版">载入主模版</button>
+                        <!-- [Fix 4] Rename Btn -->
+                        <button class="pw-mini-btn" id="pw-load-main-template" style="${isNpc ? '' : 'display:none;'}" title="使用默认User模版">使用User模版</button>
                         <button class="pw-mini-btn" id="pw-save-template">保存模版</button>
                     </div>
                 </div>
@@ -1106,7 +1112,6 @@ async function openCreatorPopup() {
             </div>
             <div class="pw-footer-group" style="flex:1; justify-content:flex-end; gap: 8px;">
                 <button class="pw-btn wi" id="pw-btn-save-wi">保存至世界书</button>
-                <!-- Hide in NPC Mode -->
                 <button class="pw-btn save" id="pw-btn-apply" style="${isNpc ? 'display:none;' : ''}">覆盖当前人设</button>
             </div>
         </div>
@@ -1159,7 +1164,8 @@ async function openCreatorPopup() {
                 <div id="pw-greetings-toggle-bar" class="pw-preview-toggle-bar" style="display:none;">
                     <i class="fa-solid fa-angle-up"></i> 收起预览
                 </div>
-                <textarea id="pw-greetings-preview"></textarea>
+                <!-- [Fix 5] Set min-height for greetings preview -->
+                <textarea id="pw-greetings-preview" style="min-height: 120px;"></textarea>
             </div>
 
             <div class="pw-card-section">
@@ -1290,7 +1296,7 @@ async function openCreatorPopup() {
     <!-- History View with Pagination -->
     <div id="pw-view-history" class="pw-view">
         <div class="pw-scroll-area">
-            <!-- [Fix 5] Detailed History Types -->
+            <!-- Detailed History Types -->
             <div class="pw-history-filters" style="display:flex; gap:5px; margin-bottom:8px;">
                 <select id="pw-hist-filter-type" class="pw-input" style="flex:1;">
                     <option value="all">所有类型</option>
@@ -1416,9 +1422,10 @@ function bindEvents() {
         // Switch Template & Button Text & Button Visibility
         if (mode === 'npc') {
             $('#pw-btn-gen').text("生成 NPC 设定");
+            // [Fix 1] Visibility Hidden instead of Display None
             $('#pw-btn-apply').hide();
-            $('#pw-btn-load-current').hide();
-            $('#pw-load-main-template').show(); // Show load main template btn
+            $('#pw-btn-load-current').css('visibility', 'hidden'); 
+            $('#pw-load-main-template').show(); 
 
             const currentT = $('#pw-template-text').val();
             // Switch to NPC Default Template logic
@@ -1431,7 +1438,7 @@ function bindEvents() {
         } else {
             $('#pw-btn-gen').text("生成 User 设定");
             $('#pw-btn-apply').show();
-            $('#pw-btn-load-current').show();
+            $('#pw-btn-load-current').css('visibility', 'visible');
             $('#pw-load-main-template').hide();
 
             const currentT = $('#pw-template-text').val();
@@ -1476,7 +1483,7 @@ function bindEvents() {
         const type = $(this).val();
         if (type === 'templateGen') {
             $('#pw-prompt-editor').val(promptsCache.templateGen);
-        } else if (type === 'npcTemplateGen') { // New case
+        } else if (type === 'npcTemplateGen') { 
             $('#pw-prompt-editor').val(promptsCache.npcTemplateGen);
         } else if (type === 'npcGen') {
             $('#pw-prompt-editor').val(promptsCache.npcGen);
@@ -1677,6 +1684,20 @@ function bindEvents() {
             saveData();
             if(!isEditingTemplate) renderTemplateChips();
             toastr.success("已载入 User 主模版");
+        }
+    });
+
+    // [Fix 3] Reset Template Small Button
+    $(document).on('click.pw', '#pw-reset-template-small', function() {
+        const isNpc = uiStateCache.generationMode === 'npc';
+        const targetName = isNpc ? "NPC" : "User";
+        if(confirm(`确定要恢复为默认的 ${targetName} 模版吗？`)) {
+            const fallbackT = isNpc ? defaultNpcTemplate : defaultYamlTemplate;
+            $('#pw-template-text').val(fallbackT);
+            currentTemplate = fallbackT;
+            saveData();
+            if(!isEditingTemplate) renderTemplateChips();
+            toastr.success(`已恢复默认 ${targetName} 模版`);
         }
     });
 
@@ -2313,7 +2334,7 @@ const renderTemplateChips = () => {
     });
 };
 
-// [Fix 5] History Filter Logic Update
+// [Fix 7] History Filter Logic Update
 const renderHistoryList = () => {
     loadData();
     const $list = $('#pw-history-list').empty();
@@ -2324,13 +2345,18 @@ const renderHistoryList = () => {
     const chars = new Set();
     historyCache.forEach(item => {
         const title = item.title || "";
-        if (title.includes('NPC:')) chars.add('NPC');
-        else if (title.includes('&')) {
+        // Extract Char Name logic: "NPC: Name & Char" or "User & Char"
+        // We split by '&' and take the last part
+        if (title.includes('&')) {
             const parts = title.split('&');
-            if (parts.length > 1) chars.add(parts[1].trim());
+            if (parts.length > 1) {
+                const charName = parts[parts.length - 1].trim();
+                if(charName) chars.add(charName);
+            }
         }
     });
     
+    // Refresh only if empty (or keep simple)
     if ($filterChar.children().length <= 1) {
         Array.from(chars).sort().forEach(c => $filterChar.append(`<option value="${c}">${c}</option>`));
         $filterChar.val(currentCharFilter || 'all');
@@ -2353,11 +2379,7 @@ const renderHistoryList = () => {
         }
 
         if (filterChar !== 'all') {
-            if (filterChar === 'NPC') {
-                if (!item.title.includes('NPC:')) return false;
-            } else {
-                if (!item.title.includes(filterChar)) return false;
-            }
+            if (!item.title.includes(filterChar)) return false;
         }
 
         if (!search) return true;
@@ -2704,5 +2726,5 @@ jQuery(async () => {
     addPersonaButton(); 
     bindEvents(); 
     loadThemeCSS('style.css'); // Default theme
-    console.log("[PW] Persona Weaver Loaded (v2.3.0)");
+    console.log("[PW] Persona Weaver Loaded (v2.4.0)");
 });
