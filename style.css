@@ -1,7 +1,7 @@
 
 /* =========================================
    File: style.css
-   Version: 2.1.0 (Native Default)
+   Version: 2.1.1 (Native Default)
    Description: Persona Weaver Core Styles
 ========================================= */
 
@@ -72,7 +72,7 @@
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; flex-wrap: wrap; }
 .pw-section-label { font-weight: bold; font-size: 1em; padding: 2px 4px; color: var(--pw-text-main); opacity: 0.9; }
 
-/* Info Display (Mode Switcher) */
+/* Info Display (Mode Switcher) - [Optimized] */
 .pw-info-display {
     display: flex; align-items: center; justify-content: space-between; gap: 10px; 
     background: rgba(128,128,128,0.1); padding: 5px; border-radius: 6px; 
@@ -81,29 +81,45 @@
 
 .pw-mode-switch {
     display: flex;
-    background: rgba(0,0,0,0.2);
+    background: rgba(0,0,0,0.1);
     border-radius: 6px;
-    padding: 2px;
+    padding: 3px;
+    gap: 5px;
 }
 
 .pw-mode-btn {
-    padding: 4px 12px;
+    padding: 6px 14px;
     cursor: pointer;
     border-radius: 4px;
-    font-size: 0.9em;
+    font-size: 0.95em;
     font-weight: bold;
     color: var(--pw-text-main);
-    opacity: 0.6;
-    transition: all 0.2s;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Bouncy transition */
     display: flex; align-items: center; gap: 6px;
+    user-select: none;
 }
 
-.pw-mode-btn:hover { opacity: 0.9; background: rgba(255,255,255,0.05); }
+/* Inactive State */
+.pw-mode-btn:not(.active) {
+    opacity: 0.5;
+    background: transparent;
+    transform: scale(0.95);
+    filter: grayscale(80%);
+}
+.pw-mode-btn:not(.active):hover {
+    opacity: 0.8;
+    background: rgba(128,128,128,0.1);
+    transform: scale(1);
+}
 
+/* Active State */
 .pw-mode-btn.active {
+    opacity: 1;
     background: var(--pw-text-main);
     color: var(--smart-theme-bg, #000);
-    opacity: 1;
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    z-index: 1;
 }
 
 #pw-display-name { text-decoration: underline; opacity: 0.9; }
