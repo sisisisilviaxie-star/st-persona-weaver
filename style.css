@@ -1,7 +1,7 @@
 
 /* =========================================
    File: style.css
-   Version: 2.1.2 (UI Fixes)
+   Version: 2.1.0 (Native Default)
    Description: Persona Weaver Core Styles
 ========================================= */
 
@@ -72,64 +72,43 @@
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; flex-wrap: wrap; }
 .pw-section-label { font-weight: bold; font-size: 1em; padding: 2px 4px; color: var(--pw-text-main); opacity: 0.9; }
 
-/* Info Display (Mode Switcher) - [Optimized] */
+/* Info Display & Mode Switcher */
 .pw-info-display {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px; 
+    display: flex; align-items: center; gap: 10px; 
     background: rgba(128,128,128,0.1); padding: 5px; border-radius: 6px; 
     border: 1px solid var(--pw-border); margin-bottom: 5px;
 }
-
-.pw-mode-switch {
-    display: flex;
-    background: rgba(0,0,0,0.1);
-    border-radius: 6px;
-    padding: 3px;
-    gap: 5px;
+.pw-info-display.mode-switcher {
+    padding: 4px;
+    gap: 4px;
 }
 
 .pw-mode-btn {
-    padding: 6px 14px;
-    cursor: pointer;
-    border-radius: 4px;
-    font-size: 0.95em;
+    flex: 1;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 8px; border-radius: 4px; cursor: pointer;
+    font-size: 0.95em; color: var(--pw-text-main); opacity: 0.6;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
     font-weight: bold;
-    color: var(--pw-text-main);
-    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    display: flex; align-items: center; gap: 6px;
-    user-select: none;
-    border: 1px solid transparent;
-}
-
-/* Inactive State - Grayed Out */
-.pw-mode-btn:not(.active) {
-    opacity: 0.5;
     background: transparent;
-    filter: grayscale(100%); /* Make it grey */
-    transform: scale(0.9); /* Smaller */
 }
-.pw-mode-btn:not(.active):hover {
-    opacity: 0.8;
-    background: rgba(128,128,128,0.1);
-    transform: scale(0.95);
-    filter: grayscale(50%);
-}
-
-/* Active State - Highlighted */
-.pw-mode-btn.active {
+.pw-mode-btn:hover { opacity: 0.9; background: rgba(128,128,128,0.1); }
+.pw-mode-btn.pw-mode-active {
+    background: var(--pw-paper-bg);
     opacity: 1;
-    background: var(--pw-text-main);
-    color: var(--smart-theme-bg, #000); /* High contrast text */
-    transform: scale(1.05); /* Bigger */
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-    z-index: 1;
-    filter: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    transform: scale(1.02);
+    border: 1px solid var(--pw-border);
 }
 
+.pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--pw-text-main); font-size: 1.05em; }
 #pw-display-name { text-decoration: underline; opacity: 0.9; }
+
 .pw-load-btn {
     font-size: 0.85em; background: transparent; border: 1px solid currentColor;
     padding: 4px 12px; border-radius: 4px; cursor: pointer; color: var(--pw-text-main);
-    opacity: 0.8; font-weight: bold; margin-left: auto; transition: all 0.2s;
+    opacity: 0.6; font-weight: normal; margin-left: auto; transition: all 0.2s;
+    white-space: nowrap;
 }
 .pw-load-btn:hover { opacity: 1; background: rgba(128,128,128,0.2); }
 
@@ -324,10 +303,6 @@
 /* =========================================
    History Section
 ========================================= */
-.pw-history-filters {
-    display: flex; gap: 8px; margin-bottom: 8px;
-}
-
 .pw-search-box { position: relative; display: flex; align-items: center; margin-bottom: 10px; background: rgba(128,128,128,0.1); border-radius: 6px; border: 1px solid var(--pw-border); width: 100%; }
 .pw-search-icon { position: absolute; left: 10px; opacity: 0.5; pointer-events: none; color: var(--pw-text-main); }
 .pw-search-input { width: 100%; padding-left: 32px !important; padding-right: 30px; border: none; background: transparent; color: var(--pw-text-main); box-sizing: border-box; }
@@ -355,7 +330,6 @@
 .pw-badge { display: inline-block; padding: 2px 5px; border-radius: 3px; font-size: 0.7em; margin-right: 5px; font-weight: bold; text-transform: uppercase; vertical-align: middle; }
 .pw-badge.persona { background-color: rgba(65, 150, 255, 0.2); color: #88c0ff; border: 1px solid rgba(65, 150, 255, 0.4); }
 .pw-badge.template { background-color: rgba(255, 165, 0, 0.2); color: #ffbc42; border: 1px solid rgba(255, 165, 0, 0.4); }
-.pw-badge.npc { background-color: rgba(155, 89, 182, 0.2); color: #c39bd3; border: 1px solid rgba(155, 89, 182, 0.4); }
 
 /* =========================================
    Diff / Refine View
