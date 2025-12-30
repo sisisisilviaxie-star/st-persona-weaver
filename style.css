@@ -1,7 +1,7 @@
 
 /* =========================================
    File: style.css
-   Version: 2.1.0 (Native Default)
+   Version: 2.2.0 (Native Default)
    Description: Persona Weaver Core Styles
 ========================================= */
 
@@ -72,43 +72,48 @@
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; flex-wrap: wrap; }
 .pw-section-label { font-weight: bold; font-size: 1em; padding: 2px 4px; color: var(--pw-text-main); opacity: 0.9; }
 
-/* Info Display & Mode Switcher */
+/* Info Display & Mode Switcher (NEW) */
 .pw-info-display {
     display: flex; align-items: center; gap: 10px; 
     background: rgba(128,128,128,0.1); padding: 5px; border-radius: 6px; 
     border: 1px solid var(--pw-border); margin-bottom: 5px;
 }
 .pw-info-display.mode-switcher {
-    padding: 4px;
-    gap: 4px;
+    padding: 2px;
+    gap: 2px; /* 更紧密 */
+    justify-content: stretch;
 }
 
 .pw-mode-btn {
-    flex: 1;
+    flex: 1; /* Default size */
     display: flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 8px; border-radius: 4px; cursor: pointer;
-    font-size: 0.95em; color: var(--pw-text-main); opacity: 0.6;
-    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    padding: 10px; border-radius: 4px; cursor: pointer;
+    font-size: 0.9em; color: var(--pw-text-main); opacity: 0.5;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     font-weight: bold;
     background: transparent;
+    border: 1px solid transparent;
 }
-.pw-mode-btn:hover { opacity: 0.9; background: rgba(128,128,128,0.1); }
+.pw-mode-btn:hover { opacity: 0.8; background: rgba(128,128,128,0.05); }
+
+/* Active State: Grow and Highlight */
 .pw-mode-btn.pw-mode-active {
+    flex: 2; /* Grow bigger */
+    font-size: 1.05em;
     background: var(--pw-paper-bg);
     opacity: 1;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    transform: scale(1.02);
-    border: 1px solid var(--pw-border);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    border-color: var(--pw-border);
 }
 
 .pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--pw-text-main); font-size: 1.05em; }
-#pw-display-name { text-decoration: underline; opacity: 0.9; }
+#pw-display-name { text-decoration: underline; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 
 .pw-load-btn {
     font-size: 0.85em; background: transparent; border: 1px solid currentColor;
     padding: 4px 12px; border-radius: 4px; cursor: pointer; color: var(--pw-text-main);
     opacity: 0.6; font-weight: normal; margin-left: auto; transition: all 0.2s;
-    white-space: nowrap;
+    white-space: nowrap; flex-shrink: 0;
 }
 .pw-load-btn:hover { opacity: 1; background: rgba(128,128,128,0.2); }
 
