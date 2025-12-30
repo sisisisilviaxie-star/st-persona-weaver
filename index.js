@@ -89,7 +89,7 @@ NSFW:
   性癖好:
   禁忌底线:`;
 
-// 1.1 NPC 模版
+// 1.1 NPC 模版 (精简版)
 const defaultNpcTemplate = 
 `基本信息:
   姓名: 
@@ -125,7 +125,7 @@ NSFW:
   性相关特征:
   性癖好:`;
 
-// 2. Prompt (User Template)
+// 2. User 模版生成专用 Prompt
 const defaultTemplateGenPrompt = 
 `[TASK: DESIGN_USER_PROFILE_SCHEMA]
 [CONTEXT: The user is entering a simulation world defined by the database provided in System Context.]
@@ -147,7 +147,7 @@ const defaultTemplateGenPrompt =
 [Action]:
 Output the blank YAML template now. No explanations.`;
 
-// 2.1 Prompt (NPC Template)
+// 2.1 NPC 模版生成专用 Prompt
 const defaultNpcTemplateGenPrompt = 
 `[TASK: DESIGN_NPC_PROFILE_SCHEMA]
 [CONTEXT: The user needs a supporting character for the simulation.]
@@ -169,7 +169,7 @@ const defaultNpcTemplateGenPrompt =
 [Action]:
 Output the blank YAML template now. No explanations.`;
 
-// 3. Prompt (User Persona)
+// 3. User 人设生成/润色 Prompt
 const defaultPersonaGenPrompt =
 `[Task: Generate/Refine Profile]
 [Target Entity: "{{user}}"]
@@ -190,7 +190,7 @@ const defaultPersonaGenPrompt =
 [Action]:
 Output ONLY the YAML data matching the schema.`;
 
-// 4. Prompt (NPC Persona)
+// 4. NPC 生成/润色 Prompt
 const defaultNpcGenPrompt = 
 `[Task: Generate NPC Profile]
 [Context: Create a new NPC relevant to the current story flow.]
@@ -773,7 +773,7 @@ function saveData() {
     safeLocalStorageSet(STORAGE_KEY_THEMES, JSON.stringify(customThemes));
 }
 
-// [Fix 3 & 4] History Naming Rules Update
+// [Fix 3] History Title Logic Update
 function saveHistory(item) {
     const limit = 1000; 
     const mode = uiStateCache.generationMode; // 'user' or 'npc'
@@ -784,15 +784,14 @@ function saveHistory(item) {
         const charName = context.characters[context.characterId]?.name || "Char";
         
         if (item.data && item.data.type === 'template') {
-            // [Fix 3] Template Naming
-            const typeStr = mode === 'npc' ? 'NPC' : 'User';
-            item.title = `${typeStr}模版 (${charName})`;
+            // [Fix 3a] Template Titles
+            item.title = mode === 'npc' ? `NPC模版 (${charName})` : `User模版 (${charName})`;
         } else {
+            // [Fix 3b] Persona Titles
             if (mode === 'npc') {
                 const nameMatch = item.data.resultText.match(/姓名:\s*(.*?)(\n|$)/);
-                const npcName = nameMatch ? nameMatch[1].trim() : "Unknown NPC";
-                // [Fix 4] NPC Naming with @
-                item.title = `NPC: ${npcName} @ ${charName}`;
+                const npcName = nameMatch ? nameMatch[1].trim() : "Unknown";
+                item.title = `NPC：${npcName}（${charName}）`;
             } else {
                 item.title = `${userName} & ${charName}`;
             }
@@ -1041,22 +1040,15 @@ async function openCreatorPopup() {
     <!-- Editor View -->
     <div id="pw-view-editor" class="pw-view active">
         <div class="pw-scroll-area">
-            <!-- Mode Switcher & Load Button -->
-            <div class="pw-info-display mode-switcher">
-                <div class="pw-mode-btn ${!isNpc ? activeClass : ''}" data-mode="user" title="User 模式">
-                    <i class="fa-solid fa-user"></i>
-                    <span id="pw-display-name">${currentName}</span>
+            <!-- [Fix 1] Mode Switcher UI Refactor -->
+            <div class="pw-info-display">
+                <!-- Left: Toggle Group -->
+                <div class="pw-mode-toggle-group">
+                    <div class="pw-mode-item ${!isNpc ? 'active' : ''}" data-mode="user" title="User 模式">User: ${currentName}</div>
+                    <div class="pw-mode-item ${isNpc ? 'active' : ''}" data-mode="npc" title="NPC 模式">NPC</div>
                 </div>
-                <div class="pw-mode-btn ${isNpc ? activeClass : ''}" data-mode="npc" title="NPC 模式">
-                    <i class="fa-solid fa-user-secret"></i>
-                    <span>NPC</span>
-                </div>
-                <!-- [Fix 1] Visual Separator -->
-                <div style="width:1px; background:var(--pw-border); margin:0 5px; height:20px;"></div>
-                <!-- [Fix 1 & 2] Rename & Visually distinct -->
-                <div class="pw-load-btn pw-action-btn-pill" id="pw-btn-load-current" title="从酒馆读取当前 User 设定" style="${isNpc ? 'visibility:hidden;' : ''}">
-                    <i class="fa-solid fa-file-import"></i> 载入当前人设
-                </div>
+                <!-- Right: Action Button (Visibility Hidden when NPC) -->
+                <div class="pw-load-btn" id="pw-btn-load-current" style="${isNpc ? 'visibility:hidden;' : ''}">载入当前人设</div>
             </div>
 
             <div>
@@ -1167,11 +1159,11 @@ async function openCreatorPopup() {
                         <option value="">(不使用开场白)</option>
                     </select>
                 </div>
+                <!-- [Fix 2] Min-height fix -->
                 <div id="pw-greetings-toggle-bar" class="pw-preview-toggle-bar" style="display:none;">
                     <i class="fa-solid fa-angle-up"></i> 收起预览
                 </div>
-                <!-- [Fix 2] Min-height increased to 180px -->
-                <textarea id="pw-greetings-preview" style="min-height: 180px;"></textarea>
+                <textarea id="pw-greetings-preview" style="min-height: 120px; display:none;"></textarea>
             </div>
 
             <div class="pw-card-section">
@@ -1302,7 +1294,7 @@ async function openCreatorPopup() {
     <!-- History View with Pagination -->
     <div id="pw-view-history" class="pw-view">
         <div class="pw-scroll-area">
-            <!-- Detailed History Types -->
+            <!-- [Fix 3] History Filters -->
             <div class="pw-history-filters" style="display:flex; gap:5px; margin-bottom:8px;">
                 <select id="pw-hist-filter-type" class="pw-input" style="flex:1;">
                     <option value="all">所有类型</option>
@@ -1414,13 +1406,13 @@ function bindEvents() {
     }
     window.openPersonaWeaver = openCreatorPopup;
 
-    // --- Mode Switcher ---
-    $(document).on('click.pw', '.pw-mode-btn', function() {
+    // --- [Fix 1] Mode Switcher (Pill Style) ---
+    $(document).on('click.pw', '.pw-mode-item', function() {
         const mode = $(this).data('mode');
         if (mode === uiStateCache.generationMode) return;
         
-        $('.pw-mode-btn').removeClass('pw-mode-active');
-        $(this).addClass('pw-mode-active');
+        $('.pw-mode-item').removeClass('active');
+        $(this).addClass('active');
         
         uiStateCache.generationMode = mode;
         saveData();
@@ -1428,13 +1420,12 @@ function bindEvents() {
         // Switch Template & Button Text & Button Visibility
         if (mode === 'npc') {
             $('#pw-btn-gen').text("生成 NPC 设定");
-            // [Fix 1] Visibility Hidden instead of Display None
             $('#pw-btn-apply').hide();
+            // [Fix 1] Use visibility hidden to keep layout
             $('#pw-btn-load-current').css('visibility', 'hidden'); 
             $('#pw-load-main-template').show(); 
 
             const currentT = $('#pw-template-text').val();
-            // Switch to NPC Default Template logic
             if (!currentT || currentT === defaultYamlTemplate) {
                 $('#pw-template-text').val(defaultNpcTemplate);
                 currentTemplate = defaultNpcTemplate;
@@ -1615,6 +1606,7 @@ function bindEvents() {
         } else if (currentGreetingsList[idx]) {
             $preview.val(currentGreetingsList[idx].content).show();
             $toggleBtn.show().html('<i class="fa-solid fa-angle-up"></i> 收起预览');
+            // [Fix 2] Smooth toggle logic
             requestAnimationFrame(() => {
                 $preview.height('auto');
                 $preview.height($preview[0].scrollHeight + 'px');
@@ -1622,6 +1614,7 @@ function bindEvents() {
         }
     });
 
+    // [Fix 2] Toggle Animation Logic
     $(document).on('click.pw', '#pw-greetings-toggle-bar', function() {
         const $preview = $('#pw-greetings-preview');
         if ($preview.is(':visible')) {
@@ -1684,7 +1677,7 @@ function bindEvents() {
 
     // Load Main Template logic
     $(document).on('click.pw', '#pw-load-main-template', function() {
-        if(confirm("确定要载入默认的 User 主模版吗？这将覆盖当前编辑器内容。")) {
+        if(confirm("确定要使用默认的 User 主模版吗？这将覆盖当前编辑器内容。")) {
             $('#pw-template-text').val(defaultYamlTemplate);
             currentTemplate = defaultYamlTemplate;
             saveData();
@@ -2340,7 +2333,7 @@ const renderTemplateChips = () => {
     });
 };
 
-// [Fix 5] History Filter Logic Update
+// [Fix 4] History Filter Logic & Tags & Click Switch
 const renderHistoryList = () => {
     loadData();
     const $list = $('#pw-history-list').empty();
@@ -2351,22 +2344,15 @@ const renderHistoryList = () => {
     const chars = new Set();
     historyCache.forEach(item => {
         const title = item.title || "";
-        // Extract Char Name logic
-        // "NPC: Name @ Char" or "User & Char"
-        // @ has highest priority
-        if (title.includes('@')) {
-            const parts = title.split('@');
-            if (parts.length > 1) {
-                const charName = parts[parts.length - 1].trim();
-                if(charName) chars.add(charName);
-            }
-        } else if (title.includes('&')) {
-            const parts = title.split('&');
-            if (parts.length > 1) {
-                const charName = parts[parts.length - 1].trim();
-                if(charName) chars.add(charName);
-            }
+        // Logic: Extract the part in parentheses or after last space for Char Name
+        // Format: "User模版 (Char)" or "NPC：Name（Char）"
+        let charName = "";
+        if (title.includes('（')) {
+            charName = title.split('（')[1].replace('）', '').trim();
+        } else if (title.includes('(')) {
+            charName = title.split('(')[1].replace(')', '').trim();
         }
+        if(charName) chars.add(charName);
     });
     
     if ($filterChar.children().length <= 1) {
@@ -2417,15 +2403,14 @@ const renderHistoryList = () => {
         const type = item.data.genType || item.data.type;
 
         let badgeHtml = '';
-        // [Fix 5] Simple Colored Badges
         if (type === 'npc_template') {
-            badgeHtml = '<span class="pw-badge template npc">NPC模版</span>';
+            badgeHtml = '<span class="pw-badge template" style="background:rgba(255, 165, 0, 0.2); color:#ffbc42;">模版(N)</span>';
         } else if (type === 'user_template' || type === 'template') {
-            badgeHtml = '<span class="pw-badge template user">User模版</span>';
+            badgeHtml = '<span class="pw-badge template">模版(U)</span>';
         } else if (type === 'npc_persona' || type === 'npc') {
-            badgeHtml = '<span class="pw-badge persona npc">NPC</span>';
+            badgeHtml = '<span class="pw-badge npc" style="background:rgba(155, 89, 182, 0.2); color:#a569bd; border:1px solid rgba(155, 89, 182, 0.4);">NPC</span>';
         } else {
-            badgeHtml = '<span class="pw-badge persona user">User</span>';
+            badgeHtml = '<span class="pw-badge persona">User</span>';
         }
 
         const $el = $(`
@@ -2446,6 +2431,14 @@ const renderHistoryList = () => {
     `);
         $el.on('click', function (e) {
             if ($(e.target).closest('.pw-hist-action-btn, .pw-hist-title-input').length) return;
+            
+            // [Fix 4] Auto Switch Mode Logic
+            const targetMode = (type === 'npc_template' || type === 'npc_persona' || type === 'npc') ? 'npc' : 'user';
+            const $modeBtn = $(`.pw-mode-item[data-mode="${targetMode}"]`);
+            if (!$modeBtn.hasClass('active')) {
+                $modeBtn.click(); // Trigger click to switch UI
+            }
+
             if (type.includes('template')) {
                 $('#pw-template-text').val(previewText);
                 currentTemplate = previewText;
