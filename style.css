@@ -1,7 +1,7 @@
 
 /* =========================================
    File: style.css
-   Version: 2.1.1 (Native Default)
+   Version: 2.1.2 (UI Fixes)
    Description: Persona Weaver Core Styles
 ========================================= */
 
@@ -94,32 +94,35 @@
     font-size: 0.95em;
     font-weight: bold;
     color: var(--pw-text-main);
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Bouncy transition */
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     display: flex; align-items: center; gap: 6px;
     user-select: none;
+    border: 1px solid transparent;
 }
 
-/* Inactive State */
+/* Inactive State - Grayed Out */
 .pw-mode-btn:not(.active) {
     opacity: 0.5;
     background: transparent;
-    transform: scale(0.95);
-    filter: grayscale(80%);
+    filter: grayscale(100%); /* Make it grey */
+    transform: scale(0.9); /* Smaller */
 }
 .pw-mode-btn:not(.active):hover {
     opacity: 0.8;
     background: rgba(128,128,128,0.1);
-    transform: scale(1);
+    transform: scale(0.95);
+    filter: grayscale(50%);
 }
 
-/* Active State */
+/* Active State - Highlighted */
 .pw-mode-btn.active {
     opacity: 1;
     background: var(--pw-text-main);
-    color: var(--smart-theme-bg, #000);
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    color: var(--smart-theme-bg, #000); /* High contrast text */
+    transform: scale(1.05); /* Bigger */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
     z-index: 1;
+    filter: none;
 }
 
 #pw-display-name { text-decoration: underline; opacity: 0.9; }
