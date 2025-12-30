@@ -1,7 +1,7 @@
 
 /* =========================================
    File: style.css
-   Version: 2.4.0 (Native Default)
+   Version: 2.3.0 (Native Default)
    Description: Persona Weaver Core Styles
 ========================================= */
 
@@ -61,6 +61,23 @@
 .pw-view.active { display: flex; }
 
 /* =========================================
+   Mode Switcher (User/NPC)
+========================================= */
+.pw-mode-switch-bar {
+    display: flex; border: 1px solid var(--pw-border); border-radius: 6px; overflow: hidden; margin-bottom: 5px;
+}
+.pw-mode-btn {
+    flex: 1; text-align: center; padding: 6px; cursor: pointer; opacity: 0.6; 
+    background: rgba(128,128,128,0.1); transition: all 0.2s; font-weight: bold; font-size: 0.9em;
+    display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--pw-text-main);
+}
+.pw-mode-btn:hover { opacity: 0.9; background: rgba(128,128,128,0.2); }
+.pw-mode-btn.active {
+    opacity: 1; background: var(--pw-paper-bg); 
+    box-shadow: inset 0 -2px 0 var(--pw-text-main);
+}
+
+/* =========================================
    General Components
 ========================================= */
 .pw-card-section { 
@@ -72,51 +89,25 @@
 .pw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; flex-wrap: wrap; }
 .pw-section-label { font-weight: bold; font-size: 1em; padding: 2px 4px; color: var(--pw-text-main); opacity: 0.9; }
 
-/* Info Display & Mode Switcher (NEW) */
+/* Info Display */
 .pw-info-display {
     display: flex; align-items: center; gap: 10px; 
-    background: rgba(128,128,128,0.1); padding: 5px; border-radius: 6px; 
+    background: rgba(128,128,128,0.1); padding: 8px; border-radius: 6px; 
     border: 1px solid var(--pw-border); margin-bottom: 5px;
 }
-.pw-info-display.mode-switcher {
-    padding: 2px;
-    gap: 2px; 
-    justify-content: stretch;
-}
-
-.pw-mode-btn {
-    flex: 1; 
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 10px; border-radius: 20px; /* [Fix 1] More Rounded */
-    cursor: pointer;
-    font-size: 0.9em; color: var(--pw-text-main); opacity: 0.5;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    font-weight: bold;
-    background: transparent;
-    border: 1px solid transparent;
-}
-.pw-mode-btn:hover { opacity: 0.8; background: rgba(128,128,128,0.05); }
-
-/* Active State: Grow and Highlight */
-.pw-mode-btn.pw-mode-active {
-    flex: 2; /* Grow bigger */
-    font-size: 1.05em;
-    background: var(--pw-paper-bg);
-    opacity: 1;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-    border-color: var(--pw-border);
-}
-
 .pw-info-item { display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--pw-text-main); font-size: 1.05em; }
-#pw-display-name { text-decoration: underline; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+#pw-display-name { text-decoration: underline; opacity: 0.9; }
 
+/* [MOD] Load Button Style */
 .pw-load-btn {
-    font-size: 0.85em; background: transparent; border: 1px solid currentColor;
+    font-size: 0.85em; 
+    background: var(--pw-paper-bg); 
+    border: 1px solid var(--pw-text-main);
     padding: 4px 12px; border-radius: 4px; cursor: pointer; color: var(--pw-text-main);
-    opacity: 0.6; font-weight: normal; margin-left: auto; transition: all 0.2s;
-    white-space: nowrap; flex-shrink: 0;
+    opacity: 0.9; font-weight: bold; margin-left: auto; transition: all 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
-.pw-load-btn:hover { opacity: 1; background: rgba(128,128,128,0.2); }
+.pw-load-btn:hover { opacity: 1; background: rgba(128,128,128,0.2); transform: translateY(-1px); }
 
 /* Inputs */
 .pw-input, .pw-textarea, .pw-select {
@@ -124,6 +115,11 @@
     color: var(--pw-text-main); border-radius: 6px; padding: 8px;
     font-family: inherit; font-size: inherit; outline: none; box-sizing: border-box;
 }
+.pw-input-transparent {
+    background: transparent; border: none; border-bottom: 1px solid var(--pw-border);
+    color: var(--pw-text-main); padding: 4px; font-size: inherit; outline: none;
+}
+.pw-input-transparent:focus { border-bottom-color: var(--pw-text-main); }
 .pw-input:focus, .pw-textarea:focus, .pw-select:focus { border-color: var(--pw-text-main); box-shadow: 0 0 5px rgba(128,128,128,0.2); }
 .pw-textarea { resize: vertical; line-height: 1.5; }
 #pw-request { min-height: 200px; transition: min-height 0.3s ease; }
@@ -301,7 +297,7 @@
 .pw-remove-book-icon { color: var(--pw-danger); cursor: pointer; transition: transform 0.2s; }
 .pw-remove-book-icon:hover { transform: scale(1.1); }
 .pw-bound-status { color: var(--pw-text-main) !important; opacity: 0.6; font-size: 0.8em; margin-left: 5px; font-weight: bold; }
-.pw-wi-desc, #pw-greetings-preview { display: none; background: rgba(128,128,128,0.1) !important; color: var(--pw-text-main) !important; border: 1px solid var(--pw-border); border-radius: 4px; padding: 8px; font-size: 0.9em; width: 100%; box-sizing: border-box; resize: vertical; line-height: 1.5; margin-top: 5px; }
+.pw-wi-desc, #pw-greetings-preview { display: none; background: rgba(128,128,128,0.1) !important; color: var(--pw-text-main) !important; border: 1px solid var(--pw-border); border-radius: 4px; padding: 8px; font-size: 0.9em; width: 100%; box-sizing: border-box; resize: vertical; line-height: 1.5; margin-top: 5px; min-height: 150px; } /* [MOD] Increased min-height */
 
 /* Info Badges */
 .pw-wi-info-badge { font-size: 0.65em; background: rgba(128,128,128,0.1); padding: 1px 4px; border-radius: 3px; color: var(--pw-text-main); opacity: 0.4; margin-right: 5px; white-space: nowrap; vertical-align: middle; }
@@ -336,6 +332,7 @@
 .pw-badge { display: inline-block; padding: 2px 5px; border-radius: 3px; font-size: 0.7em; margin-right: 5px; font-weight: bold; text-transform: uppercase; vertical-align: middle; }
 .pw-badge.persona { background-color: rgba(65, 150, 255, 0.2); color: #88c0ff; border: 1px solid rgba(65, 150, 255, 0.4); }
 .pw-badge.template { background-color: rgba(255, 165, 0, 0.2); color: #ffbc42; border: 1px solid rgba(255, 165, 0, 0.4); }
+.pw-badge.npc { background-color: rgba(131, 193, 104, 0.2); color: #83c168; border: 1px solid rgba(131, 193, 104, 0.4); }
 
 /* =========================================
    Diff / Refine View
