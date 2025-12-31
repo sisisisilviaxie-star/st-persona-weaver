@@ -574,7 +574,7 @@ function getRealSystemPrompt() {
 }
 
 // ============================================================================
-// [核心] 生成逻辑
+// [核心] 生成逻辑 (兼容 Gemini 修复版)
 // ============================================================================
 async function runGeneration(data, apiConfig, isTemplateMode = false) {
     let charName = "Char";
@@ -668,45 +668,68 @@ async function runGeneration(data, apiConfig, isTemplateMode = false) {
     const timeoutId = setTimeout(() => controller.abort(), 120000); 
 
     try {
+        // 构建基础 Prompt
         const promptArray = [];
         promptArray.push({ role: 'system', content: activeSystemPrompt });
         if (wrappedWi && wrappedWi.trim().length > 0) promptArray.push({ role: 'system', content: wrappedWi });
         promptArray.push({ role: 'user', content: userMessageContent });
+        
+        // 创建无 prefill 的备份数组，用于重试
+        const promptArrayNoPrefill = JSON.parse(JSON.stringify(promptArray));
+
+        // 默认尝试带 Prefill (这对 OpenAI/Claude 效果最好)
         if (prefillContent) promptArray.push({ role: 'assistant', content: prefillContent });
 
         updateDebugView(promptArray);
 
-        if (apiConfig.apiSource === 'independent') {
-            let baseUrl = apiConfig.indepApiUrl.replace(/\/$/, '');
-            if (baseUrl.endsWith('/chat/completions')) baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
-            const url = `${baseUrl}/chat/completions`;
-            
-            const res = await fetch(url, {
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.indepApiKey}` },
-                body: JSON.stringify({ model: apiConfig.indepApiModel, messages: promptArray, temperature: 0.85 }),
-                signal: controller.signal
-            });
-            if (!res.ok) throw new Error(`API Error: ${res.status}`);
-            const json = await res.json();
-            responseContent = json.choices[0].message.content;
-
-        } else {
-            if (window.TavernHelper && typeof window.TavernHelper.generateRaw === 'function') {
-                responseContent = await window.TavernHelper.generateRaw({
-                    user_input: '', 
-                    ordered_prompts: promptArray,
-                    overrides: { 
-                        world_info_before: '', world_info_after: '', persona_description: '', 
-                        char_description: '', char_personality: '', scenario: '', dialogue_examples: '',
-                        chat_history: { prompts: [], with_depth_entries: false, author_note: '' }
-                    },
-                    injects: [], max_chat_history: 0
+        // 封装请求函数
+        const doRequest = async (messages) => {
+            if (apiConfig.apiSource === 'independent') {
+                let baseUrl = apiConfig.indepApiUrl.replace(/\/$/, '');
+                if (baseUrl.endsWith('/chat/completions')) baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
+                const url = `${baseUrl}/chat/completions`;
+                
+                const res = await fetch(url, {
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.indepApiKey}` },
+                    body: JSON.stringify({ model: apiConfig.indepApiModel, messages: messages, temperature: 0.85 }),
+                    signal: controller.signal
                 });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const json = await res.json();
+                return json.choices[0].message.content;
             } else {
-                throw new Error("ST版本过旧或未安装 TavernHelper");
+                if (window.TavernHelper && typeof window.TavernHelper.generateRaw === 'function') {
+                    return await window.TavernHelper.generateRaw({
+                        user_input: '', 
+                        ordered_prompts: messages,
+                        overrides: { 
+                            world_info_before: '', world_info_after: '', persona_description: '', 
+                            char_description: '', char_personality: '', scenario: '', dialogue_examples: '',
+                            chat_history: { prompts: [], with_depth_entries: false, author_note: '' }
+                        },
+                        injects: [], max_chat_history: 0
+                    });
+                } else {
+                    throw new Error("ST版本过旧或未安装 TavernHelper");
+                }
+            }
+        };
+
+        // 尝试请求，包含自动重试逻辑
+        try {
+            responseContent = await doRequest(promptArray);
+        } catch (err) {
+            // 如果请求失败且使用了 prefill，尝试去掉 prefill 重试 (针对 Gemini 等不支持 assistant 结尾的模型)
+            if (prefillContent) {
+                console.warn("[PW] Generation failed (possible Gemini constraint), retrying without prefill...", err);
+                toastr.info("检测到 API 限制 (如 Gemini)，正在尝试兼容模式...");
+                responseContent = await doRequest(promptArrayNoPrefill);
+            } else {
+                throw err;
             }
         }
+
     } catch (e) {
         console.error("[PW] 生成错误:", e);
         throw e;
@@ -1974,7 +1997,7 @@ function bindEvents() {
             };
             const responseText = await runGeneration(config, config, false);
 
-            $('#pw-diff-raw-textarea').val(responseText);
+            $('#pw-diff-raw-textarea').val(responseText); // Fix: Remove markdown backticks
             $('#pw-diff-old-raw-textarea').val(oldText);
 
             const oldMap = parseYamlToBlocks(oldText);
