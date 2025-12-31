@@ -1974,7 +1974,7 @@ function bindEvents() {
             };
             const responseText = await runGeneration(config, config, false);
 
-            $('#pw-diff-raw-textarea').val(lastRawResponse);
+            $('#pw-diff-raw-textarea').val(responseText);
             $('#pw-diff-old-raw-textarea').val(oldText);
 
             const oldMap = parseYamlToBlocks(oldText);
@@ -2773,4 +2773,4 @@ jQuery(async () => {
     bindEvents(); 
     loadThemeCSS('style.css'); // Default theme
     console.log("[PW] Persona Weaver Loaded (v2.7.2 - Hotfix)");
-})
+});
