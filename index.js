@@ -2,8 +2,9 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const CURRENT_VERSION = "2.1.0"; // Hotfix version
+const CURRENT_VERSION = "2.1.0"; 
 
+// Update URL (Changed to main branch)
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/main/manifest.json";
 
 // Storage Keys
@@ -1171,7 +1172,7 @@ async function openCreatorPopup() {
                         <option value="">(不使用开场白)</option>
                     </select>
                 </div>
-                <!-- [Fix 1] Restored original textarea with larger height -->
+                <!-- [Fix] Greetings Preview Area with increased min-height -->
                 <div id="pw-greetings-toggle-bar" class="pw-preview-toggle-bar" style="display:none;">
                     <i class="fa-solid fa-angle-up"></i> 收起预览
                 </div>
@@ -2767,4 +2768,3 @@ jQuery(async () => {
     loadThemeCSS('style.css'); // Default theme
     console.log("[PW] Persona Weaver Loaded (v2.7.2 - Hotfix)");
 });
-
