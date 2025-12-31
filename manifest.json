@@ -1,11 +1,11 @@
 {
     "display_name": "Persona Weaver (User人设生成器)",
     "name": "st-persona-weaver",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "author": "Yellows & AI",
     "description": "AI辅助生成与润色用户设定",
     "js": "index.js",
     "css": "style.css",
     "type": "extension",
-    "note": "v2.0.0 重大更新：\n✨ 新增智能模版生成：根据角色/世界书自动生成YAML结构\n🎨 新增主题系统：支持切换皮肤与导入CSS\n📚 优化世界书：支持搜索、筛选、自动记忆勾选状态\n💾 优化历史记录：支持分页、搜索与分类\n🧠 强化内核：Prompt逻辑重构，支持开场白参考与自动修正"
+    "notes": "v2.1.0 更新：\n1. 新增 NPC 生成模式，支持参考聊天记录生成角色。\n2. 实装开场白智能绑定，自动识别当前开场白。\n3. 历史记录增加类型与角色筛选功能。\n\n2025最后一次更新www，祝大家新年快乐！"
 }
