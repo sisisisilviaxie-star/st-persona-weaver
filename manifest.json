@@ -1,10 +1,11 @@
 {
-    "display_name": "Persona Weaver (用户设定编织者)",
+    "display_name": "Persona Weaver (User人设生成器)",
     "name": "st-persona-weaver",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "author": "Yellows & AI",
-    "description": "原生扩展：AI辅助生成用户设定，支持历史记录、自动保存并同步至世界书。",
+    "description": "AI辅助生成与润色用户设定",
     "js": "index.js",
     "css": "style.css",
-    "type": "extension"
+    "type": "extension",
+    "notes": "v2.1.0 更新：\n1. 新增 NPC 生成模式，支持参考聊天记录生成角色。\n2. 实装开场白智能绑定，自动识别当前开场白。\n3. 历史记录增加类型与角色筛选功能。\n\n2025最后一次更新www，祝大家新年快乐！"
 }
