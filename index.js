@@ -3,7 +3,7 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const CURRENT_VERSION = "2.2.3"; // Dynamic Preset Hints
+const CURRENT_VERSION = "2.2.5"; // Smart Keywords for All
 
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/main/manifest.json";
 
@@ -961,6 +961,32 @@ async function forceSavePersona(name, description) {
     return true;
 }
 
+// [Fix 15] Universal Smart Keyword Logic
+function generateSmartKeywords(name, content, staticTags = []) {
+    let rawKeys = [name, ...staticTags];
+
+    // 1. 尝试从内容中提取 "别名/昵称/Alias"
+    const aliasMatch = content.match(/(?:别名|昵称|Alias)[:：]\s*(.*?)(\n|$)/i);
+    if (aliasMatch) {
+        // 支持中文逗号、英文逗号、顿号分隔
+        const aliases = aliasMatch[1].split(/[,，、]/).map(s => s.trim()).filter(s => s);
+        rawKeys.push(...aliases);
+    }
+
+    // 2. 智能拆分 (针对翻译名或西文名)
+    if (name.includes('·')) {
+        // 如 "希尔薇·波拉" -> 添加 "希尔薇"
+        rawKeys.push(name.split('·')[0].trim());
+    } else if (name.includes(' ')) {
+        // 如 "John Doe" -> 添加 "John" (防止单字母触发)
+        const firstName = name.split(' ')[0].trim();
+        if (firstName.length > 1) rawKeys.push(firstName);
+    }
+
+    // 3. 去重、过滤短词(长度<=1)、移除空值
+    return [...new Set(rawKeys)].filter(k => k && k.length > 1);
+}
+
 async function syncToWorldInfoViaHelper(userName, content) {
     if (!window.TavernHelper) return toastr.error(TEXT.TOAST_WI_ERROR);
 
@@ -982,19 +1008,24 @@ async function syncToWorldInfoViaHelper(userName, content) {
     let entryKeys = [];
     const isNpc = uiStateCache.generationMode === 'npc';
 
+    // 尝试从 YAML 内容中优先读取姓名，如果没写则用传入的 fallback
+    const nameMatch = content.match(/姓名:\s*(.*?)(\n|$)/);
+    
     if (isNpc) {
-        const nameMatch = content.match(/姓名:\s*(.*?)(\n|$)/);
         let npcName = nameMatch ? nameMatch[1].trim() : "";
         if (!npcName) {
             npcName = prompt("无法自动识别 NPC 姓名，请输入：", "路人甲");
             if (!npcName) return; 
         }
         entryTitle = `NPC:${npcName}`;
-        entryKeys = [npcName, `NPC:${npcName}`];
+        // NPC 额外添加 "npc" 触发词
+        entryKeys = generateSmartKeywords(npcName, content, ["npc", "NPC"]);
     } else {
-        const safeUserName = userName || "User";
-        entryTitle = `USER:${safeUserName}`; 
-        entryKeys = [safeUserName, "User"];
+        // User 优先用 YAML 里的名字（可能用户在设定里给自己起了全名），回退用酒馆用户名
+        const finalUserName = nameMatch ? nameMatch[1].trim() : (userName || "User");
+        entryTitle = `USER:${finalUserName}`; 
+        // User 额外添加 "User", "user" 触发词
+        entryKeys = generateSmartKeywords(finalUserName, content, ["User", "user"]);
     }
 
     try {
@@ -1005,6 +1036,7 @@ async function syncToWorldInfoViaHelper(userName, content) {
             await window.TavernHelper.setLorebookEntries(targetBook, [{ 
                 uid: existingEntry.uid, 
                 content: content, 
+                keys: entryKeys, // 更新 Keys
                 enabled: true 
             }]);
         } else {
@@ -1019,7 +1051,7 @@ async function syncToWorldInfoViaHelper(userName, content) {
             };
             await window.TavernHelper.createLorebookEntries(targetBook, [newEntry]);
         }
-        toastr.success(TEXT.TOAST_WI_SUCCESS(targetBook, entryTitle));
+        toastr.success(TEXT.TOAST_WI_SUCCESS(targetBook, entryTitle) + `\n触发词: ${entryKeys.join(', ')}`);
     } catch (e) { 
         console.error("[PW] World Info Sync Error:", e);
         toastr.error("写入世界书失败: " + e.message); 
