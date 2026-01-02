@@ -2,7 +2,7 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const CURRENT_VERSION = "2.1.0"; // Hotfix version
+const CURRENT_VERSION = "2.2.0"; // Feature: Preset Selector & Pure Mode
 
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/main/manifest.json";
 
@@ -12,7 +12,7 @@ const STORAGE_KEY_STATE = 'pw_state_v20';
 const STORAGE_KEY_TEMPLATE = 'pw_template_v6_new_yaml'; 
 const STORAGE_KEY_PROMPTS = 'pw_prompts_v21_restore_edit'; 
 const STORAGE_KEY_WI_STATE = 'pw_wi_selection_v1';
-const STORAGE_KEY_UI_STATE = 'pw_ui_state_v3'; 
+const STORAGE_KEY_UI_STATE = 'pw_ui_state_v4_preset'; // Updated version key
 const STORAGE_KEY_THEMES = 'pw_custom_themes_v1'; 
 const STORAGE_KEY_DATA_USER = 'pw_data_user_v1'; 
 const STORAGE_KEY_DATA_NPC = 'pw_data_npc_v1';   
@@ -268,7 +268,7 @@ let lastRawResponse = "";
 let isProcessing = false;
 let currentGreetingsList = []; 
 let wiSelectionCache = {};
-let uiStateCache = { templateExpanded: true, theme: 'style.css', generationMode: 'user' }; 
+let uiStateCache = { templateExpanded: true, theme: 'style.css', generationMode: 'user', generationPreset: 'current' }; 
 let hasNewVersion = false;
 let customThemes = {}; 
 let historyPage = 1; 
@@ -281,7 +281,7 @@ const getCurrentTemplate = () => {
 }
 
 // ============================================================================
-// 工具函数 (保持不变)
+// 工具函数
 // ============================================================================
 const yieldToBrowser = () => new Promise(resolve => requestAnimationFrame(resolve));
 const forcePaint = () => new Promise(resolve => setTimeout(resolve, 50));
@@ -545,7 +545,39 @@ Treat this as a rigid logical constraint for the simulation database.
     }
 }
 
-function getRealSystemPrompt() {
+// [Fix 10] New Logic for System Prompt Retrieval based on Selection
+function getRealSystemPrompt(selectedPreset) {
+    // 1. Pure Mode: Only return Jailbreak prompt (if available) or empty
+    if (selectedPreset === 'pure') {
+        const settings = SillyTavern.chatCompletionSettings;
+        if (settings && settings.jailbreak_toggle && settings.jailbreak_prompt) {
+            return settings.jailbreak_prompt;
+        }
+        return ""; // Totally empty system prompt
+    }
+
+    // 2. Specific Preset Mode
+    if (selectedPreset && selectedPreset !== 'current') {
+        if (window.TavernHelper && typeof window.TavernHelper.getPreset === 'function') {
+            try {
+                const preset = window.TavernHelper.getPreset(selectedPreset);
+                if (preset && preset.prompts) {
+                    const systemParts = preset.prompts
+                        .filter(p => p.enabled && (
+                            p.role === 'system' || 
+                            ['main', 'jailbreak', 'nsfw', 'jailbreak_prompt', 'main_prompt'].includes(p.id)
+                        ))
+                        .map(p => p.content)
+                        .join('\n\n');
+                    return systemParts || "";
+                }
+            } catch (e) { 
+                console.warn(`[PW] Failed to load specific preset '${selectedPreset}':`, e);
+            }
+        }
+    }
+
+    // 3. Fallback / Current Mode (Original Logic)
     if (window.TavernHelper && typeof window.TavernHelper.getPreset === 'function') {
         try {
             const preset = window.TavernHelper.getPreset('in_use');
@@ -564,6 +596,8 @@ function getRealSystemPrompt() {
             }
         } catch (e) { console.warn("[PW] 从预设获取 System Prompt 失败:", e); }
     }
+    
+    // Last resort fallback
     if (SillyTavern.chatCompletionSettings) {
         const settings = SillyTavern.chatCompletionSettings;
         const main = settings.main_prompt || "";
@@ -574,7 +608,7 @@ function getRealSystemPrompt() {
 }
 
 // ============================================================================
-// [核心] 生成逻辑 (兼容 Gemini 修复版)
+// [核心] 生成逻辑
 // ============================================================================
 async function runGeneration(data, apiConfig, isTemplateMode = false) {
     let charName = "Char";
@@ -610,14 +644,21 @@ async function runGeneration(data, apiConfig, isTemplateMode = false) {
     const wrappedUserPersona = isNpcMode ? wrapAsXiTaReference(rawUserPersona, `User Profile: ${currentName}`) : "";
     const wrappedChatHistory = isNpcMode ? wrapAsXiTaReference(rawChatHistory, `Recent Chat History`) : "";
 
-    let activeSystemPrompt = getRealSystemPrompt();
+    // [Fix 10] Use selected preset logic
+    let activeSystemPrompt = getRealSystemPrompt(uiStateCache.generationPreset);
 
-    if (!activeSystemPrompt) {
+    if (!activeSystemPrompt && uiStateCache.generationPreset !== 'pure') {
         activeSystemPrompt = fallbackSystemPrompt.replace(/{{user}}/g, currentName);
-    } else {
+    } else if (activeSystemPrompt) {
+        // [Fix 9] Prevent WI duplication by stripping macros from fetched system prompt
         activeSystemPrompt = activeSystemPrompt
             .replace(/{{user}}/g, currentName)
-            .replace(/{{char}}/g, charName);
+            .replace(/{{char}}/g, charName)
+            .replace(/{{world_info}}/gi, '')
+            .replace(/{{wInfo}}/gi, '')
+            .replace(/{{worldInfo}}/gi, '');
+    } else {
+        activeSystemPrompt = ""; // Pure mode might return empty
     }
 
     let userMessageContent = "";
@@ -652,7 +693,8 @@ async function runGeneration(data, apiConfig, isTemplateMode = false) {
     const updateDebugView = (messages) => {
         let debugText = `=== 发送时间: ${new Date().toLocaleTimeString()} ===\n`;
         const modeStr = isNpcMode ? 'NPC' : 'User';
-        debugText += `=== 模式: ${isTemplateMode ? `${modeStr}模版生成` : (data.mode === 'refine' ? `${modeStr}润色` : `${modeStr}人设生成`)} ===\n\n`;
+        debugText += `=== 模式: ${isTemplateMode ? `${modeStr}模版生成` : (data.mode === 'refine' ? `${modeStr}润色` : `${modeStr}人设生成`)} ===\n`;
+        debugText += `=== 预设策略: ${uiStateCache.generationPreset === 'pure' ? '纯净模式 (Pure)' : (uiStateCache.generationPreset === 'current' ? '当前酒馆预设' : uiStateCache.generationPreset)} ===\n\n`;
         messages.forEach((msg, idx) => {
             debugText += `[BLOCK ${idx + 1}: ${msg.role.toUpperCase()}]\n`;
             debugText += `--- START ---\n${msg.content}\n--- END ---\n\n`;
@@ -668,21 +710,19 @@ async function runGeneration(data, apiConfig, isTemplateMode = false) {
     const timeoutId = setTimeout(() => controller.abort(), 120000); 
 
     try {
-        // 构建基础 Prompt
         const promptArray = [];
-        promptArray.push({ role: 'system', content: activeSystemPrompt });
+        if (activeSystemPrompt) {
+            promptArray.push({ role: 'system', content: activeSystemPrompt });
+        }
         if (wrappedWi && wrappedWi.trim().length > 0) promptArray.push({ role: 'system', content: wrappedWi });
         promptArray.push({ role: 'user', content: userMessageContent });
         
-        // 创建无 prefill 的备份数组，用于重试
         const promptArrayNoPrefill = JSON.parse(JSON.stringify(promptArray));
 
-        // 默认尝试带 Prefill (这对 OpenAI/Claude 效果最好)
         if (prefillContent) promptArray.push({ role: 'assistant', content: prefillContent });
 
         updateDebugView(promptArray);
 
-        // 封装请求函数
         const doRequest = async (messages) => {
             if (apiConfig.apiSource === 'independent') {
                 let baseUrl = apiConfig.indepApiUrl.replace(/\/$/, '');
@@ -716,13 +756,11 @@ async function runGeneration(data, apiConfig, isTemplateMode = false) {
             }
         };
 
-        // 尝试请求，包含自动重试逻辑
         try {
             responseContent = await doRequest(promptArray);
         } catch (err) {
-            // 如果请求失败且使用了 prefill，尝试去掉 prefill 重试 (针对 Gemini 等不支持 assistant 结尾的模型)
             if (prefillContent) {
-                console.warn("[PW] Generation failed (possible Gemini constraint), retrying without prefill...", err);
+                console.warn("[PW] Generation failed, retrying without prefill...", err);
                 toastr.info("检测到 API 限制 (如 Gemini)，正在尝试兼容模式...");
                 responseContent = await doRequest(promptArrayNoPrefill);
             } else {
@@ -791,9 +829,12 @@ function loadData() {
         }; 
     }
     try { wiSelectionCache = JSON.parse(localStorage.getItem(STORAGE_KEY_WI_STATE)) || {}; } catch { wiSelectionCache = {}; }
+    
+    // [Updated] Load UI State with Preset info
     try {
-        uiStateCache = JSON.parse(localStorage.getItem(STORAGE_KEY_UI_STATE)) || { templateExpanded: true, theme: 'style.css', generationMode: 'user' };
-    } catch { uiStateCache = { templateExpanded: true, theme: 'style.css', generationMode: 'user' }; }
+        uiStateCache = JSON.parse(localStorage.getItem(STORAGE_KEY_UI_STATE)) || { templateExpanded: true, theme: 'style.css', generationMode: 'user', generationPreset: 'current' };
+    } catch { uiStateCache = { templateExpanded: true, theme: 'style.css', generationMode: 'user', generationPreset: 'current' }; }
+    
     try { customThemes = JSON.parse(localStorage.getItem(STORAGE_KEY_THEMES)) || {}; } catch { customThemes = {}; }
 
     // Load Isolated Context Data
@@ -1066,6 +1107,21 @@ async function openCreatorPopup() {
 
     const updateUiHtml = `<div id="pw-update-container"><div style="margin-top:10px; opacity:0.6; font-size:0.9em;"><i class="fas fa-spinner fa-spin"></i> 正在检查更新...</div></div>`;
 
+    // [Fix 10] Generate Preset Options
+    let presetOptionsHtml = `
+        <option value="current" ${uiStateCache.generationPreset === 'current' ? 'selected' : ''}>跟随酒馆 (Default)</option>
+        <option value="pure" ${uiStateCache.generationPreset === 'pure' ? 'selected' : ''}>✨ 纯净模式 (Pure / Jailbreak Only)</option>
+    `;
+    if (window.TavernHelper && typeof window.TavernHelper.getPresetNames === 'function') {
+        const presets = window.TavernHelper.getPresetNames().sort();
+        presets.forEach(p => {
+            if (p !== 'in_use') {
+                const sel = uiStateCache.generationPreset === p ? 'selected' : '';
+                presetOptionsHtml += `<option value="${p}" ${sel}>[预设] ${p}</option>`;
+            }
+        });
+    }
+
     const html = `
 <div class="pw-wrapper">
     <div class="pw-header">
@@ -1270,6 +1326,23 @@ async function openCreatorPopup() {
                         <button class="pw-btn primary" id="pw-btn-import-theme" title="导入本地 .css 文件" style="padding:6px 10px;"><i class="fa-solid fa-file-import"></i></button>
                         
                         <button class="pw-btn primary" id="pw-btn-download-template" title="下载主题模版" style="padding:6px 10px;"><i class="fa-solid fa-download"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- [Fix 10] Preset Selector Card -->
+            <div class="pw-card-section" style="border-left: 3px solid var(--SmartThemeQuoteColor);">
+                <div class="pw-row">
+                    <label style="color: var(--SmartThemeQuoteColor); font-weight:bold;">生成使用的预设 (System Prompt)</label>
+                </div>
+                <div class="pw-row" style="margin-top:5px;">
+                    <div style="flex:1;">
+                        <select id="pw-preset-select" class="pw-input" style="width:100%;">
+                            ${presetOptionsHtml}
+                        </select>
+                        <div style="font-size:0.8em; opacity:0.7; margin-top:4px;">
+                            推荐使用“纯净模式”以防止 LLM 续写剧情。
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1519,6 +1592,13 @@ function bindEvents() {
     // --- NEW 标记点击跳转 ---
     $(document).on('click.pw', '#pw-new-badge', function() {
         $('.pw-tab[data-tab="system"]').click();
+    });
+
+    // [Fix 10] Preset Select Change Logic
+    $(document).on('change.pw', '#pw-preset-select', function() {
+        const val = $(this).val();
+        uiStateCache.generationPreset = val;
+        saveData();
     });
 
     // --- Prompt Editor Type Switch ---
