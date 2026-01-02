@@ -3,7 +3,7 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const CURRENT_VERSION = "2.2.1"; // UI Polish & Error Handling & Preset Logic
+const CURRENT_VERSION = "2.2.2"; // UI Reorder & Pure Mode Logic Fix
 
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/main/manifest.json";
 
@@ -546,15 +546,11 @@ Treat this as a rigid logical constraint for the simulation database.
     }
 }
 
-// [Fix 10] New Logic for System Prompt Retrieval based on Selection
+// [Fix 10 & Update] New Logic for System Prompt Retrieval based on Selection
 function getRealSystemPrompt(selectedPreset) {
-    // 1. Pure Mode (Jailbreak Only): Force return JB, independent of toggle
+    // 1. Pure Mode: Force return empty string (No Main, No JB)
     if (selectedPreset === 'pure') {
-        const settings = SillyTavern.chatCompletionSettings;
-        if (settings && settings.jailbreak_prompt) {
-            return settings.jailbreak_prompt;
-        }
-        return ""; // Fallback if no JB defined
+        return ""; 
     }
 
     // 2. Specific Preset Mode
@@ -659,7 +655,8 @@ async function runGeneration(data, apiConfig, isTemplateMode = false) {
             .replace(/{{wInfo}}/gi, '')
             .replace(/{{worldInfo}}/gi, '');
     } else {
-        activeSystemPrompt = ""; // Pure mode might return empty if no JB found
+        // Pure mode returns empty string
+        activeSystemPrompt = ""; 
     }
 
     let userMessageContent = "";
@@ -695,7 +692,7 @@ async function runGeneration(data, apiConfig, isTemplateMode = false) {
         let debugText = `=== 发送时间: ${new Date().toLocaleTimeString()} ===\n`;
         const modeStr = isNpcMode ? 'NPC' : 'User';
         debugText += `=== 模式: ${isTemplateMode ? `${modeStr}模版生成` : (data.mode === 'refine' ? `${modeStr}润色` : `${modeStr}人设生成`)} ===\n`;
-        debugText += `=== 预设策略: ${uiStateCache.generationPreset === 'pure' ? '仅破限 (Jailbreak Only)' : (uiStateCache.generationPreset === 'current' ? '跟随酒馆预设 (Default)' : uiStateCache.generationPreset)} ===\n\n`;
+        debugText += `=== 预设策略: ${uiStateCache.generationPreset === 'pure' ? '✨ 纯净模式 (Pure Mode)' : (uiStateCache.generationPreset === 'current' ? '跟随酒馆预设 (Default)' : uiStateCache.generationPreset)} ===\n\n`;
         messages.forEach((msg, idx) => {
             debugText += `[BLOCK ${idx + 1}: ${msg.role.toUpperCase()}]\n`;
             debugText += `--- START ---\n${msg.content}\n--- END ---\n\n`;
@@ -1128,7 +1125,7 @@ async function openCreatorPopup() {
     // [Fix 10] Generate Preset Options
     let presetOptionsHtml = `
         <option value="current" ${uiStateCache.generationPreset === 'current' ? 'selected' : ''}>跟随酒馆预设 (Default)</option>
-        <option value="pure" ${uiStateCache.generationPreset === 'pure' ? 'selected' : ''}>仅破限 (Jailbreak Only)</option>
+        <option value="pure" ${uiStateCache.generationPreset === 'pure' ? 'selected' : ''}>✨ 纯净模式 (Pure Mode)</option>
     `;
     if (window.TavernHelper && typeof window.TavernHelper.getPresetNames === 'function') {
         const presets = window.TavernHelper.getPresetNames().sort();
@@ -1268,6 +1265,20 @@ async function openCreatorPopup() {
     <!-- Context View -->
     <div id="pw-view-context" class="pw-view">
         <div class="pw-scroll-area">
+            
+            <!-- [Fix 13] Preset Selector Relocated to TOP & Styled simply -->
+            <div class="pw-card-section">
+                <div class="pw-row">
+                    <label class="pw-section-label">生成使用的预设 (System Prompt)</label>
+                    <select id="pw-preset-select" class="pw-input" style="flex:1; width:100%;">
+                        ${presetOptionsHtml}
+                    </select>
+                </div>
+                <div style="font-size:0.8em; opacity:0.7; margin-top:4px; margin-left: 5px;">
+                    推荐使用“纯净模式”以防止 LLM 续写剧情。注意：此模式不包含任何破限内容，如遇拒绝回答请尝试切换回默认或指定包含破限的预设。
+                </div>
+            </div>
+
             <div class="pw-card-section">
                 <div class="pw-row">
                     <label class="pw-section-label pw-label-gold">角色开场白</label>
@@ -1280,19 +1291,6 @@ async function openCreatorPopup() {
                     <i class="fa-solid fa-angle-up"></i> 收起预览
                 </div>
                 <textarea id="pw-greetings-preview" style="display:none; min-height: 300px; margin-top:5px;"></textarea>
-            </div>
-
-            <!-- [Fix 13] Preset Selector Relocated here & Styled simply -->
-            <div class="pw-card-section">
-                <div class="pw-row">
-                    <label class="pw-section-label">生成使用的预设 (System Prompt)</label>
-                    <select id="pw-preset-select" class="pw-input" style="flex:1; width:100%;">
-                        ${presetOptionsHtml}
-                    </select>
-                </div>
-                <div style="font-size:0.8em; opacity:0.7; margin-top:4px; margin-left: 5px;">
-                    推荐使用“仅破限”模式，以防止 LLM 受到“角色扮演”指令影响而试图续写剧情。
-                </div>
             </div>
 
             <div class="pw-card-section">
