@@ -1018,14 +1018,12 @@ async function syncToWorldInfoViaHelper(userName, content) {
             if (!npcName) return; 
         }
         entryTitle = `NPC:${npcName}`;
-        // NPC 额外添加 "npc" 触发词
-        entryKeys = generateSmartKeywords(npcName, content, ["npc", "NPC"]);
+        entryKeys = generateSmartKeywords(npcName, content, ["NPC"]);
     } else {
         // User 优先用 YAML 里的名字（可能用户在设定里给自己起了全名），回退用酒馆用户名
         const finalUserName = nameMatch ? nameMatch[1].trim() : (userName || "User");
         entryTitle = `USER:${finalUserName}`; 
-        // User 额外添加 "User", "user" 触发词
-        entryKeys = generateSmartKeywords(finalUserName, content, ["User", "user"]);
+        entryKeys = generateSmartKeywords(finalUserName, content, ["User"]);
     }
 
     try {
