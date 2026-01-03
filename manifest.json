@@ -1,11 +1,11 @@
 {
     "display_name": "Persona Weaver (User人设生成器)",
     "name": "st-persona-weaver",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "author": "Yellows & AI",
     "description": "AI辅助生成与润色用户设定",
     "js": "index.js",
     "css": "style.css",
     "type": "extension",
-    "notes": "1. 新增“生成使用的预设”功能 (支持纯净模式/指定预设)，解决 AI 容易续写剧情和预设风格的问题。\n2. 优化npc世界书触发词。\n3. 增强 API 报错捕获。\n4. 修复世界书重复发送的 Bug。\n元旦最后一天QAQ,做了两个美化更新在原帖"
+    "notes": "1. 新增“生成使用的预设”功能 (支持纯净模式/指定预设)，解决 AI 容易续写剧情和预设风格的问题。\n2. 优化npc世界书触发词。\n3. 增强 API 报错捕获。\n4. 修复世界书重复发送的 Bug。\n元旦最后一天,抓紧做了个美化更新在原帖"
 }
