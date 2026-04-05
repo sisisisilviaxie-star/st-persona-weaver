@@ -510,7 +510,7 @@
     align-items: center;
     gap: 4px;
     padding: 4px 10px;
-    border-radius: 4px;
+    border-radius: 3px;
     border: 1px solid var(--pw-border);
     background: rgba(0,0,0,0.05);
     color: var(--pw-text-main);
@@ -541,14 +541,18 @@
 
 .pw-diff-actions {
     background: rgba(0,0,0,0.1);
-    padding: 15px;
+    padding: 10px 15px;
     border-top: 1px solid var(--pw-border);
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
+    gap: 8px;
+}
+.pw-diff-actions .pw-btn {
+    font-size: 0.8em;
+    padding: 6px 12px;
 }
 
-#pw-diff-confirm.pw-btn.gen { padding: 8px 20px; font-size: 0.95em; margin-top: 0; }
+#pw-diff-confirm.pw-btn.gen { margin-top: 0; }
 #pw-diff-cancel { background: transparent; border: 1px solid var(--pw-danger); color: var(--pw-danger); }
 #pw-diff-cancel:hover { background: rgba(255, 107, 107, 0.1); }
 
@@ -690,8 +694,8 @@
     .pw-diff-toolbar { flex-wrap: wrap; gap: 4px; padding: 6px 8px; }
     .pw-diff-mode-btn { padding: 3px 8px; font-size: 0.75em; }
     .pw-diff-hint-inline { font-size: 0.7em; }
-    .pw-diff-actions { flex-wrap: wrap; gap: 6px; padding: 10px; }
-    .pw-diff-actions .pw-btn { flex: 1; min-width: 80px; font-size: 0.85em; padding: 8px 10px; }
+    .pw-diff-actions { flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+    .pw-diff-actions .pw-btn { flex: 1; min-width: 70px; font-size: 0.72em; padding: 5px 8px; }
 
     /* System page: theme buttons row */
     #pw-view-system .pw-row > div[style*="display:flex"] { flex-wrap: wrap; }
