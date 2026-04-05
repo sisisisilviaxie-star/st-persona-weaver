@@ -5,7 +5,7 @@ import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCu
 const extensionName = "st-persona-weaver";
 const CURRENT_VERSION = "3.0.1"; // Avatar Reference + Chat Inference
 
-const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/main/manifest.json";
+const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sssilvia27/st-persona-weaver/main/manifest.json";
 
 // Storage Keys
 const STORAGE_KEY_HISTORY = 'pw_history_v29_new_template'; 
@@ -1391,6 +1391,25 @@ function generateSmartKeywords(name, content, staticTags = []) {
     return [...new Set(rawKeys)].filter(k => k && k.length > 1);
 }
 
+function extractAllNpcNames(content) {
+    const names = [];
+    const regex = /姓名[:：]\s*(.*?)(\n|$)/g;
+    let m;
+    while ((m = regex.exec(content)) !== null) {
+        const name = m[1].trim();
+        if (name && !names.includes(name)) names.push(name);
+    }
+    return names;
+}
+
+function generateSmartKeywordsMulti(names, content, staticTags = []) {
+    let allKeys = [...staticTags];
+    for (const name of names) {
+        allKeys.push(...generateSmartKeywords(name, content, []));
+    }
+    return [...new Set(allKeys)].filter(k => k && k.length > 1);
+}
+
 async function syncToWorldInfoViaHelper(userName, content) {
     if (!window.TavernHelper) return toastr.error(TEXT.TOAST_WI_ERROR);
 
@@ -1412,21 +1431,20 @@ async function syncToWorldInfoViaHelper(userName, content) {
     let entryKeys = [];
     const isNpc = uiStateCache.generationMode === 'npc';
 
-    // 尝试从 YAML 内容中优先读取姓名，如果没写则用传入的 fallback
-    const nameMatch = content.match(/姓名:\s*(.*?)(\n|$)/);
-    
     if (isNpc) {
-        let npcName = nameMatch ? nameMatch[1].trim() : "";
-        if (!npcName) {
-            npcName = prompt("无法自动识别 NPC 姓名，请输入：", "路人甲");
-            if (!npcName) return; 
+        let npcNames = extractAllNpcNames(content);
+        if (npcNames.length === 0) {
+            const fallback = prompt("无法自动识别 NPC 姓名，请输入：", "路人甲");
+            if (!fallback) return;
+            npcNames.push(fallback);
         }
-        entryTitle = `NPC:${npcName}`;
-        entryKeys = generateSmartKeywords(npcName, content, ["NPC"]);
+        const displayName = npcNames.join('&');
+        entryTitle = `NPC:${displayName}`;
+        entryKeys = generateSmartKeywordsMulti(npcNames, content, ["NPC"]);
     } else {
-        // User 优先用 YAML 里的名字（可能用户在设定里给自己起了全名），回退用酒馆用户名
+        const nameMatch = content.match(/姓名:\s*(.*?)(\n|$)/);
         const finalUserName = nameMatch ? nameMatch[1].trim() : (userName || "User");
-        entryTitle = `USER:${finalUserName}`; 
+        entryTitle = `USER:${finalUserName}`;
         entryKeys = generateSmartKeywords(finalUserName, content, ["User"]);
     }
 
@@ -1798,8 +1816,8 @@ async function openCreatorPopup() {
         <div class="pw-diff-actions">
             <button class="pw-btn primary" id="pw-diff-reroll" title="使用相同的提示词重新生成"><i class="fa-solid fa-rotate-right"></i> 重新生成</button>
             <div style="flex:1;"></div>
-            <button class="pw-btn danger" id="pw-diff-cancel" style="font-size:1.05em; padding:10px 20px;"><i class="fa-solid fa-xmark"></i> 放弃</button>
-            <button class="pw-btn gen" id="pw-diff-confirm" style="width:auto; font-size:1.05em; padding:10px 20px;"><i class="fa-solid fa-check"></i> 应用</button>
+            <button class="pw-btn danger" id="pw-diff-cancel"><i class="fa-solid fa-xmark"></i> 放弃</button>
+            <button class="pw-btn gen" id="pw-diff-confirm" style="width:auto;"><i class="fa-solid fa-check"></i> 应用</button>
         </div>
     </div>
 
