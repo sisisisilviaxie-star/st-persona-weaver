@@ -604,6 +604,15 @@
     border-bottom: 1px dashed rgba(92,184,92,0.5);
 }
 
+.pw-idiff-old.active[contenteditable],
+.pw-idiff-new.active[contenteditable],
+.pw-idiff-equal[contenteditable] {
+    cursor: text;
+}
+.pw-idiff-equal[contenteditable]:focus {
+    outline: none;
+}
+
 .pw-idiff-old.active[contenteditable]:focus,
 .pw-idiff-new.active[contenteditable]:focus {
     outline: none;
