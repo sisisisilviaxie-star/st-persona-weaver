@@ -3,7 +3,7 @@ import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced, callPopup, getRequestHeaders, saveChat, reloadCurrentChat, saveCharacterDebounced } from "../../../../script.js";
 
 const extensionName = "st-persona-weaver";
-const CURRENT_VERSION = "3.0.2"; // Avatar Reference + Chat Inference
+const CURRENT_VERSION = "3.3"; // Claude/Anthropic + OpenAI-compatible multi-model + Avatar/Diff fixes
 
 const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sisisisilviaxie-star/st-persona-weaver/main/manifest.json";
 
@@ -725,6 +725,11 @@ function getUserAvatarUrl() {
     if (parentWin.user_avatar) return makeUrl(parentWin.user_avatar);
     const sidebarImg = parentDoc.getElementById('user_avatar_img');
     if (sidebarImg && sidebarImg.src && !sidebarImg.src.includes('placeholder')) return sidebarImg.src;
+    const avatarBlock = parentDoc.querySelector('#user_avatar_block');
+    if (avatarBlock) {
+        const img = avatarBlock.querySelector('img');
+        if (img && img.src && !img.src.includes('placeholder')) return img.src;
+    }
     return null;
 }
 
@@ -732,7 +737,7 @@ async function fetchAvatarAsBase64() {
     const url = getUserAvatarUrl();
     if (!url) return null;
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, { credentials: 'same-origin' });
         if (!response.ok) return null;
         const blob = await response.blob();
         return new Promise((resolve, reject) => {
@@ -1063,7 +1068,11 @@ async function runGeneration(data, apiConfig, isTemplateMode = false) {
                     baseUrl = baseUrl.replace(/\/v1\/messages$/, '').replace(/\/v1$/, '');
                     url = `${baseUrl}/v1/messages`;
 
-                    const systemParts = messages.filter(m => m.role === 'system').map(m => m.content);
+                    const systemParts = messages.filter(m => m.role === 'system').map(m =>
+                        Array.isArray(m.content)
+                            ? (m.content.filter(b => b.type === 'text').map(b => b.text).join('\n') || '')
+                            : String(m.content ?? '')
+                    );
                     const nonSystem = messages.filter(m => m.role !== 'system').map(m => {
                         if (Array.isArray(m.content)) {
                             const anthropicContent = m.content.map(block => {
@@ -1091,22 +1100,30 @@ async function runGeneration(data, apiConfig, isTemplateMode = false) {
                         model: apiConfig.indepApiModel,
                         system: systemParts.join('\n\n'),
                         messages: nonSystem,
-                        max_tokens: 8192,
-                        temperature: 0.85
+                        max_tokens: 16384,
+                        temperature: 1.00
                     });
                 } else {
-                    if (baseUrl.endsWith('/chat/completions')) baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
+                    // OpenAI 兼容模式：支持原生 OpenAI / OpenRouter / DeepSeek / Groq / xAI /
+                    // Mistral / 01.AI / 本地 llama.cpp / 各类中转站 等
+                    if (baseUrl.endsWith('/chat/completions')) {
+                        baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
+                    }
                     url = `${baseUrl}/chat/completions`;
 
                     headers = {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${apiConfig.indepApiKey}`
                     };
-                    body = JSON.stringify({
+                    const payload = {
                         model: apiConfig.indepApiModel,
                         messages: messages,
-                        temperature: 0.85
-                    });
+                        temperature: 1.00,
+                        // 兼容大多数模型上限（GPT-4o/Claude/Gemini/DS/本地模型），
+                        // 避免硬编码 16384 触发部分小模型 400。
+                        max_tokens: 8192
+                    };
+                    body = JSON.stringify(payload);
                 }
 
                 const res = await fetch(url, { method: 'POST', headers, body, signal: controller.signal });
@@ -1125,7 +1142,13 @@ async function runGeneration(data, apiConfig, isTemplateMode = false) {
                 if (isAnthropic) {
                     return json.content[0].text;
                 }
-                return json.choices[0].message.content;
+                if (json.choices && json.choices[0]?.message?.content) {
+                    return json.choices[0].message.content;
+                }
+                if (json.content && json.content[0]?.text) {
+                    return json.content[0].text;
+                }
+                throw new Error("无法解析 API 返回格式");
             } else {
                 if (window.TavernHelper && typeof window.TavernHelper.generateRaw === 'function') {
                     return await window.TavernHelper.generateRaw({
@@ -1237,6 +1260,8 @@ function loadData() {
         if (!uiStateCache.chatHistory) uiStateCache.chatHistory = { enabled: false, preset: '20', floorFrom: '', floorTo: '', excludeTags: [], includeTags: [] };
         if (!uiStateCache.avatarRef || typeof uiStateCache.avatarRef === 'boolean') {
             uiStateCache.avatarRef = { enabled: !!uiStateCache.avatarRef, selectedIds: [] };
+        } else if (!Array.isArray(uiStateCache.avatarRef.selectedIds)) {
+            uiStateCache.avatarRef.selectedIds = [];
         }
     } catch { uiStateCache = defaultUiState; }
     
@@ -1880,14 +1905,13 @@ async function openCreatorPopup() {
 
             <div class="pw-card-section" id="pw-avatar-mgmt-section">
                 <div style="display:flex; align-items:center; gap:8px; margin-bottom:5px;">
-                    <label class="pw-section-label" style="flex:1; min-width:0; text-align:left;">形象参考</label>
+                    <label class="pw-section-label pw-avatar-mgmt-toggle" style="flex:1; min-width:0; text-align:left; cursor:pointer;">形象参考 <i class="fa-solid fa-chevron-down" style="font-size:0.7em; opacity:0.5; margin-left:2px;"></i></label>
                     <label class="pw-mini-btn" style="cursor:pointer; display:inline-flex; align-items:center; gap:3px; padding:2px 8px; font-size:0.75em; white-space:nowrap; flex-shrink:0;">
                         <i class="fa-solid fa-upload"></i> 上传
                         <input type="file" id="pw-avatar-upload" accept="image/*" multiple style="display:none;">
                     </label>
-                    <span id="pw-avatar-mgmt-collapse" style="cursor:pointer; opacity:0.5; font-size:0.85em; padding:2px 4px; flex-shrink:0;" title="展开/收起"><i class="fa-solid fa-chevron-down"></i></span>
                 </div>
-                <div id="pw-avatar-mgmt-body" class="pw-avatar-mgmt-body">
+                <div id="pw-avatar-mgmt-body" class="pw-avatar-mgmt-body" style="display:none;">
                     <div id="pw-avatar-mgmt-grid" class="pw-avatar-mgmt-grid"></div>
                 </div>
             </div>
@@ -2274,23 +2298,23 @@ function renderInlineDiff() {
     let html = '';
     currentDiffBlocks.forEach((block, index) => {
         if (block.type === 'equal') {
-            html += `<span>${_esc(block.value)}</span>`;
+            html += `<span class="pw-idiff-equal" data-idx="${index}">${_esc(block.value)}</span>`;
         } else {
             const isActiveOld = block.active === 'old';
             const isActiveNew = block.active === 'new';
             html += `<span class="pw-diff-group" data-index="${index}">`;
             if (block.oldText) {
-                html += `<span class="pw-idiff-old ${isActiveOld ? 'active' : 'inactive'}" ${isActiveOld ? 'contenteditable="true"' : ''} data-idx="${index}" title="点击保留旧版">${_esc(block.oldText)}</span>`;
+                html += `<span class="pw-idiff-old ${isActiveOld ? 'active' : 'inactive'}" contenteditable="${isActiveOld ? 'true' : 'false'}" data-idx="${index}" title="点击保留旧版">${_esc(block.oldText)}</span>`;
             }
             if (block.newText) {
-                html += `<span class="pw-idiff-new ${isActiveNew ? 'active' : 'inactive'}" ${isActiveNew ? 'contenteditable="true"' : ''} data-idx="${index}" title="点击保留新版">${_esc(block.newText)}</span>`;
+                html += `<span class="pw-idiff-new ${isActiveNew ? 'active' : 'inactive'}" contenteditable="${isActiveNew ? 'true' : 'false'}" data-idx="${index}" title="点击保留新版">${_esc(block.newText)}</span>`;
             }
             html += `</span>`;
         }
     });
 
     const $container = $('#pw-diff-merge-list');
-    $container.html(html);
+    $container.attr('contenteditable', 'true').html(html);
 
     let changeCount = currentDiffBlocks.filter(b => b.type === 'diff').length;
     if (changeCount === 0) toastr.info("没有检测到内容变化");
@@ -2299,9 +2323,13 @@ function renderInlineDiff() {
 function assembleDiffResult() {
     let text = '';
     currentDiffBlocks.forEach(block => {
-        if (block.type === 'equal') text += block.value;
-        else if (block.active === 'old') text += block.oldText;
-        else text += block.newText;
+        if (block.type === 'equal') {
+            text += block.value;
+        } else if (block.active === 'old') {
+            text += block.oldText;
+        } else {
+            text += block.newText;
+        }
     });
     return text;
 }
@@ -3094,30 +3122,37 @@ function bindEvents() {
         $('#pw-diff-hint').hide();
     });
 
-    $(document).on('click.pw', '.pw-idiff-old', function () {
+    $(document).on('mousedown.pw', '.pw-idiff-old', function () {
         if (!$('#pw-diff-merge-list').hasClass('pw-diff-mode-all')) return;
         if ($(this).hasClass('active')) return;
         const idx = $(this).data('idx');
         currentDiffBlocks[idx].active = 'old';
         $(this).addClass('active').removeClass('inactive').attr('contenteditable', 'true');
-        $(this).siblings('.pw-idiff-new').addClass('inactive').removeClass('active').removeAttr('contenteditable');
+        $(this).siblings('.pw-idiff-new').addClass('inactive').removeClass('active').attr('contenteditable', 'false');
     });
-    $(document).on('click.pw', '.pw-idiff-new', function () {
+    $(document).on('mousedown.pw', '.pw-idiff-new', function () {
         if (!$('#pw-diff-merge-list').hasClass('pw-diff-mode-all')) return;
         if ($(this).hasClass('active')) return;
         const idx = $(this).data('idx');
         currentDiffBlocks[idx].active = 'new';
         $(this).addClass('active').removeClass('inactive').attr('contenteditable', 'true');
-        $(this).siblings('.pw-idiff-old').addClass('inactive').removeClass('active').removeAttr('contenteditable');
+        $(this).siblings('.pw-idiff-old').addClass('inactive').removeClass('active').attr('contenteditable', 'false');
     });
 
-    $(document).on('input.pw', '.pw-idiff-old.active[contenteditable]', function () {
-        const idx = $(this).data('idx');
-        if (idx !== undefined) currentDiffBlocks[idx].oldText = $(this).text();
-    });
-    $(document).on('input.pw', '.pw-idiff-new.active[contenteditable]', function () {
-        const idx = $(this).data('idx');
-        if (idx !== undefined) currentDiffBlocks[idx].newText = $(this).text();
+    // 容器级 input：跨 span 编辑后统一回写到 currentDiffBlocks
+    $(document).on('input.pw', '#pw-diff-merge-list', function () {
+        $(this).find('.pw-idiff-equal').each(function () {
+            const idx = $(this).data('idx');
+            if (idx !== undefined && currentDiffBlocks[idx]) currentDiffBlocks[idx].value = $(this).text();
+        });
+        $(this).find('.pw-idiff-old.active').each(function () {
+            const idx = $(this).data('idx');
+            if (idx !== undefined && currentDiffBlocks[idx]) currentDiffBlocks[idx].oldText = $(this).text();
+        });
+        $(this).find('.pw-idiff-new.active').each(function () {
+            const idx = $(this).data('idx');
+            if (idx !== undefined && currentDiffBlocks[idx]) currentDiffBlocks[idx].newText = $(this).text();
+        });
     });
 
     // Refine (Persona)
@@ -3487,17 +3522,40 @@ function bindEvents() {
         const url = $('#pw-api-url').val().replace(/\/$/, '');
         const key = $('#pw-api-key').val();
         const $btn = $(this).find('i').addClass('fa-spin');
+        const isAnthropicStyle = url.toLowerCase().includes('anthropic.com') || url.includes('/v1/messages');
         try {
-            const endpoints = [url.includes('v1') ? `${url}/models` : `${url}/v1/models`, `${url}/models`];
             let data = null;
-            for (const ep of endpoints) {
+            if (isAnthropicStyle) {
+                let base = url.replace(/\/v1\/messages$/, '').replace(/\/v1$/, '').replace(/\/$/, '');
+                const anthEp = `${base}/v1/models`;
                 try {
-                    const res = await fetch(ep, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } });
-                    if (res.ok) { data = await res.json(); break; }
+                    const res = await fetch(anthEp, {
+                        method: 'GET',
+                        headers: {
+                            'x-api-key': key,
+                            'anthropic-version': '2023-06-01'
+                        }
+                    });
+                    if (res.ok) data = await res.json();
                 } catch { }
             }
+            if (!data) {
+                // 规范化：支持 https://x/ , https://x/v1 , https://x/v1/chat/completions 等写法
+                const cleanBase = url.replace(/\/chat\/completions$/, '');
+                const endpoints = [
+                    /\/v\d+$/.test(cleanBase) ? `${cleanBase}/models` : `${cleanBase}/v1/models`,
+                    `${cleanBase}/models`
+                ];
+                for (const ep of endpoints) {
+                    try {
+                        const res = await fetch(ep, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } });
+                        if (res.ok) { data = await res.json(); break; }
+                    } catch { }
+                }
+            }
             if (!data) throw new Error("连接失败或无法获取模型列表");
-            const models = (data.data || data).map(m => m.id).sort();
+            const rawList = data.data || data;
+            const models = (Array.isArray(rawList) ? rawList : []).map(m => (typeof m === 'string' ? m : m.id)).filter(Boolean).sort();
             const $select = $('#pw-api-model-select').empty();
             models.forEach(m => $select.append(`<option value="${m}">${m}</option>`));
             if (models.length > 0) $select.val(models[0]);
@@ -3512,14 +3570,36 @@ function bindEvents() {
         const key = $('#pw-api-key').val();
         const model = $('#pw-api-model-select').val();
         const $btn = $(this).html('<i class="fas fa-spinner fa-spin"></i>');
+        const isAnthropicStyle = url.toLowerCase().includes('anthropic.com') || url.includes('/v1/messages');
         try {
-            const ep = url.includes('v1') ? `${url}/chat/completions` : `${url}/v1/chat/completions`;
-            const res = await fetch(ep, {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-                body: JSON.stringify({ model: model, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 5 })
-            });
-            if (res.ok) toastr.success("连接成功！");
-            else toastr.error(`失败: ${res.status}`);
+            if (isAnthropicStyle) {
+                let base = url.replace(/\/v1\/messages$/, '').replace(/\/v1$/, '').replace(/\/$/, '');
+                const ep = `${base}/v1/messages`;
+                const res = await fetch(ep, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': key,
+                        'anthropic-version': '2023-06-01'
+                    },
+                    body: JSON.stringify({
+                        model: model || 'claude-3-5-haiku-20241022',
+                        max_tokens: 16,
+                        messages: [{ role: 'user', content: 'Hi' }]
+                    })
+                });
+                if (res.ok) toastr.success("连接成功！");
+                else toastr.error(`失败: ${res.status}`);
+            } else {
+                const cleanBase = url.replace(/\/chat\/completions$/, '');
+                const ep = /\/v\d+$/.test(cleanBase) ? `${cleanBase}/chat/completions` : `${cleanBase}/v1/chat/completions`;
+                const res = await fetch(ep, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+                    body: JSON.stringify({ model: model, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 5 })
+                });
+                if (res.ok) toastr.success("连接成功！");
+                else toastr.error(`失败: ${res.status}`);
+            }
         } catch (e) { toastr.error("请求发送失败"); }
         finally { $btn.html('<i class="fa-solid fa-plug"></i>'); }
     });
@@ -3613,6 +3693,7 @@ function bindEvents() {
 
     $(document).on('click.pw', '.pw-avatar-strip-img', function () {
         const id = $(this).data('avatar-id');
+        if (!uiStateCache.avatarRef.selectedIds) uiStateCache.avatarRef.selectedIds = [];
         const sel = uiStateCache.avatarRef.selectedIds;
         const idx = sel.indexOf(id);
         if (idx >= 0) { sel.splice(idx, 1); $(this).removeClass('selected'); }
@@ -3675,7 +3756,7 @@ function bindEvents() {
         const idx = avatarImagesCache.findIndex(i => i.id === imgId);
         if (idx >= 0) {
             avatarImagesCache.splice(idx, 1);
-            uiStateCache.avatarRef.selectedIds = uiStateCache.avatarRef.selectedIds.filter(id => id !== imgId);
+            uiStateCache.avatarRef.selectedIds = (uiStateCache.avatarRef.selectedIds || []).filter(id => id !== imgId);
             saveAvatarImages();
             saveCurrentState();
             $card.fadeOut(200, () => { $card.remove(); renderAvatarStrip(); });
@@ -3687,26 +3768,32 @@ function bindEvents() {
         const imgId = $card.data('img-id');
         const img = avatarImagesCache.find(i => i.id === imgId);
         if (!img) return;
-        const $name = $(this);
         const currentName = img.name || '';
-        const $input = $(`<input type="text" class="pw-input" value="${currentName}" style="font-size:0.78em; padding:2px 4px; width:100%; text-align:center;">`);
-        $name.replaceWith($input);
+        const $input = $('<input type="text" class="pw-input">').val(currentName).css({ fontSize: '0.78em', padding: '2px 4px', width: '100%', textAlign: 'center' });
+        $(this).replaceWith($input);
         $input.focus().select();
         const save = () => {
             const newName = $input.val().trim() || '未命名';
             img.name = newName;
             saveAvatarImages();
-            const $newName = $(`<span class="pw-avatar-card-name" title="点击编辑名称">${newName}</span>`);
+            const $newName = $('<span class="pw-avatar-card-name" title="点击编辑名称"></span>').text(newName);
             $input.replaceWith($newName);
         };
-        $input.on('blur', save).on('keydown', function(e) { if (e.key === 'Enter') save(); });
+        $input.on('blur', save).on('keydown', function(ev) { if (ev.key === 'Enter') save(); });
     });
 
-    $(document).on('click.pw', '#pw-avatar-mgmt-collapse', function () {
+    $(document).on('click.pw', '.pw-avatar-mgmt-toggle', function () {
         const $body = $('#pw-avatar-mgmt-body');
-        const $icon = $(this).find('i');
-        $body.slideToggle(200);
-        $icon.toggleClass('fa-chevron-down fa-chevron-up');
+        const $icon = $(this).find('i').last();
+        $body.stop(true, true);
+        if ($body.is(':visible')) {
+            $body.slideUp(200);
+            $icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        } else {
+            renderAvatarMgmt();
+            $body.slideDown(200);
+            $icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+        }
     });
 
     $(document).on('click.pw', '#pw-avatar-add-btn', function () {
