@@ -2,11 +2,11 @@
 {
     "display_name": "Persona Weaver (User人设生成器)",
     "name": "st-persona-weaver",
-    "version": "3.0.2",
+    "version": "3.3",
     "author": "Yellows & AI",
     "description": "AI辅助生成与润色User/NPC设定",
     "js": "index.js",
     "css": "style.css",
     "type": "extension",
-    "notes": "1.润色对比按钮大小调整\n2.NPC 世界书条目名与触发词适配多NPC的情况"
+    "notes": "v3.3 更新：\n1.独立 API 支持 Claude / Anthropic 原生接口\n2.OpenAI 兼容模式适配更多模型\n3.头像管理修复 \n4.Diff 编辑修复（未变更片段可编辑、事件冲突修复）\n5.NPC 世界书条目名称与触发关键词统一"
 }
