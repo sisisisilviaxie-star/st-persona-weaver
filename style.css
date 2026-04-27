@@ -604,17 +604,18 @@
     border-bottom: 1px dashed rgba(92,184,92,0.5);
 }
 
-.pw-idiff-old.active[contenteditable],
-.pw-idiff-new.active[contenteditable],
-.pw-idiff-equal[contenteditable] {
+#pw-diff-merge-list[contenteditable="true"] { cursor: text; outline: none; }
+.pw-idiff-old.active,
+.pw-idiff-new.active,
+.pw-idiff-equal {
     cursor: text;
 }
-.pw-idiff-equal[contenteditable]:focus {
+.pw-idiff-equal:focus {
     outline: none;
 }
 
-.pw-idiff-old.active[contenteditable]:focus,
-.pw-idiff-new.active[contenteditable]:focus {
+.pw-idiff-old.active:focus,
+.pw-idiff-new.active:focus {
     outline: none;
     background: rgba(128,128,128,0.12);
     border-bottom-style: solid;
